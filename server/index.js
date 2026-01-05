@@ -3,45 +3,44 @@ import path from "path";
 import { fileURLToPath } from "url";
 import routes from "./routes.js";
 
-// ES module kompatibilitás (__dirname pótlása)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 
-// ---------- MIDDLEWARE ----------
+// ---------- CONFIG ----------
+const MANGA_ROOT = "/mnt/manga/teszt";
 
-// JSON body (később jól jön)
+// ---------- MIDDLEWARE ----------
 app.use(express.json());
 
 // ---------- STATIC FILES ----------
-
-// Manga képek
+// Manga képek kiszolgálása
 app.use(
   "/images",
-  express.static(path.join(__dirname, "../images"), {
+  express.static(MANGA_ROOT, {
     maxAge: "1y",
     immutable: true
   })
 );
 
-// Frontend (HTML, JS)
-app.use(
-  express.static(path.join(__dirname, "../public"))
-);
+// Frontend
+app.use(express.static(path.join(__dirname, "../public")));
 
-// ---------- API ROUTES ----------
+// ---------- API ----------
 app.use("/api", routes);
 
 // ---------- FALLBACK ----------
-// Ha nem API és nem statikus fájl → index.html
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "../public/index.html"));
 });
 
-// ---------- START SERVER ----------
+// ---------- START ----------
 const PORT = process.env.PORT || 3000;
-
 app.listen(PORT, () => {
-  console.log(`✅ Server running at http://localhost:${PORT}`);
+  console.log("=================================");
+  console.log(`✅ Server running on http://localhost:${PORT}`);
+  console.log(`📁 Manga root: ${MANGA_ROOT}`);
+  console.log("=================================");
 });
+
