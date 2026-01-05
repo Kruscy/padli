@@ -1,26 +1,47 @@
 import express from "express";
-import { pool } from "./db.js";
+import path from "path";
+import { fileURLToPath } from "url";
+import routes from "./routes.js";
+
+// ES module kompatibilitás (__dirname pótlása)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
-app.use("/images", express.static("../images"));
-app.use(express.static("../public"));
 
-app.get("/api/manga", async (req, res) => {
-  const result = await pool.query("SELECT * FROM manga");
-  res.json(result.rows);
+// ---------- MIDDLEWARE ----------
+
+// JSON body (később jól jön)
+app.use(express.json());
+
+// ---------- STATIC FILES ----------
+
+// Manga képek
+app.use(
+  "/images",
+  express.static(path.join(__dirname, "../images"), {
+    maxAge: "1y",
+    immutable: true
+  })
+);
+
+// Frontend (HTML, JS)
+app.use(
+  express.static(path.join(__dirname, "../public"))
+);
+
+// ---------- API ROUTES ----------
+app.use("/api", routes);
+
+// ---------- FALLBACK ----------
+// Ha nem API és nem statikus fájl → index.html
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "../public/index.html"));
 });
 
-app.get("/api/chapters/:slug", async (req, res) => {
-  const result = await pool.query(`
-    SELECT chapter.*
-    FROM chapter
-    JOIN manga ON manga.id = chapter.manga_id
-    WHERE manga.slug = $1
-    ORDER BY chapter.id
-  `, [req.params.slug]);
-  res.json(result.rows);
-});
+// ---------- START SERVER ----------
+const PORT = process.env.PORT || 3000;
 
-app.listen(3000, () => {
-  console.log("Server running on :3000");
+app.listen(PORT, () => {
+  console.log(`✅ Server running at http://localhost:${PORT}`);
 });
