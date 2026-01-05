@@ -1,0 +1,17 @@
+<h1>Manga</h1>
+<ul id="list"></ul>
+
+<script>
+fetch("/api/manga")
+  .then(r => r.json())
+  .then(data => {
+    const ul = document.getElementById("list");
+    data.forEach(m => {
+      ul.innerHTML += `<li>
+        <a href="/reader.html?manga=${m.slug}">
+          ${m.title}
+        </a>
+      </li>`;
+    });
+  });
+</script>
