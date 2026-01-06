@@ -1,3 +1,109 @@
-<div id="pages"></div>
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<title>PadlizsanFanSub</title>
+<style>
+body {
+  margin: 0;
+  background: url("/assets/bg.svg") center / cover fixed;
+  color: #eee;
+  font-family: "Segoe UI", Arial, sans-serif;
+}
+#nav {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.65);
+  padding: 8px 14px;
+  border-radius: 20px;
+  box-shadow: 0 0 20px rgba(0,0,0,0.6);
+  z-index: 10;
+}
+#nav button {
+  background: #222;
+  color: #fff;
+  border: 1px solid #555;
+  padding: 6px 14px;
+  margin: 0 6px;
+  cursor: pointer;
+}
+#nav button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+#pages {
+  max-width: 900px;
+  margin: 90px auto 20px;
+  animation: fadeIn 0.4s ease;
+}
+img {
+  width: 100%;
+  display: block;
+  margin-bottom: 10px;
+  border-radius: 4px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.6);
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+</style>
+</head>
+<body>
 
-<script src="reader.js"></script>
+<div id="nav">
+  <button id="prevBtn">⬅ Prev</button>
+  <button id="nextBtn">Next ➡</button>
+</div>
+
+<div id="pages">Betöltés…</div>
+
+<script>
+const params = new URLSearchParams(location.search);
+const slug = params.get("manga");
+const chapter = params.get("chapter");
+
+/* next / prev */
+fetch(`/api/chapter-nav/${slug}/${chapter}`)
+  .then(r => r.json())
+  .then(nav => {
+    const prev = document.getElementById("prevBtn");
+    const next = document.getElementById("nextBtn");
+
+    if (nav.prev)
+      prev.onclick = () =>
+        location.href =
+          `/reader.html?manga=${slug}&chapter=${nav.prev}`;
+    else prev.disabled = true;
+
+    if (nav.next)
+      next.onclick = () =>
+        location.href =
+          `/reader.html?manga=${slug}&chapter=${nav.next}`;
+    else next.disabled = true;
+  });
+
+/* pages */
+fetch(`/api/pages/${slug}/${chapter}`)
+  .then(r => r.json())
+  .then(pages => {
+    const c = document.getElementById("pages");
+    c.innerHTML = "";
+    pages.forEach(f => {
+      const img = document.createElement("img");
+      img.src =
+        `/api/image/${slug}/${chapter}/${encodeURIComponent(f)}`;
+      img.loading = "lazy";
+      c.appendChild(img);
+    });
+  })
+  .catch(() => {
+    document.getElementById("pages").innerText =
+      "Error loading pages";
+  });
+</script>
+
+</body>
+</html>
