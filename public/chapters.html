@@ -23,26 +23,20 @@ main {
   background: rgba(0,0,0,0.65);
   padding: 20px;
   border-radius: 10px;
-  box-shadow: 0 0 40px rgba(0,0,0,0.6);
 }
 ul {
   padding: 0;
 }
 li {
   list-style: none;
-  margin: 8px 0;
-  padding: 10px 14px;
-  border-radius: 8px;
+  margin: 6px 0;
+  padding: 8px 12px;
+  border-radius: 6px;
   background: rgba(255,255,255,0.05);
-  transition: background 0.2s;
-}
-li:hover {
-  background: rgba(255,255,255,0.1);
 }
 a {
   color: #9cf;
   text-decoration: none;
-  font-size: 18px;
 }
 </style>
 </head>
@@ -53,20 +47,25 @@ a {
 </header>
 
 <main>
-  <h1>Mangák</h1>
-  <ul id="mangaList">Betöltés…</ul>
+  <h1 id="title">Fejezetek</h1>
+  <ul id="chapterList">Betöltés…</ul>
 </main>
 
 <script>
-fetch("/api/manga")
+const params = new URLSearchParams(location.search);
+const slug = params.get("manga");
+
+fetch(`/api/chapters/${slug}`)
   .then(r => r.json())
   .then(data => {
-    const ul = document.getElementById("mangaList");
+    const ul = document.getElementById("chapterList");
     ul.innerHTML = "";
-    data.forEach(m => {
+    data.forEach(c => {
       const li = document.createElement("li");
       li.innerHTML =
-        `<a href="/chapters.html?manga=${m.slug}">${m.title}</a>`;
+        `<a href="/reader.html?manga=${slug}&chapter=${c.folder}">
+          ${c.title}
+        </a>`;
       ul.appendChild(li);
     });
   });

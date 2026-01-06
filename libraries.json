@@ -1,0 +1,13 @@
+[
+  { "id": "lib1",  "name": "Ascyra",  	 	  "path": "/mnt/manga/Kavita/Ascyra",        "enabled": true },
+  { "id": "lib2",  "name": "Manga Joker",    	  "path": "/mnt/manga/Kavita/Joker/Manga",        "enabled": false },
+  { "id": "lib3",  "name": "Ascyra Manga",  	  "path": "/mnt/manga/Kavita/Ascyra Manga",    "enabled": true },
+  { "id": "lib4",  "name": "Stukker",             "path": "/mnt/manga/Kavita/Stukker/Kicsomagolt Manhwa",    "enabled": true },
+  { "id": "lib5",  "name": "Joker",        	  "path": "/mnt/manga/Kavita/Joker/Manwha",   "enabled": false },
+
+  { "id": "lib6",  "name": "Isagi_Yoichi",        "path": "/mnt/manga/Kavita/Isagi_Yoichi/Manwha",   "enabled": false },
+  { "id": "lib7",  "name": "Krisz",       	  "path": "/mnt/manga/Kavita/Krisz/Manwha",   "enabled": false },
+  { "id": "lib8",  "name": "Lacus",               "path": "/mnt/manga/Kavita/Lacus/Manwha",      "enabled": false },
+  { "id": "lib9",  "name": "SKYPRO",    	  "path": "/mnt/manga/Kavita/SKYPRO/Manwha",       "enabled": false },
+  { "id": "lib10", "name": "Sempai",		  "path": "/mnt/manga/Kavita/Sempai/Manhwa", "enabled": false }
+]

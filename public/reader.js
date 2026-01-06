@@ -1,14 +1,26 @@
-const params = new URLSearchParams(location.search);
+const params = new URLSearchParams(window.location.search);
 const manga = params.get("manga");
+const chapter = params.get("chapter");
 
-fetch(`/api/chapters/${manga}`)
-  .then(r => r.json())
-  .then(chapters => {
-    const ch = chapters[0]; // MVP: első fejezet
-    for (let i = 1; i <= 30; i++) {
+const container = document.getElementById("pages");
+
+if (!manga || !chapter) {
+  container.innerHTML = "<p>Missing manga or chapter</p>";
+  throw new Error("Missing params");
+}
+
+fetch(`/api/pages/${encodeURIComponent(manga)}/${encodeURIComponent(chapter)}`)
+  .then((res) => res.json())
+  .then((pages) => {
+    pages.forEach((file) => {
       const img = document.createElement("img");
-      img.src = `/images/${manga}/${ch.folder}/${String(i).padStart(3,"0")}.webp`;
+      img.src = `/images/${encodeURIComponent(manga)}/${encodeURIComponent(chapter)}/${encodeURIComponent(file)}`;
       img.style.width = "100%";
-      document.getElementById("pages").appendChild(img);
-    }
+      img.style.display = "block";
+      img.loading = "lazy";
+      container.appendChild(img);
+    });
+  })
+  .catch(() => {
+    container.innerHTML = "<p>Error loading pages</p>";
   });
