@@ -16,7 +16,7 @@ function extractPageNumber(filename) {
 
 router.get("/manga", async (req, res) => {
   const { rows } = await pool.query(
-    "SELECT title, slug FROM manga ORDER BY title"
+    "SELECT title, slug, cover_url FROM manga ORDER BY title"
   );
   res.json(rows);
 });
@@ -32,13 +32,18 @@ router.get("/chapters/:slug", async (req, res) => {
     FROM chapter c
     JOIN manga m ON m.id = c.manga_id
     WHERE m.slug = $1
-    ORDER BY c.folder
+    ORDER BY
+      CAST(
+        REGEXP_REPLACE(c.folder, '[^0-9]', '', 'g')
+        AS INTEGER
+      )
     `,
     [slug]
   );
 
   res.json(rows);
 });
+
 
 /* ================= PAGE LIST ================= */
 

@@ -1,108 +1,160 @@
 <!DOCTYPE html>
 <html lang="hu">
 <head>
-<meta charset="UTF-8">
-<title>PadlizsanFanSub</title>
-<style>
-body {
-  margin: 0;
-  background: url("/assets/bg.svg") center / cover fixed;
-  color: #eee;
-  font-family: "Segoe UI", Arial, sans-serif;
-}
-#nav {
-  position: fixed;
-  top: 12px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(0,0,0,0.65);
-  padding: 8px 14px;
-  border-radius: 20px;
-  box-shadow: 0 0 20px rgba(0,0,0,0.6);
-  z-index: 10;
-}
-#nav button {
-  background: #222;
-  color: #fff;
-  border: 1px solid #555;
-  padding: 6px 14px;
-  margin: 0 6px;
-  cursor: pointer;
-}
-#nav button:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-#pages {
-  max-width: 900px;
-  margin: 90px auto 20px;
-  animation: fadeIn 0.4s ease;
-}
-img {
-  width: 100%;
-  display: block;
-  margin-bottom: 10px;
-  border-radius: 4px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.6);
-}
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-</style>
+  <meta charset="UTF-8">
+  <title>PadlizsanFanSub – Reader</title>
+
+  <style>
+    body {
+      margin: 0;
+      background: #000;
+      color: #fff;
+      font-family: system-ui, sans-serif;
+    }
+
+    /* ===== TOP UI ===== */
+    #ui {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 56px;
+      background: rgba(0,0,0,.75);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      z-index: 10;
+      transition: opacity .2s ease;
+    }
+
+    #ui.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    #ui button {
+      background: #161b22;
+      color: #fff;
+      border: none;
+      padding: 8px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    #ui button:hover {
+      background: #1f2630;
+    }
+
+    #chapterInfo {
+      font-size: 14px;
+      opacity: .85;
+    }
+
+    /* ===== PAGES ===== */
+    #pages {
+      padding-top: 60px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    #pages img {
+      width: 100%;
+      display: block;
+      margin-bottom: 10px;
+    }
+  </style>
 </head>
 <body>
 
-<div id="nav">
-  <button id="prevBtn">⬅ Prev</button>
-  <button id="nextBtn">Next ➡</button>
+<!-- UI BAR -->
+<div id="ui">
+  <button id="prevBtn">← Prev</button>
+  <div id="chapterInfo">Loading…</div>
+  <button id="nextBtn">Next →</button>
 </div>
 
-<div id="pages">Betöltés…</div>
+<!-- PAGES -->
+<div id="pages"></div>
 
 <script>
 const params = new URLSearchParams(location.search);
-const slug = params.get("manga");
+const slug = params.get("slug");
 const chapter = params.get("chapter");
 
-/* next / prev */
-fetch(`/api/chapter-nav/${slug}/${chapter}`)
-  .then(r => r.json())
-  .then(nav => {
-    const prev = document.getElementById("prevBtn");
-    const next = document.getElementById("nextBtn");
+const pagesEl = document.getElementById("pages");
+const ui = document.getElementById("ui");
+const chapterInfo = document.getElementById("chapterInfo");
 
-    if (nav.prev)
-      prev.onclick = () =>
-        location.href =
-          `/reader.html?manga=${slug}&chapter=${nav.prev}`;
-    else prev.disabled = true;
+let uiVisible = true;
 
-    if (nav.next)
-      next.onclick = () =>
-        location.href =
-          `/reader.html?manga=${slug}&chapter=${nav.next}`;
-    else next.disabled = true;
-  });
+/* ===== UI TOGGLE ===== */
+document.addEventListener("click", (e) => {
+  // Ne gombnyomásra toggle-öljön
+  if (e.target.tagName === "BUTTON") return;
 
-/* pages */
-fetch(`/api/pages/${slug}/${chapter}`)
-  .then(r => r.json())
-  .then(pages => {
-    const c = document.getElementById("pages");
-    c.innerHTML = "";
-    pages.forEach(f => {
+  uiVisible = !uiVisible;
+  ui.classList.toggle("hidden", !uiVisible);
+});
+
+/* ===== LOAD PAGES ===== */
+async function loadPages() {
+  if (!slug || !chapter) {
+    pagesEl.textContent = "Missing chapter.";
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/pages/${slug}/${chapter}`);
+    const files = await res.json();
+
+    if (!Array.isArray(files) || files.length === 0) {
+      pagesEl.textContent = "No pages found.";
+      return;
+    }
+
+    files.forEach(f => {
       const img = document.createElement("img");
-      img.src =
-        `/api/image/${slug}/${chapter}/${encodeURIComponent(f)}`;
+      img.src = `/api/image/${slug}/${chapter}/${encodeURIComponent(f)}`;
       img.loading = "lazy";
-      c.appendChild(img);
+      pagesEl.appendChild(img);
     });
-  })
-  .catch(() => {
-    document.getElementById("pages").innerText =
-      "Error loading pages";
-  });
+
+  } catch (e) {
+    console.error(e);
+    pagesEl.textContent = "Error loading pages.";
+  }
+}
+
+/* ===== CHAPTER NAV ===== */
+async function loadChapterInfo() {
+  const res = await fetch(`/api/chapters/${slug}`);
+  const chapters = await res.json();
+
+  const index = chapters.findIndex(c => c.folder === chapter);
+
+  if (index === -1) {
+    chapterInfo.textContent = chapter;
+    return;
+  }
+
+  chapterInfo.textContent = `Chapter ${index + 1} / ${chapters.length}`;
+
+  document.getElementById("prevBtn").onclick = () => {
+    if (index > 0) {
+      location.href = `/reader.html?slug=${slug}&chapter=${chapters[index - 1].folder}`;
+    }
+  };
+
+  document.getElementById("nextBtn").onclick = () => {
+    if (index < chapters.length - 1) {
+      location.href = `/reader.html?slug=${slug}&chapter=${chapters[index + 1].folder}`;
+    }
+  };
+}
+
+loadPages();
+loadChapterInfo();
 </script>
 
 </body>
