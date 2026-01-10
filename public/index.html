@@ -1,75 +1,121 @@
 <!DOCTYPE html>
 <html lang="hu">
 <head>
-<meta charset="UTF-8">
-<title>PadlizsanFanSub</title>
-<style>
-body {
-  margin: 0;
-  background: url("/assets/bg.svg") center / cover fixed;
-  color: #eee;
-  font-family: "Segoe UI", Arial, sans-serif;
-}
-header {
-  text-align: center;
-  padding: 24px;
-}
-header img {
-  height: 80px;
-}
-main {
-  max-width: 900px;
-  margin: auto;
-  background: rgba(0,0,0,0.65);
-  padding: 20px;
-  border-radius: 10px;
-  box-shadow: 0 0 40px rgba(0,0,0,0.6);
-}
-ul {
-  padding: 0;
-}
-li {
-  list-style: none;
-  margin: 8px 0;
-  padding: 10px 14px;
-  border-radius: 8px;
-  background: rgba(255,255,255,0.05);
-  transition: background 0.2s;
-}
-li:hover {
-  background: rgba(255,255,255,0.1);
-}
-a {
-  color: #9cf;
-  text-decoration: none;
-  font-size: 18px;
-}
-</style>
+  <meta charset="UTF-8">
+  <title>PadlizsanFanSub</title>
+
+  <style>
+    body {
+      margin: 0;
+      background: #0e1117;
+      color: #fff;
+      font-family: system-ui, sans-serif;
+    }
+
+    header {
+      text-align: center;
+      padding: 20px;
+      font-size: 28px;
+      font-weight: bold;
+    }
+
+    #grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 16px;
+      padding: 20px;
+    }
+
+    .card {
+      background: #161b22;
+      border-radius: 8px;
+      overflow: hidden;
+      text-decoration: none;
+      color: inherit;
+      cursor: pointer;
+      transition: transform .15s ease;
+    }
+
+    .card:hover {
+      transform: translateY(-4px);
+    }
+
+    .cover {
+      width: 100%;
+      aspect-ratio: 3 / 4;
+      background: #222;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #777;
+      font-size: 14px;
+    }
+
+    .cover img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .title {
+      padding: 8px;
+      font-size: 14px;
+      line-height: 1.2em;
+      max-height: 2.4em;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+  </style>
 </head>
 <body>
 
-<header>
-  <img src="/assets/logo.svg" alt="PadlizsanFanSub">
-</header>
+<header>PadlizsanFanSub</header>
 
-<main>
-  <h1>Mangák</h1>
-  <ul id="mangaList">Betöltés…</ul>
-</main>
+<!-- EZ A FONTOS: IDE RAJZOL A JS -->
+<div id="grid"></div>
 
 <script>
-fetch("/api/manga")
-  .then(r => r.json())
-  .then(data => {
-    const ul = document.getElementById("mangaList");
-    ul.innerHTML = "";
+(async function () {
+  try {
+    const res = await fetch("/api/manga");
+    const data = await res.json();
+
+    const grid = document.getElementById("grid");
+    grid.innerHTML = "";
+
     data.forEach(m => {
-      const li = document.createElement("li");
-      li.innerHTML =
-        `<a href="/chapters.html?manga=${m.slug}">${m.title}</a>`;
-      ul.appendChild(li);
+      const a = document.createElement("a");
+      a.className = "card";
+      a.href = `/chapters.html?slug=${encodeURIComponent(m.slug)}`;
+      a.title = m.title;
+
+      const cover = document.createElement("div");
+      cover.className = "cover";
+
+      if (m.cover_url) {
+        const img = document.createElement("img");
+        img.src = m.cover_url;
+        img.loading = "lazy";
+        cover.appendChild(img);
+      } else {
+        cover.textContent = "No Cover";
+      }
+
+      const title = document.createElement("div");
+      title.className = "title";
+      title.textContent = m.title;
+
+      a.appendChild(cover);
+      a.appendChild(title);
+      grid.appendChild(a);
     });
-  });
+
+  } catch (e) {
+    console.error("Failed to load manga", e);
+  }
+})();
 </script>
 
 </body>
