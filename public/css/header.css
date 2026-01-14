@@ -1,0 +1,78 @@
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 12px 24px;
+  background: linear-gradient(180deg, #0f1220, #0b0d12);
+  border-bottom: 1px solid #1f2333;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 18px;
+  font-weight: 600;
+  font-family: "Poppins", system-ui, sans-serif;
+  font-size: 20px;
+  font-weight: 600;
+
+  color: #ffffff;
+  text-decoration: none;
+}
+
+.logo img {
+  height: 30px;
+}
+
+.search-wrapper {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  position: relative;
+}
+
+.search-wrapper input {
+  width: 380px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid #333;
+  background: #0e111b;
+  color: #fff;
+  font-size: 14px;
+}
+
+.search-wrapper input:focus {
+  outline: none;
+  border-color: #7c5cff;
+}
+
+/* ==== PATREON ICON ==== */
+
+.patreon {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  height: 45x;              /* EZ A KULCS */
+  width: auto;               /* EZ A KULCS */
+
+  text-decoration: none;     /* aláhúzás OFF */
+  line-height: 0;            /* inline bug OFF */
+  overflow: hidden; /* <- nagyon fontos */
+}
+
+.patreon img {
+  height: 40px;              /* tényleges ikon méret */
+  width: auto;
+  display: block;
+
+  transition: transform 0.2s ease, filter 0.2s ease;
+  filter: brightness(0.9);
+}
+
+.patreon:hover img {
+  transform: scale(1.15);
+  filter: brightness(1);
+}

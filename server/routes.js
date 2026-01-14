@@ -8,8 +8,9 @@ const router = express.Router();
 /* ================= HELPERS ================= */
 
 function extractPageNumber(filename) {
-  const m = filename.match(/(\d+)(?=\.[^.]+$)/);
-  return m ? parseInt(m[1], 10) : null;
+  const base = filename.replace(/\.[^.]+$/, ""); // .jpg levágása
+  const match = base.match(/(\d+)(?!.*\d)/);     // UTOLSÓ szám
+  return match ? parseInt(match[1], 10) : null;
 }
 
 /* ================= MANGA LIST ================= */
@@ -72,13 +73,22 @@ router.get("/pages/:slug/:chapter", async (req, res) => {
   const dir = path.join(library_path, manga_folder, chapter);
 
   try {
-    const pages = fs
-      .readdirSync(dir)
-      .filter(f => /\.(jpg|jpeg|png|webp)$/i.test(f))
-      .map(f => ({ f, n: extractPageNumber(f) }))
-      .filter(p => p.n !== null)
-      .sort((a, b) => a.n - b.n)
-      .map(p => p.f);
+const files = fs
+  .readdirSync(dir)
+  .filter(f => /\.(jpg|jpeg|png|webp)$/i.test(f));
+
+const pages = files
+  .map(f => ({ f, n: extractPageNumber(f) }))
+  .sort((a, b) => {
+    // ha mindkettő számozott → szám szerint
+    if (a.n !== null && b.n !== null) return a.n - b.n;
+    // ha csak egyik számozott → az menjen előre
+    if (a.n !== null) return -1;
+    if (b.n !== null) return 1;
+    // egyik sem → természetes ABC
+    return a.f.localeCompare(b.f, undefined, { numeric: true });
+  })
+  .map(p => p.f);
 
     res.json(pages);
   } catch {
