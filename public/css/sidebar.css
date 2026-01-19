@@ -1,0 +1,52 @@
+/* SIDEBAR ALAP */
+.sidebar {
+  position: fixed;
+  top: 64px;               /* header magasság */
+  left: 0;
+  width: 240px;
+  height: calc(100vh - 64px);
+  background: #121418;
+  box-shadow: 2px 0 20px rgba(0,0,0,.4);
+  padding: 16px;
+  transform: translateX(-100%);
+  transition: transform .25s ease;
+  z-index: 1000;
+}
+
+/* NYITOTT ÁLLAPOT */
+.sidebar.open {
+  transform: translateX(0);
+}
+
+/* NAV LINK */
+.sidebar nav a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  color: #ddd;
+  text-decoration: none;
+  border-radius: 8px;
+  font-weight: 500;
+}
+
+.sidebar nav a:hover {
+  background: #1f232b;
+  color: #fff;
+}
+
+/* OVERLAY */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.55);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .2s ease;
+  z-index: 40;
+}
+
+.overlay.show {
+  opacity: 1;
+  pointer-events: auto;
+}

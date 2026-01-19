@@ -1,17 +1,16 @@
 <!DOCTYPE html>
 <html lang="hu">
 <head>
-  <meta charset="UTF-8">
-  <title>PadlizsanFanSub</title>
-<link rel="stylesheet" href="/css/search.css">
-<link rel="stylesheet" href="/css/header.css">
-<link rel="stylesheet" href="/css/grid.css">
+<meta charset="UTF-8">
+<title>Want To Read</title>
 <link rel="stylesheet" href="/css/sidebar.css">
-
-
+<link rel="stylesheet" href="/css/search.css">
+<link rel="stylesheet" href="/css/grid.css">
+<link rel="stylesheet" href="/css/header.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
+
 </head>
 <body>
 
@@ -50,6 +49,7 @@ document.getElementById("logoutBtn")?.addEventListener("click", async () => {
   location.href = "/login.html";
 });
 </script>
+
 </header>
 <!-- SIDEBAR -->
 <aside id="sidebar" class="sidebar">
@@ -63,87 +63,43 @@ document.getElementById("logoutBtn")?.addEventListener("click", async () => {
     <a href="/partners.html">🤝 Társoldalak</a>
   </nav>
 </aside>
+
 <!-- OVERLAY -->
 <div id="overlay" class="overlay"></div>
-<!-- EZ A FONTOS: IDE RAJZOL A JS -->
+
 <main class="content">
-<div id="grid"></div>
+  <h1>⭐ Want To Read</h1>
+  <div id="grid"></div>
 </main>
+
 <script src="/js/auth-check.js"></script>
+
 <script>
-(async function () {
-  try {
-    const res = await fetch("/api/manga");
-    const mangas = await res.json();
+(async () => {
+  const res = await fetch("/api/want");
+  const mangas = await res.json();
 
-    const grid = document.getElementById("grid");
-    grid.innerHTML = "";
+  const grid = document.getElementById("grid");
+  grid.innerHTML = "";
 
-    // 🔹 progress map (slug → progress)
-    const progressMap = {};
+  mangas.forEach(m => {
+    const a = document.createElement("a");
+    a.className = "card";
+    a.href = `/chapters.html?slug=${m.slug}`;
 
-    // 🔹 minden mangához megpróbáljuk lekérni a progress-t
-    await Promise.all(
-      mangas.map(async (m) => {
-        try {
-          const r = await fetch(`/api/progress/${m.slug}`);
-          if (r.ok) {
-            const p = await r.json();
-            if (p) progressMap[m.slug] = p;
-          }
-        } catch {
-          // ha nincs progress → semmi gond
-        }
-      })
-    );
-
-mangas.forEach(m => {
-  const card = document.createElement("div");
-  card.className = "card";
-
-  /* ===== COVER (KÉP) ===== */
-  const coverLink = document.createElement("a");
-  coverLink.className = "cover";
-
-  // default: chapters
-  coverLink.href = `/chapters.html?slug=${encodeURIComponent(m.slug)}`;
-
-  if (m.cover_url) {
     const img = document.createElement("img");
-    img.src = m.cover_url;
-    img.loading = "lazy";
-    coverLink.appendChild(img);
-  } else {
-    coverLink.textContent = "No Cover";
-  }
+    img.src = m.cover_url || "/assets/no-cover.png";
 
-  // ▶ FOLYTATÁS – csak ha van progress
-  if (progressMap[m.slug]) {
-    const badge = document.createElement("div");
-    badge.className = "continue-badge";
-    badge.textContent = "▶ Folytatás";
-    coverLink.appendChild(badge);
+    const t = document.createElement("div");
+    t.className = "title";
+    t.textContent = m.title;
 
-    coverLink.href =
-      `/reader.html?slug=${encodeURIComponent(m.slug)}&chapter=${encodeURIComponent(progressMap[m.slug].chapter)}&page=${progressMap[m.slug].page}`;
-  }
-
-  /* ===== TITLE (CÍM) ===== */
-  const titleLink = document.createElement("a");
-  titleLink.className = "title";
-  titleLink.href = `/chapters.html?slug=${encodeURIComponent(m.slug)}`;
-  titleLink.textContent = m.title;
-
-  card.appendChild(coverLink);
-  card.appendChild(titleLink);
-  grid.appendChild(card);
-});
-
-  } catch (e) {
-    console.error("Failed to load manga", e);
-  }
+    a.append(img, t);
+    grid.appendChild(a);
+  });
 })();
 </script>
+
 
 <script>
 let allManga = [];
@@ -201,34 +157,6 @@ document.addEventListener("click", e => {
   }
 });
 </script>
-<script>
-(async () => {
-  const res = await fetch("/api/auth/me");
-  const user = await res.json();
-
-  if (!user) {
-    location.href = "/login.html";
-  }
-})();
-</script>
-<script src="/js/layout.js"></script>
 <script src="/js/sidebar.js"></script>
-
 </body>
-
-<!-- Matomo -->
-<script>
-  var _paq = window._paq = window._paq || [];
-  /* tracker methods like "setCustomDimension" should be called before "trackPageView" */
-  _paq.push(['trackPageView']);
-  _paq.push(['enableLinkTracking']);
-  (function() {
-    var u="//mamato.csimota.duckdns.org/";
-    _paq.push(['setTrackerUrl', u+'matomo.php']);
-    _paq.push(['setSiteId', '1']);
-    var d=document, g=d.createElement('script'), s=d.getElementsByTagName('script')[0];
-    g.async=true; g.src=u+'matomo.js'; s.parentNode.insertBefore(g,s);
-  })();
-</script>
-<!-- End Matomo Code -->
 </html>

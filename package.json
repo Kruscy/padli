@@ -4,8 +4,10 @@
   "type": "module",
   "private": true,
   "dependencies": {
+    "bcrypt": "^6.0.0",
     "dotenv": "^17.2.3",
     "express": "^4.19.0",
+    "express-session": "^1.18.2",
     "node-fetch": "^3.3.2",
     "pg": "^8.11.5"
   }

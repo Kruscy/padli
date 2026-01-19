@@ -53,3 +53,25 @@ body {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
 }
+.card a {
+  text-decoration: none;
+  color: inherit;
+}
+.cover {
+  position: relative;
+  display: block;
+}
+
+.continue-badge {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,.5);
+  pointer-events: none;
+}

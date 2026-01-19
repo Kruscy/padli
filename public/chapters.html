@@ -1,113 +1,329 @@
 <!DOCTYPE html>
 <html lang="hu">
 <head>
-  <meta charset="UTF-8">
-  <title>PadlizsanFanSub</title>
+<meta charset="UTF-8">
+<title>PadlizsanFanSub – Manga</title>
 
-  <style>
-    body {
-      margin: 0;
-      background: #0e1117;
-      color: #fff;
-      font-family: system-ui, sans-serif;
-    }
+<link rel="stylesheet" href="/css/header.css">
+<link rel="stylesheet" href="/css/sidebar.css">
+<link rel="stylesheet" href="/css/search.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
 
-    header {
-      padding: 20px;
-      font-size: 24px;
-      font-weight: bold;
-      text-align: center;
-      border-bottom: 1px solid #222;
-    }
-
-    .container {
-      max-width: 900px;
-      margin: 0 auto;
-      padding: 20px;
-    }
-
-    .manga-title {
-      font-size: 28px;
-      margin-bottom: 10px;
-    }
-
-    .chapter-list a {
-      display: block;
-      padding: 10px;
-      margin-bottom: 6px;
-      background: #161b22;
-      color: #fff;
-      text-decoration: none;
-      border-radius: 6px;
-    }
-
-    .chapter-list a:hover {
-      background: #1f2630;
-    }
-  </style>
-</head>
-<body>
-
-<header>PadlizsanFanSub</header>
-
-<div class="container">
-  <div id="mangaTitle" class="manga-title">Loading...</div>
-  <div id="chapters" class="chapter-list"></div>
-</div>
-
-<script>
-function getSlug() {
-  const params = new URLSearchParams(window.location.search);
-  return params.get("slug");
+<style>
+body {
+  margin: 0;
+  background: #0e1117;
+  color: #fff;
+  font-family: system-ui, sans-serif;
 }
 
-async function loadChapters() {
-  const slug = getSlug();
-  if (!slug) {
-    document.getElementById("mangaTitle").textContent = "Missing manga slug";
-    return;
+.page {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 32px;
+}
+
+.manga-header {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 32px;
+}
+.actions button,
+.actions a {
+  position: relative;
+  z-index: 20;
+  cursor: pointer;
+}
+.cover {
+  position: relative;
+  z-index: 1;
+}
+
+.cover img {
+width: 100%;
+border-radius: 12px;
+  position: relative;
+  z-index: 1;
+}
+
+.actions {
+  position: relative;
+  z-index: 5;
+}
+
+.want-btn {
+  position: relative;
+  z-index: 10;
+  cursor: pointer;
+}
+.actions a, .actions button {
+  background: #1f2937;
+  color: #fff;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 10px;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.actions .continue {
+  background: #2e8b57;
+}
+.chapter-list a {
+  display: block;
+  padding: 12px;
+  background: #161b22;
+  margin-bottom: 8px;
+  border-radius: 8px;
+  color: #fff;
+  text-decoration: none;
+}
+
+.chapter-list a:hover {
+  background: #1f2630;
+}
+</style>
+</head>
+
+<body>
+
+<header class="topbar">
+  <button id="menuToggle" class="menu-btn">☰</button>
+  <a href="/" class="logo">
+    <img src="/assets/logo.png" alt="PadlizsanFanSub">
+    <span>PadlizsanFanSub</span>
+  </a>
+
+  <div class="search-wrapper">
+    <input
+      type="text"
+      id="searchInput"
+      placeholder="Search manga..."
+      autocomplete="off"
+    />
+    <div id="searchResults" class="search-results hidden"></div>
+  </div>
+<a
+  href="https://patreon.com/Padlizsanfansub"
+  target="_blank"
+  class="patreon"
+  title="Support us on Patreon"
+>
+  <img src="/assets/pat2.png" alt="Patreon">
+</a>
+<button id="logoutBtn" class="icon-btn" title="Logout">
+  <img src="/assets/logout.png" alt="Logout">
+</button>
+
+<script>
+document.getElementById("logoutBtn")?.addEventListener("click", async () => {
+  await fetch("/api/auth/logout", { method: "POST" });
+  location.href = "/login.html";
+});
+</script>
+
+</header>
+<!-- SIDEBAR -->
+<aside id="sidebar" class="sidebar">
+  <nav>
+    <a href="/">🏠 Home</a>
+    <a href="/want.html">⭐ Want To Read</a>
+    <a href="/bookmarks.html">🔖 Bookmarks</a>
+    <hr>
+
+    <a href="/partners.html">🤝 Társoldalak</a>
+  </nav>
+</aside>
+<div id="overlay" class="overlay"></div>
+
+<main class="page">
+
+<div class="manga-header">
+  <div class="cover">
+    <img id="cover">
+  </div>
+
+  <div class="info">
+    <h1 id="title">Loading...</h1>
+
+    <div class="actions" id="actions">
+      <button>⭐ Want to Read</button>
+      <button>❤️ Kedvenc</button>
+    </div>
+
+    <div id="description"></div>
+  </div>
+</div>
+
+<h2 style="margin-top:40px">Részek</h2>
+<div id="chapters" class="chapter-list"></div>
+
+</main>
+
+<script src="/js/auth-check.js"></script>
+<script src="/js/sidebar.js"></script>
+
+<script>
+(async () => {
+  const slug = new URLSearchParams(location.search).get("slug");
+  if (!slug) return;
+
+  /* ===== MANGA ===== */
+  try {
+    const mangas = await (await fetch("/api/manga")).json();
+    const manga = mangas.find(m => m.slug === slug);
+    if (!manga) return;
+
+    document.getElementById("title").textContent = manga.title;
+    document.getElementById("cover").src = manga.cover_url || "/assets/no-cover.png";
+    document.getElementById("description").innerHTML = manga.description || "";
+  } catch (e) {
+    console.error("Manga load error", e);
   }
 
+  /* ===== PROGRESS ===== */
   try {
-    // Manga alapadat (cím)
-    const mangaRes = await fetch("/api/manga");
-    const mangas = await mangaRes.json();
-    const manga = mangas.find(m => m.slug === slug);
-
-    if (!manga) {
-      document.getElementById("mangaTitle").textContent = "Manga not found";
-      return;
+    const res = await fetch(`/api/progress/${slug}`);
+    if (res.ok) {
+      const p = await res.json();
+      if (p) {
+        const a = document.createElement("a");
+        a.className = "continue";
+        a.textContent = `▶ Folytatás (${p.chapter} – ${p.page + 1}. oldal)`;
+        a.href = `/reader.html?slug=${slug}&chapter=${p.chapter}&page=${p.page}`;
+        document.getElementById("actions").prepend(a);
+      }
     }
+  } catch {}
 
-    document.getElementById("mangaTitle").textContent = manga.title;
-
-    // Chapter lista
-    const res = await fetch(`/api/chapters/${encodeURIComponent(slug)}`);
+  /* ===== CHAPTERS ===== */
+  try {
+    const res = await fetch(`/api/chapters/${slug}`);
     const chapters = await res.json();
 
-    const container = document.getElementById("chapters");
-    container.innerHTML = "";
-
-    if (chapters.length === 0) {
-      container.textContent = "No chapters found.";
-      return;
-    }
+    const list = document.getElementById("chapters");
+    list.innerHTML = "";
 
     chapters.forEach(ch => {
       const a = document.createElement("a");
-      a.href = `/reader.html?slug=${encodeURIComponent(slug)}&chapter=${encodeURIComponent(ch.folder)}`;
+      a.href = `/reader.html?slug=${slug}&chapter=${ch.folder}`;
       a.textContent = ch.folder;
-      container.appendChild(a);
+      list.appendChild(a);
+    });
+  } catch (e) {
+    console.error("Chapter load error", e);
+  }
+})();
+</script>
+<!-- kereso -->
+
+<script>
+let allManga = [];
+
+fetch("/api/manga")
+  .then(r => r.json())
+  .then(data => {
+    allManga = data;
+  });
+
+const input = document.getElementById("searchInput");
+const results = document.getElementById("searchResults");
+
+input.addEventListener("input", () => {
+  const q = input.value.toLowerCase().trim();
+  results.innerHTML = "";
+
+  if (!q) {
+    results.classList.add("hidden");
+    return;
+  }
+
+  const matches = allManga
+    .filter(m => m.title.toLowerCase().includes(q))
+    .slice(0, 10);
+
+  if (!matches.length) {
+    results.classList.add("hidden");
+    return;
+  }
+
+  matches.forEach(m => {
+    const div = document.createElement("div");
+    div.className = "search-item";
+
+    div.innerHTML = `
+      <img src="${m.cover_url || "/assets/no-cover.png"}">
+      <span>${m.title}</span>
+    `;
+
+    div.onclick = () => {
+      window.location.href = `/chapters.html?slug=${m.slug}`;
+    };
+
+    results.appendChild(div);
+  });
+
+  results.classList.remove("hidden");
+});
+
+// kattint  s m  shova  ^f^r bez  r
+document.addEventListener("click", e => {
+  if (!e.target.closest(".search-wrapper")) {
+    results.classList.add("hidden");
+  }
+});
+</script>
+<!-- wanttoread -->
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const wantBtn = document.getElementById("wantBtn");
+  if (!wantBtn) return;
+
+  const slug = new URLSearchParams(location.search).get("slug");
+  if (!slug) return;
+
+  // Állapot lekérés
+  fetch(`/api/want/${slug}`, {
+    credentials: "same-origin"
+  })
+    .then(r => {
+      if (r.status === 401) {
+        console.warn("Not logged in");
+        return null;
+      }
+      return r.json();
+    })
+    .then(d => {
+      if (!d) return;
+      wantBtn.textContent = d.wanted
+        ? "⭐ Want To Read"
+        : "☆ Want To Read";
     });
 
-  } catch (e) {
-    console.error(e);
-    document.getElementById("mangaTitle").textContent = "Error loading chapters";
-  }
-}
+  // Toggle
+  wantBtn.addEventListener("click", async () => {
+    console.log("Want clicked"); // ← ez most már meg fog jelenni
 
-loadChapters();
+    const r = await fetch(`/api/want/${slug}`, {
+      method: "POST",
+      credentials: "same-origin"
+    });
+
+    if (!r.ok) {
+      console.warn("Toggle failed", r.status);
+      return;
+    }
+
+    const d = await r.json();
+    wantBtn.textContent = d.wanted
+      ? "⭐ Want To Read"
+      : "☆ Want To Read";
+  });
+});
 </script>
+
 
 </body>
 </html>
