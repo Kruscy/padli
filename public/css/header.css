@@ -6,6 +6,21 @@
   background: linear-gradient(180deg, #0f1220, #0b0d12);
   border-bottom: 1px solid #1f2333;
 }
+.content {
+  padding-top: 64px;
+}
+.menu-btn {
+  font-size: 22px;
+  background: none;
+  border: none;
+  color: white;
+  cursor: pointer;
+  margin-right: 12px;
+}
+.menu-btn:hover {
+  transform: scale(1.15);
+  filter: brightness(1);
+}
 
 .logo {
   display: flex;
@@ -45,6 +60,23 @@
 .search-wrapper input:focus {
   outline: none;
   border-color: #7c5cff;
+}
+/* ==== LOGOUT ICON ==== */
+
+.icon-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.icon-btn img {
+  width: 37px;
+  opacity: .85;
+}
+
+.icon-btn:hover img {
+  transform: scale(1.15);
+  opacity: 1;
 }
 
 /* ==== PATREON ICON ==== */

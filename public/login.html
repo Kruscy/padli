@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8" />
+  <title>Login – PadlizsanFanSub</title>
+  <link rel="stylesheet" href="/css/auth.css" />
+</head>
+<body>
+
+<div class="auth-page" id="authPage">
+  <div class="auth-card">
+    <h1>PadlizsanFanSub</h1>
+
+    <form id="loginForm">
+      <input id="login" placeholder="Email vagy felhasználónév" />
+      <input id="password" type="password" placeholder="Jelszó" />
+      <button>Login</button>
+    </form>
+
+    <div id="error" class="error"></div>
+
+    <p>Nincs még fiókod? <a href="/register.html">Regisztráció</a></p>
+  </div>
+</div>
+
+<script src="/js/background.js"></script>
+<script src="/js/login.js"></script>
+</body>
+</html>

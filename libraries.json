@@ -1,7 +1,7 @@
 [
   { "id": "lib1",  "name": "Ascyra",  	 	  "path": "/mnt/manga/Kavita/Ascyra",        "enabled": true },
   { "id": "lib2",  "name": "Manga Joker",    	  "path": "/mnt/manga/Kavita/Joker/Manga",        "enabled": false },
-  { "id": "lib3",  "name": "Ascyra Manga",  	  "path": "/mnt/manga/Kavita/Ascyra Manga",    "enabled": false },
+  { "id": "lib3",  "name": "bajos",  	  "path": "/mnt/manga/Kavita/bajos",    "enabled": true },
   { "id": "lib4",  "name": "Stukker",             "path": "/mnt/manga/Kavita/Stukker/Kicsomagolt Manhwa",    "enabled": true },
   { "id": "lib5",  "name": "Joker",        	  "path": "/mnt/manga/Kavita/Joker/Manwha",   "enabled": false },
 
