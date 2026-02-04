@@ -1,4 +1,11 @@
 .topbar {
+  position: sticky;   /* ⬅ EZ HIÁNYZOTT */
+  top: 0;             /* ⬅ EZ IS KELL */
+/*   left: 0;
+  right: 0; */
+
+   z-index: 10000;     /* ⬅ hogy minden felett legyen */
+
   display: flex;
   align-items: center;
   gap: 20px;
@@ -7,7 +14,7 @@
   border-bottom: 1px solid #1f2333;
 }
 .content {
-  padding-top: 64px;
+  padding-top: 65px;
 }
 .menu-btn {
   font-size: 22px;
@@ -107,4 +114,117 @@
 .patreon:hover img {
   transform: scale(1.15);
   filter: brightness(1);
+}
+/* ==== SETTINGS BUTTON ==== */
+
+.settings-wrapper {
+  position: relative;
+}
+
+.settings-btn {
+  width: 42px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.settings-btn .gear {
+  font-size: 22px;
+  transition: transform 0.2s ease, filter 0.2s ease;
+  opacity: .85;
+}
+
+.settings-btn:hover .gear {
+  transform: scale(1.15) rotate(15deg);
+  opacity: 1;
+}
+
+/* ===== SETTINGS DROPDOWN ===== */
+
+.settings-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+#settingsBtn img {
+  width: 34px;
+  opacity: 0.85;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+#settingsBtn:hover img {
+  transform: scale(1.15);
+  opacity: 1;
+}
+
+.settings-menu {
+  position: absolute;
+  right: 0;
+  top: 46px;
+  background: #0f172a;
+  border-radius: 12px;
+  padding: 6px;
+  min-width: 180px;
+  box-shadow: 0 12px 35px rgba(0,0,0,.65);
+  z-index: 20000;
+}
+
+.settings-menu a {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  color: #fff;
+  text-decoration: none;
+  font-weight: 500;
+  transition: background .15s ease;
+}
+
+.settings-menu a:hover {
+  background: #1e293b;
+}
+
+.hidden {
+  display: none;
+}
+/* ===== SETTINGS ADMIN ACTION ===== */
+
+.settings-action {
+  width: 100%;
+  background: #1f2937;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s ease, transform .15s ease;
+/* hover */
+.settings-action:hover {
+  background: linear-gradient(180deg, #9a3412, #c2410c);
+  transform: scale(1.03);
+  box-shadow: 0 6px 18px rgba(0,0,0,.5);
+}
+
+/* aktív kattintás */
+.settings-action:active {
+  transform: scale(0.98);
+}
+
+/* disabled állapot (scan fut) */
+.settings-action:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* admin gomb elkülönítés */
+.settings-menu .settings-action {
+  margin-top: 8px;
+  border-top: 1px solid rgba(255,255,255,.08);
+  padding-top: 12px;
 }

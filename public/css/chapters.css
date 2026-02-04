@@ -1,0 +1,213 @@
+/* ===== PAGE BASE ===== */
+body {
+  margin: 0;
+  background: #0e1117;
+  color: #ffffff;
+  font-family: "Poppins", system-ui, sans-serif;
+}
+
+main.content {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+/* ===== MANGA HEADER ===== */
+.manga-header {
+  display: flex;
+  gap: 32px;
+  align-items: flex-start;
+  margin-bottom: 32px;
+}
+
+.manga-cover {
+  width: 220px;
+  border-radius: 14px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+  flex-shrink: 0;
+}
+
+.manga-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+#mangaTitle {
+  margin: 0 0 8px;
+  font-size: 30px;
+  font-weight: 700;
+}
+
+/* ===== ACTION BAR ===== */
+.action-bar {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 14px 0 16px;
+}
+
+.btn {
+  background: #1f2630;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 10px;
+  color: #ffffff;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+  transition: background .15s ease, transform .1s ease;
+}
+
+.btn:hover {
+  background: #27303c;
+  transform: translateY(-1px);
+}
+
+.btn.primary {
+  background: #2e8b57;
+}
+
+.btn.primary:hover {
+  background: #34a36a;
+}
+
+.hidden {
+  display: none;
+}
+
+/* ===== DESCRIPTION ===== */
+.description {
+  opacity: 0.9;
+  line-height: 1.6;
+  max-width: 760px;
+}
+
+/* ===== TAGS ===== */
+.tags {
+  margin-top: 12px;
+}
+
+.tags span {
+  display: inline-block;
+  background: #1f2630;
+  padding: 6px 12px;
+  border-radius: 999px;
+  margin: 4px 6px 0 0;
+  font-size: 13px;
+  font-weight: 500;
+  opacity: 0.95;
+}
+
+/* ===== CHAPTER LIST ===== */
+.chapter-list {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* 🔹 TELJES SOR = KATTINTHATÓ */
+.chapter-row {
+  display: grid;
+  grid-template-columns: 32px 1fr 110px;
+  align-items: center;
+  gap: 12px;
+
+  padding: 14px 16px;
+  background: #161b22;
+  border-radius: 10px;
+
+  color: #ffffff;
+  text-decoration: none;
+  font-weight: 500;
+
+  transition: background .15s ease, transform .08s ease;
+}
+
+/* hover az EGÉSZ sorra */
+.chapter-row:hover {
+  background: #1f2630;
+  transform: translateX(2px);
+}
+
+/* ===== CÍM ===== */
+.chapter-title {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ===== OLVASOTT / NEM OLVASOTT ===== */
+.read.yes {
+  color: #22c55e;
+  font-size: 18px;
+}
+
+.read.no {
+  color: #64748b;
+  font-size: 18px;
+}
+
+/* ===== SCAN DÁTUM ===== */
+.scan-date {
+  font-size: 13px;
+  opacity: 0.7;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* ===== EDIT MODAL ===== */
+
+.edit-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+}
+
+.edit-box {
+  width: 720px;
+  max-width: 95%;
+  background: #0f172a;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.8);
+}
+
+.edit-box h3 {
+  margin-top: 0;
+}
+
+.edit-box label {
+  display: block;
+  margin-top: 14px;
+  font-size: 14px;
+  opacity: .9;
+}
+
+.edit-box input,
+.edit-box textarea {
+  width: 100%;
+  margin-top: 6px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #334155;
+  background: #020617;
+  color: #fff;
+  font-size: 14px;
+}
+
+.edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.hidden {
+  display: none;
+}

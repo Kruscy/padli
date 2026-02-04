@@ -32,3 +32,14 @@
   max-height: 2.4em;
   overflow: hidden;
 }
+.new-count {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background: #22c55e;
+  color: #000;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 13px;
+}

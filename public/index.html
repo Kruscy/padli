@@ -1,234 +1,218 @@
 <!DOCTYPE html>
 <html lang="hu">
 <head>
-  <meta charset="UTF-8">
-  <title>PadlizsanFanSub</title>
-<link rel="stylesheet" href="/css/search.css">
-<link rel="stylesheet" href="/css/header.css">
-<link rel="stylesheet" href="/css/grid.css">
+<meta charset="UTF-8">
+<title>PadlizsanFanSub</title>
 <link rel="stylesheet" href="/css/sidebar.css">
+<link rel="stylesheet" href="/css/search.css">
+<link rel="stylesheet" href="/css/grid.css">
+<link rel="stylesheet" href="/css/header.css">
+<link rel="stylesheet" href="/css/profile.css">
+<link rel="stylesheet" href="/css/main.css">
 
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
+
 </head>
 <body>
+<div id="header-root"></div>
+<div id="sidebar-root"></div>
 
-<header class="topbar">
-  <button id="menuToggle" class="menu-btn">☰</button>
- 
-    <a href="/" class="logo">
-    <img src="/assets/logo.png" alt="PadlizsanFanSub">
-    <span>PadlizsanFanSub</span>
-  </a>
-
-  <div class="search-wrapper">
-    <input
-      type="text"
-      id="searchInput"
-      placeholder="Search manga..."
-      autocomplete="off"
-    />
-    <div id="searchResults" class="search-results hidden"></div>
-  </div>
-<a
-  href="https://patreon.com/Padlizsanfansub"
-  target="_blank"
-  class="patreon"
-  title="Support us on Patreon"
->
-  <img src="/assets/pat2.png" alt="Patreon">
-</a>
-<button id="logoutBtn" class="icon-btn" title="Logout">
-  <img src="/assets/logout.png" alt="Logout">
-</button>
+<main class="content">
+<h2>📖 Most olvasott</h2>
+<div id="grid" class="grid"></div>
 
 <script>
-document.getElementById("logoutBtn")?.addEventListener("click", async () => {
-  await fetch("/api/auth/logout", { method: "POST" });
-  location.href = "/login.html";
-});
-</script>
-</header>
-<!-- SIDEBAR -->
-<aside id="sidebar" class="sidebar">
-  <nav>
-    <a href="/">🏠 Home</a>
-    <a href="/want.html">⭐ Want To Read</a>
-    <a href="/collections.html">📚 Collections</a>
-    <a href="/bookmarks.html">🔖 Bookmarks</a>
-    <hr>
+(async function () {
+  try {
+    const mangas = await (await fetch("/api/manga")).json();
+    const grid = document.getElementById("grid");
+    grid.innerHTML = "";
 
-    <a href="/partners.html">🤝 Társoldalak</a>
-  </nav>
-</aside>
-<!-- OVERLAY -->
-<div id="overlay" class="overlay"></div>
-<!-- EZ A FONTOS: IDE RAJZOL A JS -->
-<main class="content">
-<div id="grid"></div>
-</main>
-<script src="/js/auth-check.js"></script>
+    const items = await Promise.all(
+      mangas.map(async (m) => {
+        const [progressRes, chaptersRes] = await Promise.all([
+          fetch(`/api/progress/${m.slug}`),
+          fetch(`/api/chapters/${m.slug}`)
+        ]);
+
+        if (!progressRes.ok || !chaptersRes.ok) return null;
+
+        const progress = await progressRes.json();
+        if (!progress) return null;
+
+        const chapters = await chaptersRes.json();
+        if (!chapters.length) return null;
+
+        const lastChapter = chapters[chapters.length - 1].folder;
+
+        // ❌ ha elérte az utolsó részt → ne jelenjen meg
+        if (progress.chapter === lastChapter) return null;
+
+        return { manga: m, progress };
+      })
+    );
+
+const filtered = items
+  .filter(Boolean)
+  .sort((a, b) => {
+    // legutóbb olvasott elöl
+    return new Date(b.progress.updated_at) - new Date(a.progress.updated_at);
+  });
+
+    if (!filtered.length) {
+      grid.innerHTML = "<p>Nincs aktív olvasásod.</p>";
+      return;
+    }
+
+    filtered.forEach(({ manga, progress }) => {
+      const card = document.createElement("div");
+      card.className = "card";
+
+      /* COVER → FOLYTATÁS */
+      const coverLink = document.createElement("a");
+      coverLink.className = "cover";
+      coverLink.href =
+        `/reader.html?slug=${encodeURIComponent(manga.slug)}&chapter=${encodeURIComponent(progress.chapter)}&page=${progress.page}`;
+
+      if (manga.cover_url) {
+        const img = document.createElement("img");
+        img.src = manga.cover_url;
+        img.loading = "lazy";
+        coverLink.appendChild(img);
+      }
+
+      const badge = document.createElement("div");
+      badge.className = "continue-badge";
+      badge.textContent = "▶ Folytatás";
+      coverLink.appendChild(badge);
+
+      /* TITLE → CHAPTERS */
+      const title = document.createElement("a");
+      title.className = "title";
+      title.href = `/chapters.html?slug=${encodeURIComponent(manga.slug)}`;
+      title.textContent = manga.title;
+
+      card.appendChild(coverLink);
+      card.appendChild(title);
+      grid.appendChild(card);
+    });
+
+  } catch (e) {
+    console.error("Most olvasott hiba:", e);
+  }
+})();
+</script>
+
+<h2>🆕 Új részek</h2>
+<div id="newGrid" class="content"></div>
 <script>
 (async function () {
   try {
     const res = await fetch("/api/manga");
     const mangas = await res.json();
 
-    const grid = document.getElementById("grid");
+    const grid = document.getElementById("newGrid");
     grid.innerHTML = "";
 
-    // 🔹 progress map (slug → progress)
-    const progressMap = {};
+    const now = Date.now();
+    const WEEK = 2 * 24 * 60 * 60 * 1000;
 
-    // 🔹 minden mangához megpróbáljuk lekérni a progress-t
-    await Promise.all(
-      mangas.map(async (m) => {
-        try {
-          const r = await fetch(`/api/progress/${m.slug}`);
-          if (r.ok) {
-            const p = await r.json();
-            if (p) progressMap[m.slug] = p;
-          }
-        } catch {
-          // ha nincs progress → semmi gond
-        }
-      })
-    );
+    const items = [];
 
-mangas.forEach(m => {
-  const card = document.createElement("div");
-  card.className = "card";
+    for (const m of mangas) {
+      // chapters
+      const chaptersRes = await fetch(`/api/chapters/${m.slug}`);
+      if (!chaptersRes.ok) continue;
 
-  /* ===== COVER (KÉP) ===== */
-  const coverLink = document.createElement("a");
-  coverLink.className = "cover";
+      const chapters = await chaptersRes.json();
 
-  // default: chapters
-  coverLink.href = `/chapters.html?slug=${encodeURIComponent(m.slug)}`;
+      // csak 7 napon belül scannelt
+      const recent = chapters.filter(ch => {
+        if (!ch.scanned_at) return false;
+        return now - new Date(ch.scanned_at).getTime() <= WEEK;
+      });
 
-  if (m.cover_url) {
-    const img = document.createElement("img");
-    img.src = m.cover_url;
-    img.loading = "lazy";
-    coverLink.appendChild(img);
-  } else {
-    coverLink.textContent = "No Cover";
-  }
+      if (!recent.length) continue;
 
-  // ▶ FOLYTATÁS – csak ha van progress
-  if (progressMap[m.slug]) {
-    const badge = document.createElement("div");
-    badge.className = "continue-badge";
-    badge.textContent = "▶ Folytatás";
-    coverLink.appendChild(badge);
+      // progress
+      const progressRes = await fetch(`/api/progress/${m.slug}`);
+      const progress = progressRes.ok ? await progressRes.json() : null;
 
-    coverLink.href =
-      `/reader.html?slug=${encodeURIComponent(m.slug)}&chapter=${encodeURIComponent(progressMap[m.slug].chapter)}&page=${progressMap[m.slug].page}`;
-  }
+      // ha az utolsó rész már ki van olvasva → ne jelenjen meg
+      if (progress) {
+        const lastChapter = chapters[chapters.length - 1]?.folder;
+        if (progress.chapter === lastChapter) continue;
+      }
 
-  /* ===== TITLE (CÍM) ===== */
-  const titleLink = document.createElement("a");
-  titleLink.className = "title";
-  titleLink.href = `/chapters.html?slug=${encodeURIComponent(m.slug)}`;
-  titleLink.textContent = m.title;
+      // legfrissebb scan idő
+      const latestScan = recent
+        .map(r => new Date(r.scanned_at))
+        .sort((a, b) => b - a)[0];
 
-  card.appendChild(coverLink);
-  card.appendChild(titleLink);
-  grid.appendChild(card);
-});
+      items.push({
+        manga: m,
+        recent,
+        progress,
+        latestScan
+      });
+    }
+
+    // 🔽 RENDEZÉS: legutóbb scannelt elöl
+    items.sort((a, b) => b.latestScan - a.latestScan);
+
+    // kirajzolás
+    for (const item of items) {
+      const { manga: m, recent, progress } = item;
+
+      const card = document.createElement("div");
+      card.className = "card";
+
+      /* ===== COVER ===== */
+      const coverLink = document.createElement("a");
+      coverLink.className = "cover";
+
+      coverLink.href = progress
+        ? `/reader.html?slug=${encodeURIComponent(m.slug)}&chapter=${encodeURIComponent(progress.chapter)}&page=${progress.page}`
+        : `/chapters.html?slug=${encodeURIComponent(m.slug)}`;
+
+      if (m.cover_url) {
+        const img = document.createElement("img");
+        img.src = m.cover_url;
+        img.loading = "lazy";
+        coverLink.appendChild(img);
+      }
+
+      const badge = document.createElement("div");
+      badge.className = "new-count";
+      badge.textContent = `Új részek: +${recent.length}`;
+      coverLink.appendChild(badge);
+
+      /* ===== TITLE ===== */
+      const title = document.createElement("a");
+      title.className = "title";
+      title.href = `/chapters.html?slug=${encodeURIComponent(m.slug)}`;
+      title.textContent = m.title;
+
+      card.appendChild(coverLink);
+      card.appendChild(title);
+      grid.appendChild(card);
+    }
 
   } catch (e) {
-    console.error("Failed to load manga", e);
+    console.error("Új részek hiba:", e);
   }
 })();
 </script>
 
-<script>
-let allManga = [];
+</main>
 
-fetch("/api/manga")
-  .then(r => r.json())
-  .then(data => {
-    allManga = data;
-  });
 
-const input = document.getElementById("searchInput");
-const results = document.getElementById("searchResults");
-
-input.addEventListener("input", () => {
-  const q = input.value.toLowerCase().trim();
-  results.innerHTML = "";
-
-  if (!q) {
-    results.classList.add("hidden");
-    return;
-  }
-
-  const matches = allManga
-    .filter(m => m.title.toLowerCase().includes(q))
-    .slice(0, 10);
-
-  if (!matches.length) {
-    results.classList.add("hidden");
-    return;
-  }
-
-  matches.forEach(m => {
-    const div = document.createElement("div");
-    div.className = "search-item";
-
-    div.innerHTML = `
-      <img src="${m.cover_url || "/assets/no-cover.png"}">
-      <span>${m.title}</span>
-    `;
-
-    div.onclick = () => {
-      window.location.href = `/chapters.html?slug=${m.slug}`;
-    };
-
-    results.appendChild(div);
-  });
-
-  results.classList.remove("hidden");
-});
-
-// kattint  s m  shova  ^f^r bez  r
-document.addEventListener("click", e => {
-  if (!e.target.closest(".search-wrapper")) {
-    results.classList.add("hidden");
-  }
-});
-</script>
-<script>
-(async () => {
-  const res = await fetch("/api/auth/me");
-  const user = await res.json();
-
-  if (!user) {
-    location.href = "/login.html";
-  }
-})();
-</script>
-<script src="/js/layout.js"></script>
+<script type="module" src="/js/layout-loader.js"></script>
 <script src="/js/sidebar.js"></script>
+<script src="/js/auth-check.js"></script>
 
 </body>
-
-<!-- Matomo -->
-<script>
-  var _paq = window._paq = window._paq || [];
-  /* tracker methods like "setCustomDimension" should be called before "trackPageView" */
-  _paq.push(['trackPageView']);
-  _paq.push(['enableLinkTracking']);
-  (function() {
-    var u="//mamato.csimota.duckdns.org/";
-    _paq.push(['setTrackerUrl', u+'matomo.php']);
-    _paq.push(['setSiteId', '1']);
-    var d=document, g=d.createElement('script'), s=d.getElementsByTagName('script')[0];
-    g.async=true; g.src=u+'matomo.js'; s.parentNode.insertBefore(g,s);
-  })();
-</script>
-<!-- End Matomo Code -->
 </html>

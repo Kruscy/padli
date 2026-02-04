@@ -1,201 +1,70 @@
 <!DOCTYPE html>
 <html lang="hu">
 <head>
-<meta charset="UTF-8">
-<title>PadlizsanFanSub – Manga</title>
+  <meta charset="UTF-8">
+  <title>PadlizsanFanSub – Manga</title>
 
-<link rel="stylesheet" href="/css/header.css">
-<link rel="stylesheet" href="/css/sidebar.css">
-<link rel="stylesheet" href="/css/search.css">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
+  <!-- GLOBAL CSS -->
+  <link rel="stylesheet" href="/css/header.css">
+  <link rel="stylesheet" href="/css/sidebar.css">
+  <link rel="stylesheet" href="/css/search.css">
+  <link rel="stylesheet" href="/css/chapters.css">
 
-<style>
-body {
-  margin: 0;
-  background: #0e1117;
-  color: #fff;
-  font-family: system-ui, sans-serif;
-}
 
-.page {
-  max-width: 1000px;
-  margin: 0 auto;
-  padding: 32px;
-}
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
 
-.manga-header {
-  display: grid;
-  grid-template-columns: 220px 1fr;
-  gap: 32px;
-}
-.actions button,
-.actions a {
-  position: relative;
-  z-index: 20;
-  cursor: pointer;
-}
-.cover {
-  position: relative;
-  z-index: 1;
-}
-
-.cover img {
-width: 100%;
-border-radius: 12px;
-  position: relative;
-  z-index: 1;
-}
-
-.actions {
-  position: relative;
-  z-index: 5;
-}
-
-.want-btn {
-  position: relative;
-  z-index: 10;
-  cursor: pointer;
-}
-.actions a, .actions button {
-  background: #1f2937;
-  color: #fff;
-  border: none;
-  padding: 10px 16px;
-  border-radius: 10px;
-  text-decoration: none;
-  font-weight: 600;
-}
-
-.actions .continue {
-  background: #2e8b57;
-}
-.chapter-list a {
-  display: block;
-  padding: 12px;
-  background: #161b22;
-  margin-bottom: 8px;
-  border-radius: 8px;
-  color: #fff;
-  text-decoration: none;
-}
-
-.chapter-list a:hover {
-  background: #1f2630;
-}
-</style>
 </head>
-
 <body>
+<div id="header-root"></div>
+<div id="sidebar-root"></div>
 
-<header class="topbar">
-  <button id="menuToggle" class="menu-btn">☰</button>
-  <a href="/" class="logo">
-    <img src="/assets/logo.png" alt="PadlizsanFanSub">
-    <span>PadlizsanFanSub</span>
-  </a>
 
-  <div class="search-wrapper">
-    <input
-      type="text"
-      id="searchInput"
-      placeholder="Search manga..."
-      autocomplete="off"
-    />
-    <div id="searchResults" class="search-results hidden"></div>
-  </div>
-<a
-  href="https://patreon.com/Padlizsanfansub"
-  target="_blank"
-  class="patreon"
-  title="Support us on Patreon"
->
-  <img src="/assets/pat2.png" alt="Patreon">
-</a>
-<button id="logoutBtn" class="icon-btn" title="Logout">
-  <img src="/assets/logout.png" alt="Logout">
-</button>
+<!-- ===== CONTENT ===== -->
+<main class="content">
 
-<script>
-document.getElementById("logoutBtn")?.addEventListener("click", async () => {
-  await fetch("/api/auth/logout", { method: "POST" });
-  location.href = "/login.html";
-});
-</script>
+  <div class="manga-header">
+    <img id="coverImg" class="manga-cover" src="/assets/no-cover.png">
 
-</header>
-<!-- SIDEBAR -->
-<aside id="sidebar" class="sidebar">
-  <nav>
-    <a href="/">🏠 Home</a>
-    <a href="/want.html">⭐ Want To Read</a>
-    <a href="/bookmarks.html">🔖 Bookmarks</a>
-    <hr>
+    <div class="manga-meta">
+      <h1 id="mangaTitle">Loading…</h1>
 
-    <a href="/partners.html">🤝 Társoldalak</a>
-  </nav>
-</aside>
-<div id="overlay" class="overlay"></div>
+      <div class="action-bar">
+        <a id="continueBtn" class="btn primary hidden"> Folytatás</a>
+        <button id="wantBtn" class="btn">Want to Read</button>
+        <button id="favBtn" class="btn">❤️ Kedvenc</button>
+		<div id="editWrapper" class="edit-wrapper hidden">
+			  <button id="editBtn" class="edit-btn" title="Szerkesztés" type="button" >
+  				  ✏️
+ 			 </button>
+		</div>
 
-<main class="page">
+      </div>
 
-<div class="manga-header">
-  <div class="cover">
-    <img id="cover">
-  </div>
-
-  <div class="info">
-    <h1 id="title">Loading...</h1>
-
-    <div class="actions" id="actions">
-      <button>⭐ Want to Read</button>
-      <button>❤️ Kedvenc</button>
+      <p id="description" class="description"></p>
+      <div id="tags" class="tags"></div>
     </div>
+  </div>
+  <h2 style="margin-top:40px">Részek</h2>
+  <div id="chapters" class="chapter-list"></div>
 
-    <div id="description"></div>
   </div>
 </div>
 
-<h2 style="margin-top:40px">Részek</h2>
-<div id="chapters" class="chapter-list"></div>
-
 </main>
-
-<script src="/js/auth-check.js"></script>
-<script src="/js/sidebar.js"></script>
 
 <script>
 (async () => {
   const slug = new URLSearchParams(location.search).get("slug");
   if (!slug) return;
 
-  /* ===== MANGA ===== */
-  try {
-    const mangas = await (await fetch("/api/manga")).json();
-    const manga = mangas.find(m => m.slug === slug);
-    if (!manga) return;
-
-    document.getElementById("title").textContent = manga.title;
-    document.getElementById("cover").src = manga.cover_url || "/assets/no-cover.png";
-    document.getElementById("description").innerHTML = manga.description || "";
-  } catch (e) {
-    console.error("Manga load error", e);
-  }
+  let progress = null;
 
   /* ===== PROGRESS ===== */
   try {
-    const res = await fetch(`/api/progress/${slug}`);
-    if (res.ok) {
-      const p = await res.json();
-      if (p) {
-        const a = document.createElement("a");
-        a.className = "continue";
-        a.textContent = `▶ Folytatás (${p.chapter} – ${p.page + 1}. oldal)`;
-        a.href = `/reader.html?slug=${slug}&chapter=${p.chapter}&page=${p.page}`;
-        document.getElementById("actions").prepend(a);
-      }
-    }
+    const r = await fetch(`/api/progress/${slug}`);
+    if (r.ok) progress = await r.json();
   } catch {}
 
   /* ===== CHAPTERS ===== */
@@ -207,122 +76,277 @@ document.getElementById("logoutBtn")?.addEventListener("click", async () => {
     list.innerHTML = "";
 
     chapters.forEach(ch => {
-      const a = document.createElement("a");
-      a.href = `/reader.html?slug=${slug}&chapter=${ch.folder}`;
-      a.textContent = ch.folder;
-      list.appendChild(a);
+      const row = document.createElement("a");
+      row.className = "chapter-row";
+      row.href = `/reader.html?slug=${slug}&chapter=${encodeURIComponent(ch.folder)}`;
+
+      /* 🔹 olvasottság */
+      const read = progress && progress.chapter === ch.folder;
+
+      const status = document.createElement("span");
+      status.className = `read ${read ? "yes" : "no"}`;
+      status.textContent = read ? "✅" : "⬜";
+
+      /* 🔹 cím */
+      const title = document.createElement("span");
+      title.className = "chapter-title";
+      title.textContent = ch.folder;
+
+      /* 🔹 scan dátum */
+      const date = document.createElement("span");
+      date.className = "scan-date";
+      if (ch.scanned_at) {
+        const d = new Date(ch.scanned_at);
+        date.textContent = d.toISOString().slice(0, 10);
+      } else {
+        date.textContent = "—";
+      }
+
+      row.append(status, title, date);
+      list.appendChild(row);
     });
+
   } catch (e) {
     console.error("Chapter load error", e);
   }
 })();
 </script>
-<!-- kereso -->
+
 
 <script>
-let allManga = [];
-
-fetch("/api/manga")
-  .then(r => r.json())
-  .then(data => {
-    allManga = data;
-  });
-
-const input = document.getElementById("searchInput");
-const results = document.getElementById("searchResults");
-
-input.addEventListener("input", () => {
-  const q = input.value.toLowerCase().trim();
-  results.innerHTML = "";
-
-  if (!q) {
-    results.classList.add("hidden");
-    return;
-  }
-
-  const matches = allManga
-    .filter(m => m.title.toLowerCase().includes(q))
-    .slice(0, 10);
-
-  if (!matches.length) {
-    results.classList.add("hidden");
-    return;
-  }
-
-  matches.forEach(m => {
-    const div = document.createElement("div");
-    div.className = "search-item";
-
-    div.innerHTML = `
-      <img src="${m.cover_url || "/assets/no-cover.png"}">
-      <span>${m.title}</span>
-    `;
-
-    div.onclick = () => {
-      window.location.href = `/chapters.html?slug=${m.slug}`;
-    };
-
-    results.appendChild(div);
-  });
-
-  results.classList.remove("hidden");
-});
-
-// kattint  s m  shova  ^f^r bez  r
-document.addEventListener("click", e => {
-  if (!e.target.closest(".search-wrapper")) {
-    results.classList.add("hidden");
-  }
-});
-</script>
-<!-- wanttoread -->
-<script>
-document.addEventListener("DOMContentLoaded", () => {
-  const wantBtn = document.getElementById("wantBtn");
-  if (!wantBtn) return;
-
+(async () => {
   const slug = new URLSearchParams(location.search).get("slug");
   if (!slug) return;
 
-  // Állapot lekérés
-  fetch(`/api/want/${slug}`, {
-    credentials: "same-origin"
-  })
-    .then(r => {
-      if (r.status === 401) {
-        console.warn("Not logged in");
-        return null;
-      }
-      return r.json();
-    })
-    .then(d => {
-      if (!d) return;
+  /* ===== MANGA + METADATA ===== */
+  const mRes = await fetch(`/api/manga/${slug}`);
+  const manga = await mRes.json();
+
+  document.getElementById("mangaTitle").textContent = manga.title;
+  document.getElementById("coverImg").src =
+    manga.cover_url || "/assets/no-cover.png";
+  document.getElementById("description").innerHTML =
+    manga.description || "";
+
+  // tagek
+  const tagsEl = document.getElementById("tags");
+  tagsEl.innerHTML = "";
+  manga.tags.forEach(t => {
+    const s = document.createElement("span");
+    s.textContent = t;
+    tagsEl.appendChild(s);
+  });
+})();
+
+
+</script>
+<script>
+document.addEventListener("DOMContentLoaded", async () => {
+  const wantBtn = document.getElementById("wantBtn");
+  const continueBtn = document.getElementById("continueBtn");
+  const slug = new URLSearchParams(location.search).get("slug");
+  if (!wantBtn || !slug) return;
+
+  /* ===== WANT STATE ===== */
+  try {
+    const r = await fetch(`/api/want/${slug}`);
+    if (r.ok) {
+      const d = await r.json();
       wantBtn.textContent = d.wanted
-        ? "⭐ Want To Read"
-        : "☆ Want To Read";
-    });
-
-  // Toggle
-  wantBtn.addEventListener("click", async () => {
-    console.log("Want clicked"); // ← ez most már meg fog jelenni
-
-    const r = await fetch(`/api/want/${slug}`, {
-      method: "POST",
-      credentials: "same-origin"
-    });
-
-    if (!r.ok) {
-      console.warn("Toggle failed", r.status);
-      return;
+        ? "⭐ Want to Read"
+        : "☆ Want to Read";
     }
+  } catch {}
+
+  /* ===== TOGGLE ===== */
+  wantBtn.addEventListener("click", async () => {
+    const r = await fetch(`/api/want/${slug}`, { method: "POST" });
+    if (!r.ok) return;
 
     const d = await r.json();
     wantBtn.textContent = d.wanted
-      ? "⭐ Want To Read"
-      : "☆ Want To Read";
+      ? "⭐ Want to Read"
+      : "☆ Want to Read";
+  });
+
+  /* ===== CONTINUE ===== */
+  try {
+    const r = await fetch(`/api/progress/${slug}`);
+    if (r.ok) {
+      const p = await r.json();
+      if (p) {
+        continueBtn.classList.remove("hidden");
+        continueBtn.href =
+          `/reader.html?slug=${slug}&chapter=${p.chapter}&page=${p.page}`;
+      }
+    }
+  } catch {}
+});
+</script>
+
+<script>
+(async () => {
+  const slug = new URLSearchParams(location.search).get("slug");
+  if (!slug) return;
+
+  const res = await fetch(`/api/progress/${slug}`);
+  if (!res.ok) return;
+
+  const p = await res.json();
+  if (!p) return;
+
+  const btn = document.getElementById("continueBtn");
+  btn.classList.remove("hidden");
+  btn.href =
+    `/reader.html?slug=${slug}&chapter=${p.chapter}&page=${p.page}`;
+})();
+</script>
+
+<script>
+document.addEventListener("DOMContentLoaded", async () => {
+  const wrapper = document.getElementById("editWrapper");
+  const btn = document.getElementById("editBtn");
+  const menu = document.getElementById("editMenu");
+
+  if (!wrapper || !btn || !menu) return;
+
+  /* ===== ADMIN CHECK ===== */
+  try {
+    const res = await fetch("/api/auth/me");
+    if (!res.ok) return;
+
+    const user = await res.json();
+
+    // 🔴 FONTOS: nálad role van, NEM is_admin
+    if (user.role !== "admin") return;
+
+    // ✅ ADMIN → ceruza megjelenik
+    wrapper.classList.remove("hidden");
+  } catch (err) {
+    console.error("Admin check error", err);
+    return;
+  }
+
+  /* ===== MENU TOGGLE ===== */
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    menu.classList.toggle("hidden");
+  });
+
+  /* ===== KATTINTÁS MÁSHOVA → BEZÁR ===== */
+  document.addEventListener("click", () => {
+    menu.classList.add("hidden");
+  });
+
+  /* ===== MENÜN BELÜLI KATT → NEM ZÁR ===== */
+  menu.addEventListener("click", (e) => {
+    e.stopPropagation();
   });
 });
 </script>
+
+<!-- ===== EDIT MODAL ===== -->
+<div id="editModal" class="edit-modal hidden">
+  <div class="edit-box">
+
+    <h3>✏️ Manga szerkesztése</h3>
+
+    <label>
+      Borítókép URL
+      <input id="editCoverInput" type="text" placeholder="https://..." />
+    </label>
+
+    <label>
+      Leírás
+      <textarea id="editDescInput" rows="8"></textarea>
+    </label>
+
+    <div class="edit-actions">
+      <button id="editCancel" class="btn">❌ Mégse</button>
+      <button id="editSave" class="btn primary">💾 Mentés</button>
+    </div>
+
+  </div>
+</div>
+<script>
+document.addEventListener("DOMContentLoaded", async () => {
+  const slug = new URLSearchParams(location.search).get("slug");
+  if (!slug) return;
+
+  /* ===== ADMIN CHECK ===== */
+  const me = await fetch("/api/auth/me").then(r => r.ok ? r.json() : null);
+  if (!me || me.role !== "admin") return;
+
+  /* ===== ELEMEK ===== */
+  const editWrapper = document.getElementById("editWrapper");
+  const editBtn = document.getElementById("editBtn");
+  const modal = document.getElementById("editModal");
+
+  const coverInput = document.getElementById("editCoverInput");
+  const descInput = document.getElementById("editDescInput");
+
+  const saveBtn = document.getElementById("editSave");
+  const cancelBtn = document.getElementById("editCancel");
+
+  if (!editWrapper || !editBtn || !modal) return;
+
+  /* ===== CERUZA MEGJELENÍT ===== */
+  editWrapper.classList.remove("hidden");
+
+  /* ===== CERUZA → MODAL ===== */
+  editBtn.addEventListener("click", () => {
+    coverInput.value = document.getElementById("coverImg")?.src || "";
+    descInput.value = document.getElementById("description")?.innerText || "";
+    modal.classList.remove("hidden");
+  });
+
+  /* ===== MÉGSE ===== */
+  cancelBtn.addEventListener("click", () => {
+    modal.classList.add("hidden");
+  });
+
+  /* ===== MENTÉS ===== */
+saveBtn.addEventListener("click", async () => {
+  const payload = {
+    cover_url: coverInput.value || null,
+    description: descInput.value || null
+  };
+
+  console.log("EDIT SLUG:", slug);
+  console.log("EDIT PAYLOAD:", payload);
+
+  try {
+    const res = await fetch(`/api/admin/manga/${slug}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    console.log("EDIT RESPONSE STATUS:", res.status);
+
+    const text = await res.text();
+    console.log("EDIT RESPONSE BODY:", text);
+
+    if (!res.ok) {
+      alert("❌ Mentés sikertelen (backend error)");
+      return;
+    }
+
+    document.getElementById("coverImg").src = payload.cover_url;
+    document.getElementById("description").innerHTML = payload.description;
+
+    modal.classList.add("hidden");
+  } catch (err) {
+    console.error("EDIT FETCH ERROR:", err);
+  }
+});
+
+</script>
+
+
+<script type="module" src="/js/layout-loader.js"></script>
+<script src="/js/sidebar.js"></script>
+<script src="/js/auth-check.js"></script>
 
 
 </body>

@@ -1,0 +1,86 @@
+/* ===== PROFILE PAGE ===== */
+
+.profile-page {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 32px 24px;
+  color: #fff;
+  font-family: "Poppins", system-ui, sans-serif;
+}
+
+/* ===== HEADER ===== */
+
+.profile-header {
+  margin-bottom: 32px;
+}
+
+.profile-header h1 {
+  margin: 0;
+  font-size: 32px;
+  font-weight: 700;
+}
+
+.profile-header p {
+  margin-top: 6px;
+  opacity: 0.7;
+  font-size: 14px;
+}
+
+/* ===== SECTION ===== */
+
+.profile-section {
+  background: #0f172a;
+  border-radius: 16px;
+  padding: 20px 22px;
+  margin-bottom: 24px;
+  box-shadow: 0 12px 35px rgba(0,0,0,.45);
+}
+
+.profile-section h2 {
+  margin: 0 0 14px;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+/* ===== READING LIST ===== */
+
+.reading-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.reading-list li {
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  background: #161b22;
+  border-radius: 10px;
+  font-size: 15px;
+  cursor: default;
+  transition: background .15s ease, transform .15s ease;
+}
+
+.reading-list li:hover {
+  background: #1f2630;
+  transform: translateY(-1px);
+}
+
+/* ===== EMPTY STATE ===== */
+
+.empty {
+  opacity: 0.6;
+  font-size: 14px;
+  padding: 10px 0;
+}
+
+/* ===== MOBILE ===== */
+
+@media (max-width: 640px) {
+  .profile-page {
+    padding: 24px 16px;
+  }
+
+  .profile-header h1 {
+    font-size: 26px;
+  }
+}

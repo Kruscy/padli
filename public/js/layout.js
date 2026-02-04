@@ -11,3 +11,17 @@ overlay?.addEventListener("click", () => {
   sidebar.classList.remove("open");
   overlay.classList.remove("show");
 });
+
+<script>
+const settingsBtn = document.getElementById("settingsBtn");
+const settingsMenu = document.getElementById("settingsMenu");
+
+settingsBtn?.addEventListener("click", (e) => {
+  e.stopPropagation();
+  settingsMenu.classList.toggle("hidden");
+});
+
+document.addEventListener("click", () => {
+  settingsMenu?.classList.add("hidden");
+});
+</script>

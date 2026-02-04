@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<title>Want To Read</title>
+<link rel="stylesheet" href="/css/sidebar.css">
+<link rel="stylesheet" href="/css/search.css">
+<link rel="stylesheet" href="/css/grid.css">
+<link rel="stylesheet" href="/css/header.css">
+<link rel="stylesheet" href="/css/profile.css">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
+
+</head>
+<body>
+<div id="header-root"></div>
+<div id="sidebar-root"></div>
+
+<main class="content">
+<h1>My Profile</h1>
+<ul id="readingList"></ul>
+
+<script>
+(async () => {
+  const res = await fetch("/api/progress");
+  if (!res.ok) return;
+
+  const data = await res.json();
+  const ul = document.getElementById("readingList");
+
+  data.forEach(m => {
+    const li = document.createElement("li");
+    li.textContent = m.title;
+    ul.appendChild(li);
+  });
+})();
+</script>
+
+<script type="module" src="/js/layout-loader.js"></script>
+<script src="/js/sidebar.js"></script>
+<script src="/js/auth-check.js"></script>
+
+</body>
+</html>
