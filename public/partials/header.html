@@ -1,0 +1,51 @@
+<header class="topbar">
+  <button id="menuToggle" class="menu-btn">☰</button>
+
+  <a href="/" class="logo">
+    <img src="/assets/logo.png" alt="PadlizsanFanSub">
+    <span>PadlizsanFanSub</span>
+  </a>
+
+  <div class="search-wrapper">
+    <input
+      type="text"
+      id="searchInput"
+      placeholder="Search manga..."
+      autocomplete="off"
+    />
+    <div id="searchResults" class="search-results hidden"></div>
+  </div>
+
+  <a
+    href="https://patreon.com/Padlizsanfansub"
+    target="_blank"
+    class="patreon"
+  >
+    <img src="/assets/pat2.png">
+  </a>
+<div class="settings-wrapper">
+  <button id="settingsBtn" class="icon-btn settings-btn" title="Settings">
+  <img src="/assets/settings.png" alt="Settings">
+  </button>
+
+  <div id="settingsMenu" class="settings-menu hidden">
+    <a href="/profile.html">👤 My Profile</a>
+    <a href="/settings.html">⚙️ Settings</a>
+ <!-- ADMIN ONLY -->
+    <button
+      id="scanBtn"
+      class="settings-action hidden"
+      type="button"
+    >
+      🔄 Scan library
+    </button>
+  </div>
+</div>
+
+
+  <div class="header-actions">
+    <button id="logoutBtn" class="icon-btn">
+      <img src="/assets/logout.png">
+    </button>
+  </div>
+</header>

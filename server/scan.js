@@ -29,6 +29,10 @@ function slugify(str) {
     .replace(/(^-|-$)/g, "");
 }
 
+function isImage(file) {
+  return /\.(jpg|jpeg|png|webp)$/i.test(file);
+}
+
 /* ================= LOAD LIBRARIES ================= */
 
 const LIB_FILE = path.join(process.cwd(), "libraries.json");
@@ -62,44 +66,86 @@ async function scan() {
 
     const libraryId = libRes.rows[0].id;
 
-    const mangaDirs = fs.readdirSync(lib.path, { withFileTypes: true })
-      .filter(d => d.isDirectory());
+    let mangaDirs;
+    try {
+      mangaDirs = fs.readdirSync(lib.path, { withFileTypes: true })
+        .filter(d => d.isDirectory());
+    } catch (err) {
+      console.error(`❌ Failed to read library dir: ${lib.path}`, err.message);
+      continue;
+    }
 
     for (const mangaDir of mangaDirs) {
       const mangaTitle = mangaDir.name;
       const mangaSlug = slugify(mangaTitle);
       const mangaPath = path.join(lib.path, mangaTitle);
 
-      const mangaRes = await pool.query(
-        `
-        INSERT INTO manga (title, slug, folder, library_id)
-        VALUES ($1, $2, $3, $4)
-        ON CONFLICT (slug, library_id) DO UPDATE
-          SET title = EXCLUDED.title
-        RETURNING id
-        `,
-        [mangaTitle, mangaSlug, mangaTitle, libraryId]
-      );
+      let mangaId;
+      try {
+        const mangaRes = await pool.query(
+          `
+          INSERT INTO manga (title, slug, folder, library_id)
+          VALUES ($1, $2, $3, $4)
+          ON CONFLICT (slug, library_id) DO UPDATE
+            SET title = EXCLUDED.title
+          RETURNING id
+          `,
+          [mangaTitle, mangaSlug, mangaTitle, libraryId]
+        );
+        mangaId = mangaRes.rows[0].id;
+      } catch (err) {
+        console.error(`❌ DB error (manga): ${mangaTitle}`, err.message);
+        continue;
+      }
 
-      const mangaId = mangaRes.rows[0].id;
-
-      const chapterDirs = fs.readdirSync(mangaPath, { withFileTypes: true })
-        .filter(d => d.isDirectory());
+      let chapterDirs;
+      try {
+        chapterDirs = fs.readdirSync(mangaPath, { withFileTypes: true })
+          .filter(d => d.isDirectory());
+      } catch (err) {
+        console.error(`⚠️ Cannot read manga folder, skipping: ${mangaPath}`);
+        continue;
+      }
 
       for (const ch of chapterDirs) {
-        await pool.query(
-          `
-          INSERT INTO chapter (manga_id, title, folder, library_id)
-          VALUES ($1, $2, $3, $4)
-          ON CONFLICT (manga_id, folder) DO NOTHING
-          `,
-          [
-            mangaId,
-            ch.name,   // title
-            ch.name,   // folder
-            libraryId
-          ]
-        );
+        const chapterPath = path.join(mangaPath, ch.name);
+
+        let files;
+        try {
+          files = fs.readdirSync(chapterPath);
+        } catch (err) {
+          console.warn(`⚠️ Cannot read chapter folder: ${chapterPath}`);
+          continue;
+        }
+
+        const imageCount = files.filter(isImage).length;
+
+        // 👉 CSAK AKKOR SKIP, HA 0 KÉP VAN
+        if (imageCount === 0) {
+          console.warn(`⚠️ No images, skipping chapter: ${chapterPath}`);
+          continue;
+        }
+
+        try {
+          await pool.query(
+            `
+            INSERT INTO chapter (manga_id, title, folder, library_id)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (manga_id, folder) DO NOTHING
+            `,
+            [
+              mangaId,
+              ch.name,
+              ch.name,
+              libraryId
+            ]
+          );
+        } catch (err) {
+          console.error(
+            `❌ DB error (chapter): ${mangaTitle} / ${ch.name}`,
+            err.message
+          );
+        }
       }
     }
 

@@ -14,7 +14,7 @@ const __dirname = path.dirname(__filename);
 /* ===== BODY PARSER ===== */
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
-
+/* ===== settings ===== */
 /* ===== SESSION (AUTH) ===== */
 app.use(
   session({

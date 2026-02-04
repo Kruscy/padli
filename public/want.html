@@ -13,59 +13,8 @@
 
 </head>
 <body>
-
-<header class="topbar">
-  <button id="menuToggle" class="menu-btn">☰</button>
- 
-    <a href="/" class="logo">
-    <img src="/assets/logo.png" alt="PadlizsanFanSub">
-    <span>PadlizsanFanSub</span>
-  </a>
-
-  <div class="search-wrapper">
-    <input
-      type="text"
-      id="searchInput"
-      placeholder="Search manga..."
-      autocomplete="off"
-    />
-    <div id="searchResults" class="search-results hidden"></div>
-  </div>
-<a
-  href="https://patreon.com/Padlizsanfansub"
-  target="_blank"
-  class="patreon"
-  title="Support us on Patreon"
->
-  <img src="/assets/pat2.png" alt="Patreon">
-</a>
-<button id="logoutBtn" class="icon-btn" title="Logout">
-  <img src="/assets/logout.png" alt="Logout">
-</button>
-
-<script>
-document.getElementById("logoutBtn")?.addEventListener("click", async () => {
-  await fetch("/api/auth/logout", { method: "POST" });
-  location.href = "/login.html";
-});
-</script>
-
-</header>
-<!-- SIDEBAR -->
-<aside id="sidebar" class="sidebar">
-  <nav>
-    <a href="/">🏠 Home</a>
-    <a href="/want.html">⭐ Want To Read</a>
-    <a href="/collections.html">📚 Collections</a>
-    <a href="/bookmarks.html">🔖 Bookmarks</a>
-    <hr>
-
-    <a href="/partners.html">🤝 Társoldalak</a>
-  </nav>
-</aside>
-
-<!-- OVERLAY -->
-<div id="overlay" class="overlay"></div>
+<div id="header-root"></div>
+<div id="sidebar-root"></div>
 
 <main class="content">
   <h1>⭐ Want To Read</h1>
@@ -76,87 +25,93 @@ document.getElementById("logoutBtn")?.addEventListener("click", async () => {
 
 <script>
 (async () => {
-  const res = await fetch("/api/want");
-  const mangas = await res.json();
-
   const grid = document.getElementById("grid");
+  if (!grid) return;
+
+  /* ===== WANT TO READ LISTA ===== */
+  let mangas = [];
+  try {
+    const res = await fetch("/api/want");
+    if (!res.ok) return;
+    mangas = await res.json();
+  } catch (e) {
+    console.error("Want list load error", e);
+    return;
+  }
+
   grid.innerHTML = "";
 
+  /* ===== PROGRESS MAP ===== */
+  const progressMap = {};
+
+  await Promise.all(
+    mangas.map(async (m) => {
+      try {
+        const r = await fetch(`/api/progress/${m.slug}`);
+        if (!r.ok) return;
+        const p = await r.json();
+        if (p && p.chapter) {
+          progressMap[m.slug] = p;
+        }
+      } catch {}
+    })
+  );
+
+  /* ===== RENDER ===== */
   mangas.forEach(m => {
-    const a = document.createElement("a");
-    a.className = "card";
-    a.href = `/chapters.html?slug=${m.slug}`;
+    const card = document.createElement("div");
+    card.className = "card";
+
+    /* --- COVER --- */
+    const cover = document.createElement("div");
+    cover.className = "cover";
 
     const img = document.createElement("img");
     img.src = m.cover_url || "/assets/no-cover.png";
+    img.loading = "lazy";
 
-    const t = document.createElement("div");
-    t.className = "title";
-    t.textContent = m.title;
+    cover.appendChild(img);
 
-    a.append(img, t);
-    grid.appendChild(a);
+    // kattintás a képre
+    cover.addEventListener("click", () => {
+      const p = progressMap[m.slug];
+      if (p) {
+        location.href =
+          `/reader.html?slug=${encodeURIComponent(m.slug)}` +
+          `&chapter=${encodeURIComponent(p.chapter)}` +
+          `&page=${p.page}`;
+      } else {
+        location.href = `/chapters.html?slug=${encodeURIComponent(m.slug)}`;
+      }
+    });
+
+    // badge, ha van progress
+    if (progressMap[m.slug]) {
+      const badge = document.createElement("div");
+      badge.className = "continue-badge";
+      badge.textContent = "▶ Folytatás";
+      cover.appendChild(badge);
+    }
+
+    /* --- TITLE --- */
+    const title = document.createElement("div");
+    title.className = "title";
+    title.textContent = m.title;
+
+    title.addEventListener("click", () => {
+      location.href = `/chapters.html?slug=${encodeURIComponent(m.slug)}`;
+    });
+
+    card.appendChild(cover);
+    card.appendChild(title);
+    grid.appendChild(card);
   });
 })();
 </script>
 
-
-<script>
-let allManga = [];
-
-fetch("/api/manga")
-  .then(r => r.json())
-  .then(data => {
-    allManga = data;
-  });
-
-const input = document.getElementById("searchInput");
-const results = document.getElementById("searchResults");
-
-input.addEventListener("input", () => {
-  const q = input.value.toLowerCase().trim();
-  results.innerHTML = "";
-
-  if (!q) {
-    results.classList.add("hidden");
-    return;
-  }
-
-  const matches = allManga
-    .filter(m => m.title.toLowerCase().includes(q))
-    .slice(0, 10);
-
-  if (!matches.length) {
-    results.classList.add("hidden");
-    return;
-  }
-
-  matches.forEach(m => {
-    const div = document.createElement("div");
-    div.className = "search-item";
-
-    div.innerHTML = `
-      <img src="${m.cover_url || "/assets/no-cover.png"}">
-      <span>${m.title}</span>
-    `;
-
-    div.onclick = () => {
-      window.location.href = `/chapters.html?slug=${m.slug}`;
-    };
-
-    results.appendChild(div);
-  });
-
-  results.classList.remove("hidden");
-});
-
-// kattint  s m  shova  ^f^r bez  r
-document.addEventListener("click", e => {
-  if (!e.target.closest(".search-wrapper")) {
-    results.classList.add("hidden");
-  }
-});
-</script>
+<script type="module" src="/js/layout-loader.js"></script>
 <script src="/js/sidebar.js"></script>
+<script src="/js/auth-check.js"></script>
+
 </body>
 </html>

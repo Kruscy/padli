@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<title>Want To Read</title>
+<link rel="stylesheet" href="/css/sidebar.css">
+<link rel="stylesheet" href="/css/search.css">
+<link rel="stylesheet" href="/css/grid.css">
+<link rel="stylesheet" href="/css/header.css">
+<link rel="stylesheet" href="/css/settings.css">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
+
+</head>
+<body>
+<form id="settingsForm">
+  <label>
+    Username
+    <input id="username" disabled>
+  </label>
+
+  <label>
+    Email
+    <input id="email" type="email">
+  </label>
+
+  <hr>
+
+  <label>
+    Régi jelszó
+    <input id="oldPassword" type="password">
+  </label>
+
+  <label>
+    Új jelszó
+    <input id="newPassword" type="password">
+  </label>
+
+  <label>
+    Új jelszó újra
+    <input id="newPassword2" type="password">
+  </label>
+
+  <button>💾 Mentés</button>
+</form>
+
+<script src="/js/settings.js"></script>
+
+
+
+<script type="module" src="/js/layout-loader.js"></script>
+<script src="/js/sidebar.js"></script>
+<script src="/js/auth-check.js"></script>
+
+</body>
+</html>

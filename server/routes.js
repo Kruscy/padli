@@ -2,6 +2,7 @@ import { Router } from "express";
 import fs from "fs";
 import path from "path";
 import { pool } from "./db.js";
+import adminRoutes from "./routes/admin.js";
 
 const router = Router();
 
@@ -26,6 +27,33 @@ router.get("/manga", async (_req, res) => {
     res.status(500).json({ error: "DB error" });
   }
 });
+/* ================= MANGA METADATA ================= */
+router.get("/manga/:slug", async (req, res) => {
+  const { slug } = req.params;
+
+  const { rows } = await pool.query(
+    `
+    SELECT
+      m.title,
+      m.slug,
+      m.cover_url,
+      m.description,
+      COALESCE(
+        ARRAY_AGG(g.name) FILTER (WHERE g.name IS NOT NULL),
+        '{}'
+      ) AS tags
+    FROM manga m
+    LEFT JOIN manga_genre mg ON mg.manga_id = m.id
+    LEFT JOIN genre g ON g.id = mg.genre_id
+    WHERE m.slug = $1
+    GROUP BY m.id
+    `,
+    [slug]
+  );
+
+  if (!rows.length) return res.status(404).end();
+  res.json(rows[0]);
+});
 
 /* ================= CHAPTER LIST ================= */
 
@@ -35,7 +63,7 @@ router.get("/chapters/:slug", async (req, res) => {
 
     const { rows } = await pool.query(
       `
-      SELECT c.folder, c.title
+      SELECT c.folder, c.title, c.scanned_at
       FROM chapter c
       JOIN manga m ON m.id = c.manga_id
       WHERE m.slug = $1
@@ -208,7 +236,7 @@ router.get("/progress/:slug", async (req, res) => {
 
   const { rows } = await pool.query(
     `
-    SELECT rp.chapter, rp.page
+    SELECT rp.chapter, rp.page, rp.updated_at
     FROM reading_progress rp
     JOIN manga m ON m.id = rp.manga_id
     WHERE rp.user_id = $1 AND m.slug = $2
@@ -220,7 +248,6 @@ router.get("/progress/:slug", async (req, res) => {
   res.json(rows[0] || null);
 });
 
-export default router;
 import bcrypt from "bcrypt";
 
 /* ================= REGISTER ================= */
@@ -329,40 +356,41 @@ router.post("/auth/logout", (req, res) => {
     res.json({ ok: true });
   });
 });
-// ===== WANT TO READ =====
-
-// lekérdezés
-router.get("/want/:slug", async (req, res) => {
-  if (!req.session.user) {
+// ===== WANT TO READ – LIST =====
+router.get("/want", async (req, res) => {
+  if (!req.session?.user?.id) {
     return res.status(401).json({ error: "Not logged in" });
   }
 
-  const { slug } = req.params;
+  try {
+    const { rows } = await pool.query(
+      `
+      SELECT
+        m.id,
+        m.title,
+        m.slug,
+        m.cover_url,
+        rp.chapter,
+        rp.page
+      FROM want_to_read w
+      JOIN manga m ON m.id = w.manga_id
+      LEFT JOIN reading_progress rp
+        ON rp.manga_id = m.id
+       AND rp.user_id = w.user_id
+      WHERE w.user_id = $1
+      ORDER BY w.created_at DESC
+      `,
+      [req.session.user.id]
+    );
 
-  const mangaRes = await pool.query(
-    "SELECT id FROM manga WHERE slug = $1",
-    [slug]
-  );
-
-  if (mangaRes.rowCount === 0) {
-    return res.status(404).json({ error: "Manga not found" });
+    res.json(rows);
+  } catch (err) {
+    console.error("GET /api/want error", err);
+    res.status(500).json({ error: "Server error" });
   }
-
-  const mangaId = mangaRes.rows[0].id;
-
-  const r = await pool.query(
-    `
-    SELECT 1
-    FROM want_to_read
-    WHERE user_id = $1 AND manga_id = $2
-    `,
-    [req.session.user.id, mangaId]
-  );
-
-  res.json({ wanted: r.rowCount > 0 });
 });
 
-// toggle
+// ===== WANT TO READ – TOGGLE =====
 router.post("/want/:slug", async (req, res) => {
   if (!req.session.user) {
     return res.status(401).json({ error: "Not logged in" });
@@ -414,3 +442,8 @@ router.post("/want/:slug", async (req, res) => {
   }
 });
 
+/* ================= ADMIN ================= */
+
+router.use("/admin", adminRoutes);
+
+export default router;

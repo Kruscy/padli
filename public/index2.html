@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<title>PadlizsanFanSub</title>
+<link rel="stylesheet" href="/css/sidebar.css">
+<link rel="stylesheet" href="/css/search.css">
+<link rel="stylesheet" href="/css/grid.css">
+<link rel="stylesheet" href="/css/header.css">
+<link rel="stylesheet" href="/css/profile.css">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
+
+</head>
+<body>
+<div id="header-root"></div>
+<div id="sidebar-root"></div>
+
+<main class="content">
+  <div id="grid"></div>
+</main>
+
+<script>
+(async function () {
+  try {
+    const res = await fetch("/api/manga");
+    const mangas = await res.json();
+
+    const grid = document.getElementById("grid");
+    grid.innerHTML = "";
+
+    // 🔹 csak azok a mangák kellenek, ahol VAN progress
+    const items = await Promise.all(
+      mangas.map(async (m) => {
+        try {
+          const r = await fetch(`/api/progress/${m.slug}`);
+          if (!r.ok) return null;
+
+          const p = await r.json();
+          if (!p) return null;
+
+          return { manga: m, progress: p };
+        } catch {
+          return null;
+        }
+      })
+    );
+
+    // 🔹 nullok kidobása
+    const started = items.filter(Boolean);
+
+    if (started.length === 0) {
+      grid.innerHTML = "<p>Még nem kezdtél el semmit olvasni.</p>";
+      return;
+    }
+
+    // 🔹 CSAK ELKEZDETT MANGÁK
+    started.forEach(({ manga, progress }) => {
+      const card = document.createElement("div");
+      card.className = "card";
+
+      /* ===== COVER ===== */
+      const coverLink = document.createElement("a");
+      coverLink.className = "cover";
+      coverLink.href =
+        `/reader.html?slug=${encodeURIComponent(manga.slug)}&chapter=${encodeURIComponent(progress.chapter)}&page=${progress.page}`;
+
+      if (manga.cover_url) {
+        const img = document.createElement("img");
+        img.src = manga.cover_url;
+        img.loading = "lazy";
+        coverLink.appendChild(img);
+      } else {
+        coverLink.textContent = "No Cover";
+      }
+
+      const badge = document.createElement("div");
+      badge.className = "continue-badge";
+      badge.textContent = "▶ Folytatás";
+      coverLink.appendChild(badge);
+
+      /* ===== TITLE ===== */
+      const titleLink = document.createElement("a");
+      titleLink.className = "title";
+      titleLink.href = coverLink.href;
+      titleLink.textContent = manga.title;
+
+      card.appendChild(coverLink);
+      card.appendChild(titleLink);
+      grid.appendChild(card);
+    });
+
+  } catch (e) {
+    console.error("Failed to load continue list", e);
+  }
+})();
+</script>
+
+<script type="module" src="/js/layout-loader.js"></script>
+<script src="/js/sidebar.js"></script>
+<script src="/js/auth-check.js"></script>
+
+</body>
+</html>
