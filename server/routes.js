@@ -67,11 +67,9 @@ router.get("/chapters/:slug", async (req, res) => {
       FROM chapter c
       JOIN manga m ON m.id = c.manga_id
       WHERE m.slug = $1
-      ORDER BY
-        CAST(
-          NULLIF(REGEXP_REPLACE(c.folder, '[^0-9]', '', 'g'), '')
-          AS INTEGER
-        )
+ORDER BY
+  CAST(SPLIT_PART(REGEXP_REPLACE(c.folder, '[^0-9\.]', '', 'g'), '.', 1) AS INT),
+  CAST(COALESCE(NULLIF(SPLIT_PART(REGEXP_REPLACE(c.folder, '[^0-9\.]', '', 'g'), '.', 2), ''), '0') AS INT)
       `,
       [slug]
     );
@@ -171,11 +169,9 @@ router.get("/chapter-nav/:slug/:chapter", async (req, res) => {
     FROM chapter c
     JOIN manga m ON m.id = c.manga_id
     WHERE m.slug = $1
-    ORDER BY
-      CAST(
-        NULLIF(REGEXP_REPLACE(c.folder, '[^0-9]', '', 'g'), '')
-        AS INTEGER
-      )
+ORDER BY
+  CAST(SPLIT_PART(REGEXP_REPLACE(c.folder, '[^0-9\.]', '', 'g'), '.', 1) AS INT),
+  CAST(COALESCE(NULLIF(SPLIT_PART(REGEXP_REPLACE(c.folder, '[^0-9\.]', '', 'g'), '.', 2), ''), '0') AS INT)
     `,
     [slug]
   );

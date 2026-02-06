@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8">
+  <title>Statisztika</title>
+  <link rel="stylesheet" href="/css/stats.css">
+<link rel="stylesheet" href="/css/header.css">
+<link rel="stylesheet" href="/css/sidebar.css">
+<link rel="stylesheet" href="/css/search.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
+
+</head>
+<body>
+<div id="header-root"></div>
+<div id="sidebar-root"></div>
+
+<main class="stats">
+  <h1>📊 Olvasási statisztika</h1>
+
+  <div class="cards">
+    <div class="card">
+      <div class="num" id="totalManga">–</div>
+      <div class="label">Olvasott mangák</div>
+    </div>
+
+    <div class="card">
+      <div class="num" id="totalChapters">–</div>
+      <div class="label">Olvasott részek</div>
+    </div>
+
+    <div class="card">
+      <div class="num" id="totalPages">–</div>
+      <div class="label">Olvasott oldalak</div>
+    </div>
+  </div>
+
+  <h2>🔥 Legutóbb olvasott</h2>
+  <ul id="recentList"></ul>
+</main>
+<script type="module" src="/js/layout-loader.js"></script>
+<script src="/js/sidebar.js"></script>
+<script src="/js/auth-check.js"></script>
+
+<script src="/js/stats.js"></script>
+</body>
+</html>
