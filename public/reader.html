@@ -1,256 +1,266 @@
 <!DOCTYPE html>
 <html lang="hu">
 <head>
-  <meta charset="UTF-8">
-  <title>PadlizsanFanSub – Reader</title>
+<meta charset="UTF-8">
+<title>PadlizsanFanSub – Reader</title>
 
-  <style>
-    body {
-      margin: 0;
-      background: #000;
-      color: #fff;
-      font-family: system-ui, sans-serif;
-    }
+<style>
+body {
+  margin: 0;
+  background: #000;
+  color: #fff;
+  font-family: system-ui, sans-serif;
+}
 
-    /* ===== BACK HOME ===== */
-    .back-home {
-      position: fixed;
-      top: 70px;
-      left: 16px;
-      z-index: 1000;
-      background: #1e293b;
-      color: #fff;
-      padding: 8px 14px;
-      border-radius: 8px;
-      text-decoration: none;
-      font-weight: 600;
-      box-shadow: 0 6px 20px rgba(0,0,0,.4);
-    }
+/* ===== TOP BAR ===== */
+.topbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 56px;
+  background: rgba(0,0,0,.85);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  z-index: 100;
+}
 
-    .back-home:hover {
-      background: #334155;
-    }
+.topbar a,
+.topbar button {
+  background: #161b22;
+  color: #fff;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  text-decoration: none;
+  font-weight: 600;
+}
 
-    /* ===== TOP UI ===== */
-    #ui {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 56px;
-      background: rgba(0,0,0,.75);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 16px;
-      z-index: 10;
-      transition: opacity .2s ease;
-    }
+.topbar a:hover,
+.topbar button:hover {
+  background: #1f2630;
+}
 
-    #ui.hidden {
-      opacity: 0;
-      pointer-events: none;
-    }
+#chapterInfo {
+  opacity: .85;
+  font-size: 14px;
+}
 
-    #ui button {
-      background: #161b22;
-      color: #fff;
-      border: none;
-      padding: 8px 14px;
-      border-radius: 6px;
-      cursor: pointer;
-    }
+/* ===== PAGES ===== */
+#pages {
+  padding-top: 70px;
+  padding-bottom: 70px;
+  max-width: 900px;
+  margin: 0 auto;
+}
 
-    #ui button:hover {
-      background: #1f2630;
-    }
+#pages img {
+  width: 100%;
+  display: block;
+}
 
-    #chapterInfo {
-      font-size: 14px;
-      opacity: .85;
-    }
+/* ===== BOTTOM BAR ===== */
+.bottombar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 56px;
+  background: rgba(0,0,0,.85);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  z-index: 100;
+}
 
-    /* ===== PAGES ===== */
-    #pages {
-      padding-top: 60px;
-      max-width: 900px;
-      margin: 0 auto;
-    }
+.bottombar button {
+  background: #161b22;
+  color: #fff;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
 
-    #pages img {
-      width: 100%;
-      display: block;
-      margin-bottom: 0px;
-    }
-  </style>
+.bottombar button:hover {
+  background: #1f2630;
+}
+.manga-title {
+  font-size: 28px;
+  font-weight: 700;
+  margin-bottom: 16px;
+}
+
+</style>
 </head>
 <body>
 
-<!-- UI BAR -->
-<div id="ui">
-  <a href="/" class="back-home">⬅ Főoldal</a>
-  <button id="prevBtn">← Prev</button>
-  <div id="chapterInfo">Loading…</div>
-  <button id="nextBtn">Next →</button>
+<!-- ===== TOP BAR ===== -->
+<div class="topbar">
+  <a id="backBtn">⬅ Vissza</a>
+<h1 id="mangaTitle" class="manga-title">Loading…</h1>
+
+  <div id="chapterInfo" class="manga-title">Loading…</div>
 </div>
 
-<script src="/js/auth-check.js"></script>
-
-<!-- PAGES -->
+<!-- ===== PAGES ===== -->
 <div id="pages"></div>
+
+<!-- ===== BOTTOM BAR ===== -->
+<div class="bottombar">
+  <button id="prevBtn">← Előző rész</button>
+  <button id="nextBtn">Következő rész →</button>
+</div>
+<script>
+(async () => {
+  const slug = new URLSearchParams(location.search).get("slug");
+  if (!slug) return;
+
+  try {
+    const mangas = await (await fetch("/api/manga")).json();
+    const manga = mangas.find(m => m.slug === slug);
+    if (!manga) return;
+
+    document.getElementById("mangaTitle").textContent = manga.title;
+    document.title = manga.title + " – Részek";
+  } catch (e) {
+    console.error("Cím betöltési hiba:", e);
+  }
+})();
+</script>
 
 <script>
 /* ================= PARAMS ================= */
 const params = new URLSearchParams(location.search);
 const slug = params.get("slug");
 const chapter = params.get("chapter");
+const startPage = parseInt(params.get("page") || "1", 10);
 
 const pagesEl = document.getElementById("pages");
-const ui = document.getElementById("ui");
 const chapterInfo = document.getElementById("chapterInfo");
 
-/* ================= UI TOGGLE ================= */
-let uiVisible = true;
+/* ================= HELPERS ================= */
+function chapterKey(folder) {
+  return folder.split(".").map(n => parseInt(n, 10));
+}
 
-document.addEventListener("click", (e) => {
-  if (e.target.tagName === "BUTTON" || e.target.tagName === "A") return;
-  uiVisible = !uiVisible;
-  ui.classList.toggle("hidden", !uiVisible);
-});
+function compareChapters(a, b) {
+  const ak = chapterKey(a.folder);
+  const bk = chapterKey(b.folder);
+  for (let i = 0; i < Math.max(ak.length, bk.length); i++) {
+    const av = ak[i] ?? 0;
+    const bv = bk[i] ?? 0;
+    if (av !== bv) return av - bv;
+  }
+  return 0;
+}
 
 /* ================= PROGRESS ================= */
 let lastSavedPage = 0;
 let saveTimeout = null;
 
-/* ===== GET CURRENT PAGE ===== */
 function getCurrentPage() {
   const imgs = [...document.querySelectorAll("#pages img")];
-  if (!imgs.length) return 1;
-
   let current = 1;
-  const viewportMiddle = window.innerHeight / 2;
+  const mid = window.innerHeight / 2;
 
-  imgs.forEach((img, index) => {
-    const rect = img.getBoundingClientRect();
-    if (rect.top < viewportMiddle) {
-      current = index + 1;
+  imgs.forEach((img, i) => {
+    if (img.getBoundingClientRect().top < mid) {
+      current = i + 1;
     }
   });
-
   return current;
 }
 
-/* ===== SAVE PROGRESS ===== */
 async function saveProgress(page) {
   if (!page || page === lastSavedPage) return;
 
   clearTimeout(saveTimeout);
   saveTimeout = setTimeout(async () => {
-    try {
-      await fetch("/api/progress", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          slug,
-          chapter,
-          page
-        })
-      });
-
-      lastSavedPage = page;
-      console.log("Progress saved:", page);
-    } catch (e) {
-      console.error("Failed to save progress", e);
-    }
-  }, 800);
+    await fetch("/api/progress", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slug, chapter, page })
+    });
+    lastSavedPage = page;
+  }, 600);
 }
 
-/* ===== SCROLL LISTENER ===== */
 window.addEventListener("scroll", () => {
-  const page = getCurrentPage();
-  saveProgress(page);
+  saveProgress(getCurrentPage());
 });
 
 /* ================= LOAD PAGES ================= */
 async function loadPages() {
-  if (!slug || !chapter) {
-    pagesEl.textContent = "Missing chapter.";
-    return;
-  }
+  const res = await fetch(`/api/pages/${slug}/${chapter}`);
+  const files = await res.json();
 
-  try {
-    const res = await fetch(`/api/pages/${slug}/${chapter}`);
-    const files = await res.json();
+  files.forEach((f, i) => {
+    const img = document.createElement("img");
+    img.src = `/api/image/${slug}/${chapter}/${encodeURIComponent(f)}`;
+    img.loading = "lazy";
+    pagesEl.appendChild(img);
 
-    if (!Array.isArray(files) || files.length === 0) {
-      pagesEl.textContent = "No pages found.";
-      return;
+    if (i + 1 === startPage) {
+      setTimeout(() => img.scrollIntoView({ behavior: "auto" }), 100);
     }
-
-    files.forEach((f, index) => {
-      const img = document.createElement("img");
-      img.src = `/api/image/${slug}/${chapter}/${encodeURIComponent(f)}`;
-      img.loading = "lazy";
-
-      img.addEventListener("load", () => {
-        if (index === 0) {
-          saveProgress(1); // elkezdte olvasni
-        }
-      });
-
-      pagesEl.appendChild(img);
-    });
-
-  } catch (e) {
-    console.error(e);
-    pagesEl.textContent = "Error loading pages.";
-  }
+  });
 }
 
-/* ================= CHAPTER NAV ================= */
-async function loadChapterInfo() {
+/* ================= NAV ================= */
+async function loadNav() {
   const res = await fetch(`/api/chapters/${slug}`);
-  const chapters = await res.json();
+  const chapters = (await res.json()).sort(compareChapters);
 
   const index = chapters.findIndex(c => c.folder === chapter);
+  chapterInfo.textContent = `Rész: ${chapter}`;
 
-  if (index === -1) {
-    chapterInfo.textContent = chapter;
-    return;
-  }
-
-  chapterInfo.textContent = `Chapter ${index + 1} / ${chapters.length}`;
+  document.getElementById("backBtn").href =
+    `/chapters.html?slug=${slug}`;
 
   document.getElementById("prevBtn").onclick = () => {
     if (index > 0) {
-      location.href = `/reader.html?slug=${slug}&chapter=${chapters[index - 1].folder}`;
+      location.href =
+        `/reader.html?slug=${slug}&chapter=${chapters[index - 1].folder}`;
     }
   };
 
   document.getElementById("nextBtn").onclick = () => {
     if (index < chapters.length - 1) {
-      location.href = `/reader.html?slug=${slug}&chapter=${chapters[index + 1].folder}`;
+      location.href =
+        `/reader.html?slug=${slug}&chapter=${chapters[index + 1].folder}`;
     }
   };
 }
 
 /* ================= INIT ================= */
 loadPages();
-loadChapterInfo();
+loadNav();
+/* ================= UI TOGGLE ================= */
+const topbar = document.querySelector(".topbar");
+const bottombar = document.querySelector(".bottombar");
+
+let uiVisible = true;
+
+document.addEventListener("click", (e) => {
+  // gombokra / linkekre ne reagáljon
+  if (e.target.closest("button") || e.target.closest("a")) return;
+
+  uiVisible = !uiVisible;
+
+  topbar.style.opacity = uiVisible ? "1" : "0";
+  bottombar.style.opacity = uiVisible ? "1" : "0";
+
+  topbar.style.pointerEvents = uiVisible ? "auto" : "none";
+  bottombar.style.pointerEvents = uiVisible ? "auto" : "none";
+});
+
 </script>
 
-<!-- Matomo -->
-<script>
-  var _paq = window._paq = window._paq || [];
-  _paq.push(['trackPageView']);
-  _paq.push(['enableLinkTracking']);
-  (function() {
-    var u="//mamato.csimota.duckdns.org/";
-    _paq.push(['setTrackerUrl', u+'matomo.php']);
-    _paq.push(['setSiteId', '1']);
-    var d=document, g=d.createElement('script'), s=d.getElementsByTagName('script')[0];
-    g.async=true; g.src=u+'matomo.js'; s.parentNode.insertBefore(g,s);
-  })();
-</script>
 </body>
 </html>

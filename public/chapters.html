@@ -55,6 +55,12 @@
 </main>
 
 <script>
+function parseChapterNumber(str) {
+  // kiszedi az első számot (15, 15.5, 80.2 stb)
+  const m = str.match(/\d+(\.\d+)?/);
+  return m ? parseFloat(m[0]) : Infinity;
+}
+
 (async () => {
   const slug = new URLSearchParams(location.search).get("slug");
   if (!slug) return;
@@ -70,7 +76,12 @@
   /* ===== CHAPTERS ===== */
   try {
     const res = await fetch(`/api/chapters/${slug}`);
-    const chapters = await res.json();
+    let chapters = await res.json();
+
+    /* ✅ HELYES SORRENDEZÉS (15 < 15.5 < 16) */
+    chapters.sort((a, b) => {
+      return parseChapterNumber(a.folder) - parseChapterNumber(b.folder);
+    });
 
     const list = document.getElementById("chapters");
     list.innerHTML = "";
@@ -111,7 +122,6 @@
   }
 })();
 </script>
-
 
 <script>
 (async () => {
