@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { spawn } from "child_process";
 import { pool } from "../db.js";
+import { sendMail } from "../mail.js";
 
 
 const router = Router();
@@ -73,6 +74,23 @@ router.post("/manga/:slug", async (req, res) => {
   } catch (err) {
     console.error("ADMIN EDIT ERROR:", err);
     res.status(500).json({ error: "DB error", detail: err.message });
+  }
+});
+/* ================= Users ================= */
+router.get("/users", async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT id, username, email, role, created_at, ps.tier, ps.active
+      FROM users u
+      LEFT JOIN patreon_status ps
+        ON ps.user_id = u.id
+      ORDER BY created_at DESC
+    `);
+
+    res.json(rows);
+  } catch (err) {
+    console.error("ADMIN USERS ERROR:", err);
+    res.status(500).json({ error: "DB error" });
   }
 });
 

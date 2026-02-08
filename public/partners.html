@@ -8,128 +8,23 @@
   <link rel="stylesheet" href="/css/header.css">
   <link rel="stylesheet" href="/css/sidebar.css">
   <link rel="stylesheet" href="/css/partners.css">
+  <link rel="stylesheet" href="/css/footer.css">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
+<div id="header-root"></div>
+<div id="sidebar-root"></div>
 
-<!-- header majd jön tőled -->
-<header class="topbar">
-  <button id="menuToggle" class="menu-btn">☰</button>
- 
-    <a href="/" class="logo">
-    <img src="/assets/logo.png" alt="PadlizsanFanSub">
-    <span>PadlizsanFanSub</span>
-  </a>
-
-  <div class="search-wrapper">
-    <input
-      type="text"
-      id="searchInput"
-      placeholder="Search manga..."
-      autocomplete="off"
-    />
-    <div id="searchResults" class="search-results hidden"></div>
-  </div>
-<a
-  href="https://patreon.com/Padlizsanfansub"
-  target="_blank"
-  class="patreon"
-  title="Support us on Patreon"
->
-  <img src="/assets/pat2.png" alt="Patreon">
-</a>
-<button id="logoutBtn" class="icon-btn" title="Logout">
-  <img src="/assets/logout.png" alt="Logout">
-</button>
-
-<script>
-document.getElementById("logoutBtn")?.addEventListener("click", async () => {
-  await fetch("/api/auth/logout", { method: "POST" });
-  location.href = "/login.html";
-});
-</script>
-
-</header>
-
-<!-- SIDEBAR -->
-<aside id="sidebar" class="sidebar">
-  <nav>
-    <a href="/">🏠 Home</a>
-    <a href="/want.html">⭐ Want To Read</a>
-    <a href="/collections.html">📚 Collections</a>
-    <a href="/bookmarks.html">🔖 Bookmarks</a>
-    <hr>
-    <a href="/partners.html" class="active">🤝 Társoldalak</a>
-  </nav>
-</aside>
-
-<div id="overlay" class="overlay"></div>
-<script>
-let allManga = [];
-
-fetch("/api/manga")
-  .then(r => r.json())
-  .then(data => {
-    allManga = data;
-  });
-
-const input = document.getElementById("searchInput");
-const results = document.getElementById("searchResults");
-
-input.addEventListener("input", () => {
-  const q = input.value.toLowerCase().trim();
-  results.innerHTML = "";
-
-  if (!q) {
-    results.classList.add("hidden");
-    return;
-  }
-
-  const matches = allManga
-    .filter(m => m.title.toLowerCase().includes(q))
-    .slice(0, 10);
-
-  if (!matches.length) {
-    results.classList.add("hidden");
-    return;
-  }
-
-  matches.forEach(m => {
-    const div = document.createElement("div");
-    div.className = "search-item";
-
-    div.innerHTML = `
-      <img src="${m.cover_url || "/assets/no-cover.png"}">
-      <span>${m.title}</span>
-    `;
-
-    div.onclick = () => {
-      window.location.href = `/chapters.html?slug=${m.slug}`;
-    };
-
-    results.appendChild(div);
-  });
-
-  results.classList.remove("hidden");
-});
-
-// kattint  s m  shova  ^f^r bez  r
-document.addEventListener("click", e => {
-  if (!e.target.closest(".search-wrapper")) {
-    results.classList.add("hidden");
-  }
-});
-</script>
 
 <main class="content partners-page">
   <h1>🤝 Társoldalak</h1>
 
   <div class="partners-grid">
 
-    <a class="partner-card" href="http://148-230-70-15.nip.io/index.html" target="_blank">
+    <a class="partner-card" href="https://manhwamania.hu/" target="_blank">
       <h2>Aeliin</h2>
       <p>Fansub oldal</p>
     </a>
@@ -152,10 +47,13 @@ document.addEventListener("click", e => {
     </a>
 
   </div>
-</main>
 
-<script src="/js/auth-check.js"></script>
+</main>
+<div id="footer"></div>
+<script src="/js/footer.js"></script>
+<script type="module" src="/js/layout-loader.js"></script>
 <script src="/js/sidebar.js"></script>
+<script src="/js/auth-check.js"></script>
 
 </body>
 </html>

@@ -117,10 +117,6 @@
 }
 /* ==== SETTINGS BUTTON ==== */
 
-.settings-wrapper {
-  position: relative;
-}
-
 .settings-btn {
   width: 42px;
   height: 42px;
@@ -130,7 +126,7 @@
 }
 
 .settings-btn .gear {
-  font-size: 22px;
+  font-size: 16px;
   transition: transform 0.2s ease, filter 0.2s ease;
   opacity: .85;
 }
@@ -149,7 +145,7 @@
 }
 
 #settingsBtn img {
-  width: 34px;
+  width: 40px;
   opacity: 0.85;
   transition: transform 0.2s ease, opacity 0.2s ease;
 }
@@ -179,7 +175,8 @@
   border-radius: 8px;
   color: #fff;
   text-decoration: none;
-  font-weight: 500;
+  font-weight: 600;
+  font-size: 20px;
   transition: background .15s ease;
 }
 

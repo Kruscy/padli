@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="/css/header.css">
 <link rel="stylesheet" href="/css/profile.css">
 <link rel="stylesheet" href="/css/main.css">
-
+<link rel="stylesheet" href="/css/footer.css">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -118,7 +118,7 @@ const filtered = items
     grid.innerHTML = "";
 
     const now = Date.now();
-    const WEEK = 2 * 24 * 60 * 60 * 1000;
+    const WEEK = 4 * 24 * 60 * 60 * 1000;
 
     const items = [];
 
@@ -213,6 +213,8 @@ const filtered = items
 <script type="module" src="/js/layout-loader.js"></script>
 <script src="/js/sidebar.js"></script>
 <script src="/js/auth-check.js"></script>
+<div id="footer"></div>
+<script src="/js/footer.js"></script>
 
 </body>
 </html>

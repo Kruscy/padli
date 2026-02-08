@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <title>Login – PadlizsanFanSub</title>
-  <link rel="stylesheet" href="/css/auth.css" />
+	<link rel="stylesheet" href="/css/footer.css">
+	<link rel="stylesheet" href="/css/auth.css" />
 </head>
 <body>
 
@@ -20,8 +21,19 @@
     <div id="error" class="error"></div>
 
     <p>Nincs még fiókod? <a href="/register.html">Regisztráció</a></p>
+	<p class="forgot">
+  <a href="/forgot-password.html">Elfelejtetted a jelszavad?</a>
+</p>
+<div class="remember-wrap">
+  <label class="remember">
+    <input type="checkbox" id="rememberMe" />
+    <span>Maradjak bejelentkezve</span>
+  </label>
+</div>
   </div>
 </div>
+<div id="footer"></div>
+<script src="/js/footer.js"></script>
 
 <script src="/js/background.js"></script>
 <script src="/js/login.js"></script>

@@ -1,39 +1,106 @@
-.settings-page {
-  max-width: 700px;
-  margin: 0 auto;
-  padding: 32px 24px;
-  color: #fff;
+/* ===== LAYOUT ===== */
+
+.settings-layout {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 32px;
+  max-width: 1200px;
+  margin: 32px auto;
+  padding: 0 24px;
+  color: #e5e7eb;
   font-family: "Poppins", system-ui, sans-serif;
 }
 
-.settings-page h1 {
-  margin-bottom: 24px;
+/* ===== LEFT NAV ===== */
+
+.settings-nav {
+  background: #020617;
+  padding: 16px;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.settings-card {
-  background: #0f172a;
-  border-radius: 16px;
-  padding: 24px;
-  box-shadow: 0 12px 35px rgba(0,0,0,.45);
+.settings-nav h3 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  opacity: .5;
+  margin: 12px 8px 6px;
 }
+
+.settings-nav button {
+  background: transparent;
+  border: none;
+  padding: 10px 12px;
+  border-radius: 6px;
+  color: #cbd5f5;
+  text-align: left;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.settings-nav button:hover {
+  background: #020617;
+}
+
+.settings-nav button.active {
+  background: #020617;
+  color: #fff;
+  font-weight: 600;
+}
+
+.settings-nav button:disabled {
+  opacity: .4;
+  cursor: not-allowed;
+}
+
+/* ===== RIGHT CONTENT ===== */
+
+.settings-content {
+  background: #020617;
+  border-radius: 10px;
+  padding: 28px 32px;
+  min-height: 400px;
+}
+
+/* ===== TABS ===== */
+
+.tab {
+  display: none;
+}
+
+.tab.active {
+  display: block;
+}
+
+/* ===== HEADINGS ===== */
+
+.settings-content h2 {
+  font-size: 22px;
+  margin-bottom: 20px;
+}
+
+/* ===== FORM FIELDS ===== */
 
 .field {
   display: flex;
   flex-direction: column;
-  margin-bottom: 18px;
+  margin-bottom: 20px;
 }
 
 .field label {
   font-size: 13px;
-  opacity: .75;
+  opacity: .7;
   margin-bottom: 6px;
 }
 
 .field input {
   padding: 12px 14px;
-  border-radius: 10px;
+  border-radius: 6px;
   border: 1px solid #1f2937;
-  background: #0e111b;
+  background: #020617;
   color: #fff;
 }
 
@@ -42,42 +109,84 @@
   cursor: not-allowed;
 }
 
-.email-row {
-  display: flex;
-  gap: 10px;
-}
-
-.small-btn {
-  background: #1f2937;
-  border: none;
-  padding: 10px 14px;
-  border-radius: 10px;
-  color: #fff;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.small-btn:hover {
-  filter: brightness(1.15);
-}
+/* ===== BUTTONS ===== */
 
 .save-btn {
-  margin-top: 16px;
-  background: linear-gradient(135deg, #7c5cff, #5b3df5);
+  margin-top: 12px;
+  background: #2563eb;
   border: none;
-  padding: 12px 24px;
-  border-radius: 12px;
+  padding: 12px 20px;
+  border-radius: 6px;
   color: #fff;
   font-weight: 600;
   cursor: pointer;
 }
 
 .save-btn:hover {
-  box-shadow: 0 10px 25px rgba(124,92,255,.35);
+  filter: brightness(1.1);
 }
+
+.small-btn {
+  background: #020617;
+  border: 1px solid #1f2937;
+  padding: 10px 14px;
+  border-radius: 6px;
+  color: #fff;
+  cursor: pointer;
+}
+
+.small-btn:hover {
+  background: #020617;
+}
+
+/* ===== PATREON (NEM BUBORÉKOS) ===== */
+
+.patreon-box {
+  margin-top: 12px;
+  padding: 0;
+  background: none;
+}
+
+.patreon-box p {
+  margin-bottom: 12px;
+  opacity: .85;
+}
+
+.patreon-btn {
+  background: #ff424d;
+  border: none;
+  padding: 12px 18px;
+  border-radius: 6px;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.patreon-btn:hover {
+  filter: brightness(1.1);
+}
+
+.disconnect-btn {
+  background: transparent;
+  border: 1px solid #1f2937;
+  padding: 10px 16px;
+  border-radius: 6px;
+  color: #cbd5f5;
+  cursor: pointer;
+}
+
+.disconnect-btn:hover {
+  background: #020617;
+}
+
+/* ===== MISC ===== */
 
 .status {
   margin-top: 12px;
   font-size: 14px;
-  opacity: .85;
+  opacity: .8;
+}
+
+.hidden {
+  display: none;
 }

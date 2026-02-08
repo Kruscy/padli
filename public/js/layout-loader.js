@@ -27,8 +27,7 @@ function initSettingsMenu() {
 
   menu.addEventListener("click", (e) => e.stopPropagation());
 }
-
-/* ===== ADMIN SCAN BUTTON ===== */
+/* ===== ADMIN CONTROLS ===== */
 async function initAdminControls() {
   const res = await fetch("/api/auth/me");
   if (!res.ok) return;
@@ -36,31 +35,44 @@ async function initAdminControls() {
   const user = await res.json();
   if (user.role !== "admin") return;
 
+  /* ===== SCAN GOMB ===== */
   const scanBtn = document.getElementById("scanBtn");
-  if (!scanBtn) return;
+  if (scanBtn) {
+    scanBtn.classList.remove("hidden");
 
-  scanBtn.classList.remove("hidden");
+    scanBtn.addEventListener("click", async () => {
+      if (!confirm("Biztos elindítod a scan-t?")) return;
 
-  scanBtn.addEventListener("click", async () => {
-    if (!confirm("Biztos elindítod a scan-t?")) return;
+      scanBtn.disabled = true;
+      scanBtn.textContent = "⏳ Scanning...";
 
-    scanBtn.disabled = true;
-    scanBtn.textContent = "⏳ Scanning...";
+      const r = await fetch("/api/admin/scan", {
+        method: "POST"
+      });
 
-const r = await fetch("/api/admin/scan", {
-  method: "POST"
-});
+      scanBtn.textContent = r.ok
+        ? "✅ Scan started"
+        : "❌ Scan failed";
 
-    scanBtn.textContent = r.ok
-      ? "✅ Scan started"
-      : "❌ Scan failed";
+      setTimeout(() => {
+        scanBtn.textContent = "🔄 Scan library";
+        scanBtn.disabled = false;
+      }, 3000);
+    });
+  }
 
-    setTimeout(() => {
-      scanBtn.textContent = "🔄 Scan library";
-      scanBtn.disabled = false;
-    }, 3000);
-  });
+  /* ===== USERS GOMB ===== */
+  const usersBtn = document.getElementById("usersBtn");
+  if (usersBtn) {
+    usersBtn.classList.remove("hidden");
+
+    usersBtn.addEventListener("click", () => {
+      window.location.href = "/users.html";
+    });
+  }
 }
+
+
 /* ================= LAYOUT INIT ================= */
 
 async function loadLayout() {
@@ -97,5 +109,6 @@ async function loadLayout() {
     overlay.classList.remove("show");
   });
 }
+
 
 document.addEventListener("DOMContentLoaded", loadLayout);

@@ -9,6 +9,7 @@
     "express": "^4.19.0",
     "express-session": "^1.18.2",
     "node-fetch": "^3.3.2",
+    "nodemailer": "^8.0.0",
     "pg": "^8.11.5"
   }
 }

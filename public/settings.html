@@ -2,12 +2,13 @@
 <html lang="hu">
 <head>
 <meta charset="UTF-8">
-<title>Want To Read</title>
+<title>PadlizsanFanSub - Settings</title>
 <link rel="stylesheet" href="/css/sidebar.css">
 <link rel="stylesheet" href="/css/search.css">
 <link rel="stylesheet" href="/css/grid.css">
 <link rel="stylesheet" href="/css/header.css">
 <link rel="stylesheet" href="/css/settings.css">
+<link rel="stylesheet" href="/css/footer.css">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -15,41 +16,95 @@
 
 </head>
 <body>
-<form id="settingsForm">
-  <label>
-    Username
-    <input id="username" disabled>
-  </label>
+<div id="header-root"></div>
+<div id="sidebar-root"></div>
 
-  <label>
-    Email
-    <input id="email" type="email">
-  </label>
+  <div class="settings-layout">
+    <!-- BAL OLDALI MENÜ -->
+    <aside class="settings-nav">
+      <h3>Account</h3>
+      <button data-tab="account" class="active">👤 Felhasználó</button>
+      <button data-tab="patreon">💜 Patreon</button>
+      <button data-tab="anilist" disabled>📚 AniList</button>
+    </aside>
 
-  <hr>
+    <!-- JOBB OLDALI TARTALOM -->
+    <main class="settings-content">
+      <section id="tab-account" class="tab active">
+    <h1>⚙️ Beállítások</h1>
 
-  <label>
-    Régi jelszó
-    <input id="oldPassword" type="password">
-  </label>
+    <form id="settingsForm">
 
-  <label>
-    Új jelszó
-    <input id="newPassword" type="password">
-  </label>
+      <div class="field">
+        <label>Felhasználónév</label>
+        <input id="username" disabled>
+      </div>
 
-  <label>
-    Új jelszó újra
-    <input id="newPassword2" type="password">
-  </label>
+      <div class="field">
+        <label>Email</label>
+        <input id="email" type="email">
+      </div>
 
-  <button>💾 Mentés</button>
-</form>
+      <hr>
 
-<script src="/js/settings.js"></script>
+      <div class="field">
+        <label>Régi jelszó</label>
+        <input id="oldPassword" type="password">
+      </div>
+
+      <div class="field">
+        <label>Új jelszó</label>
+        <input id="newPassword" type="password">
+      </div>
+
+      <div class="field">
+        <label>Új jelszó újra</label>
+        <input id="newPassword2" type="password">
+      </div>
+
+      <button class="save-btn">💾 Mentés</button>
+
+      <div id="status" class="status"></div>
+
+    </form>
+	</section>
+
+<section id="tab-patreon" class="tab">
+  <h2>💜 Patreon</h2>
+
+  <!-- NINCS ÖSSZEKÖTVE -->
+  <div id="patreon-disconnected" class="patreon-box hidden">
+    <p>
+      Kösd össze a Patreon fiókodat, hogy megkapd az extra tartalmakat.
+    </p>
+
+    <button id="patreonConnectBtn" class="patreon-btn">
+      💜 Patreon összekapcsolása
+    </button>
+  </div>
+
+  <!-- ÖSSZEKÖTVE -->
+  <div id="patreon-connected" class="patreon-box hidden">
+    <p><b>Állapot:</b> <span id="patreonActive"></span></p>
+    <p><b>Tier:</b> <span id="patreonTier"></span></p>
+
+    <button id="patreonDisconnectBtn" class="disconnect-btn">
+      Leválasztás
+    </button>
+  </div>
+</section>
 
 
+      <section id="tab-anilist" class="tab">
+        <p>🚧 Hamarosan…</p>
+      </section>
+    </main>
 
+  <script src="/js/settings.js"></script>
+</div>
+<div id="footer"></div>
+<script src="/js/footer.js"></script>
+<script src="/js/patreon-settings.js"></script>
 <script type="module" src="/js/layout-loader.js"></script>
 <script src="/js/sidebar.js"></script>
 <script src="/js/auth-check.js"></script>
