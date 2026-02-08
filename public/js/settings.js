@@ -4,29 +4,46 @@ const oldPwEl = document.getElementById("oldPassword");
 const newPwEl = document.getElementById("newPassword");
 const newPw2El = document.getElementById("newPassword2");
 const form = document.getElementById("settingsForm");
+const statusEl = document.getElementById("status");
 
 /* ===== BETÖLTÉS ===== */
 fetch("/api/settings")
-  .then(r => r.json())
+  .then(r => {
+    if (!r.ok) throw new Error();
+    return r.json();
+  })
   .then(d => {
     usernameEl.value = d.username;
-    usernameEl.disabled = true;
     emailEl.value = d.email;
+  })
+  .catch(() => {
+    statusEl.textContent = "Nem sikerült betölteni az adatokat";
   });
 
 /* ===== MENTÉS ===== */
 form.addEventListener("submit", async e => {
   e.preventDefault();
+  statusEl.textContent = "";
 
-  if (newPwEl.value && newPwEl.value !== newPw2El.value) {
-    alert("Az új jelszavak nem egyeznek");
-    return;
+  if (newPwEl.value || newPw2El.value) {
+    if (!oldPwEl.value) {
+      statusEl.textContent = "Régi jelszó megadása kötelező";
+      return;
+    }
+    if (newPwEl.value !== newPw2El.value) {
+      statusEl.textContent = "Az új jelszavak nem egyeznek";
+      return;
+    }
+    if (newPwEl.value.length < 8) {
+      statusEl.textContent = "Az új jelszó túl rövid";
+      return;
+    }
   }
 
   const payload = {
-    email: emailEl.value || undefined,
-    oldPassword: oldPwEl.value || undefined,
-    newPassword: newPwEl.value || undefined
+    email: emailEl.value,
+    oldPassword: oldPwEl.value || null,
+    newPassword: newPwEl.value || null
   };
 
   const res = await fetch("/api/settings", {
@@ -36,11 +53,32 @@ form.addEventListener("submit", async e => {
   });
 
   const data = await res.json();
+
   if (!res.ok) {
-    alert(data.error);
+    statusEl.textContent = data.error || "Hiba történt";
     return;
   }
 
-  alert("Beállítások mentve ✔");
-  form.reset();
+  statusEl.textContent = "Beállítások mentve ✔";
+  oldPwEl.value = "";
+  newPwEl.value = "";
+  newPw2El.value = "";
+});
+document.querySelectorAll(".settings-nav button").forEach(btn => {
+  btn.addEventListener("click", () => {
+    if (btn.disabled) return;
+
+    document
+      .querySelectorAll(".settings-nav button")
+      .forEach(b => b.classList.remove("active"));
+
+    document
+      .querySelectorAll(".tab")
+      .forEach(t => t.classList.remove("active"));
+
+    btn.classList.add("active");
+    document
+      .getElementById("tab-" + btn.dataset.tab)
+      .classList.add("active");
+  });
 });

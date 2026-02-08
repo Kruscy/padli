@@ -1,0 +1,47 @@
+/* Oldal struktúra */
+html, body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+/* minden fő tartalom */
+main {
+  flex: 1;
+}
+
+/* Footer */
+.site-footer {
+  margin-top: auto;
+  background: #0e0f12;
+  color: #aaa;
+  font-size: 14px;
+}
+
+.footer-divider {
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    #2a2f3a,
+    transparent
+  );
+}
+
+.footer-content {
+  padding: 20px;
+  text-align: center;
+}
+
+.site-footer a {
+  color: #7dd3fc;
+  text-decoration: none;
+}
+
+.site-footer a:hover {
+  text-decoration: underline;
+}

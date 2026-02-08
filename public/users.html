@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<title>PadlizsanFanSub Felhasználók</title>
+<link rel="stylesheet" href="/css/sidebar.css">
+<link rel="stylesheet" href="/css/search.css">
+<link rel="stylesheet" href="/css/grid.css">
+<link rel="stylesheet" href="/css/header.css">
+<link rel="stylesheet" href="/css/profile.css">
+<link rel="stylesheet" href="/css/footer.css">
+<link rel="stylesheet" href="/css/users.css">
+
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
+
+</head>
+<body class="hidden">
+
+<div id="header-root"></div>
+<div id="sidebar-root"></div>
+<script>
+document.addEventListener("DOMContentLoaded", async () => {
+  try {
+    const res = await fetch("/api/auth/me");
+    if (!res.ok) {
+      location.replace("/index.html");
+      return;
+    }
+
+    const user = await res.json();
+    if (user.role !== "admin") {
+      location.replace("/index.html");
+      return;
+    }
+
+    // ✅ CSAK ITT
+    document.body.classList.remove("hidden");
+
+  } catch {
+    location.replace("/index.html");
+  }
+});
+</script>
+
+ <h1>👤 Felhasználók</h1>
+
+  <table class="users-table">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Felhasználónév</th>
+        <th>Email</th>
+        <th>Role</th>
+	<th>Patreon</th>
+	<th>Tier</th>
+        <th>Létrehozva</th>
+      </tr>
+    </thead>
+    <tbody id="usersTableBody"></tbody>
+  </table>
+
+  <script src="/js/users.js"></script>
+
+<div id="footer"></div>
+<script src="/js/footer.js"></script>
+
+<script type="module" src="/js/layout-loader.js"></script>
+<script src="/js/sidebar.js"></script>
+<script src="/js/auth-check.js"></script>
+
+</body>
+</html>

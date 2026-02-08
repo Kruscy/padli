@@ -1,4 +1,7 @@
 import bcrypt from "bcrypt";
+import crypto from "crypto";
+import { sendMail } from "../mail.js";
+import { pool } from "../db.js";
 
 router.post("/register", async (req, res) => {
   const { email, password } = req.body;
@@ -36,3 +39,5 @@ router.post("/register", async (req, res) => {
     res.status(500).json({ error: "DB error" });
   }
 });
+  }
+

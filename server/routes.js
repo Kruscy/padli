@@ -2,7 +2,14 @@ import { Router } from "express";
 import fs from "fs";
 import path from "path";
 import { pool } from "./db.js";
+import { requireLogin } from "./middleware/auth.js";
 import adminRoutes from "./routes/admin.js";
+import { randomBytes } from "crypto";
+import { sendMail } from "./mail.js";
+import settingsRoutes from "./routes/settings.js";
+import patreonRoutes from "./routes/patreon.js";
+import { syncPatreonForUser } from "./patreon-sync.js";
+
 
 const router = Router();
 
@@ -16,7 +23,7 @@ function extractPageNumber(filename) {
 
 /* ================= MANGA LIST ================= */
 
-router.get("/manga", async (_req, res) => {
+router.get("/manga", requireLogin, async (_req, res) => {
   try {
     const { rows } = await pool.query(
       "SELECT title, slug, cover_url FROM manga ORDER BY title"
@@ -28,7 +35,7 @@ router.get("/manga", async (_req, res) => {
   }
 });
 /* ================= MANGA METADATA ================= */
-router.get("/manga/:slug", async (req, res) => {
+router.get("/manga/:slug", requireLogin, async (req, res) => {
   const { slug } = req.params;
 
   const { rows } = await pool.query(
@@ -57,7 +64,7 @@ router.get("/manga/:slug", async (req, res) => {
 
 /* ================= CHAPTER LIST ================= */
 
-router.get("/chapters/:slug", async (req, res) => {
+router.get("/chapters/:slug", requireLogin, async (req, res) => {
   try {
     const { slug } = req.params;
 
@@ -83,7 +90,7 @@ ORDER BY
 
 /* ================= PAGE LIST ================= */
 
-router.get("/pages/:slug/:chapter", async (req, res) => {
+router.get("/pages/:slug/:chapter", requireLogin, async (req, res) => {
   const { slug, chapter } = req.params;
 
   const result = await pool.query(
@@ -131,7 +138,7 @@ router.get("/pages/:slug/:chapter", async (req, res) => {
 
 /* ================= IMAGE ================= */
 
-router.get("/image/:slug/:chapter/:file", async (req, res) => {
+router.get("/image/:slug/:chapter/:file", requireLogin, async (req, res) => {
   const { slug, chapter, file } = req.params;
 
   const result = await pool.query(
@@ -160,7 +167,7 @@ router.get("/image/:slug/:chapter/:file", async (req, res) => {
 
 /* ================= NEXT / PREV ================= */
 
-router.get("/chapter-nav/:slug/:chapter", async (req, res) => {
+router.get("/chapter-nav/:slug/:chapter", requireLogin, async (req, res) => {
   const { slug, chapter } = req.params;
 
   const { rows } = await pool.query(
@@ -222,7 +229,7 @@ router.post("/progress", async (req, res) => {
 
 
 /* ===== READING PROGRESS LOAD ===== */
-router.get("/progress/:slug", async (req, res) => {
+router.get("/progress/:slug", requireLogin, async (req, res) => {
   if (!req.session.user) {
     return res.json(null);
   }
@@ -294,10 +301,89 @@ router.post("/auth/register", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+/* ================= PASSWORD RESET ================= */
+
+/* ===== FORGOT PASSWORD ===== */
+router.post("/auth/forgot-password", async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    const token = randomBytes(32).toString("hex");
+    const expires = new Date(Date.now() + 1000 * 60 * 30); // 30 perc
+
+    const result = await pool.query(
+      `
+      UPDATE users
+      SET reset_token = $1,
+          reset_expires = $2
+      WHERE email = $3
+      RETURNING email
+      `,
+      [token, expires, email]
+    );
+
+    // Biztonság: mindig OK
+    if (!result.rowCount) {
+      return res.json({ ok: true });
+    }
+
+    const resetLink =
+      `https://padlizsanfansub.hu/reset-password.html?token=${token}`;
+
+    await sendMail({
+      to: email,
+      subject: "🔐 Jelszó visszaállítás – PadlizsanFanSub",
+      html: `
+        <p>Jelszó visszaállítást kértél.</p>
+        <p>
+          <a href="${resetLink}">
+            Új jelszó beállítása
+          </a>
+        </p>
+        <p>Ez a link 30 percig érvényes.</p>
+      `
+    });
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("FORGOT PASSWORD ERROR:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+/* ===== RESET PASSWORD ===== */
+router.post("/auth/reset-password", async (req, res) => {
+  try {
+    const { token, password } = req.body;
+
+    const hash = await bcrypt.hash(password, 10);
+
+    const result = await pool.query(
+      `
+      UPDATE users
+      SET password_hash = $1,
+          reset_token = NULL,
+          reset_expires = NULL
+      WHERE reset_token = $2
+        AND reset_expires > NOW()
+      `,
+      [hash, token]
+    );
+
+    if (!result.rowCount) {
+      return res.status(400).json({ error: "Invalid or expired token" });
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("RESET PASSWORD ERROR:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 /* ================= LOGIN ================= */
 router.post("/auth/login", async (req, res) => {
-  const { login, password } = req.body; // login = email VAGY username
-
+  const { login, password, remember } = req.body; // login = email VAGY username
   if (!login || !password) {
     return res.status(400).json({ error: "Missing credentials" });
   }
@@ -330,6 +416,18 @@ router.post("/auth/login", async (req, res) => {
       username: user.username,
       role: user.role
     };
+// login route-ban
+try {
+  await syncPatreonForUser(user.id);
+} catch (e) {
+  console.error("PATREON SYNC FAILED:", e);
+}
+
+
+	// remember me
+	if (remember) {
+	  req.session.cookie.maxAge = 1000 * 60 * 60 * 24 * 30; // 30 nap
+	}
 
     res.json({ ok: true });
   } catch (err) {
@@ -387,7 +485,7 @@ router.get("/want", async (req, res) => {
 });
 
 // ===== WANT TO READ – TOGGLE =====
-router.post("/want/:slug", async (req, res) => {
+router.post("/want/:slug", requireLogin, async (req, res) => {
   if (!req.session.user) {
     return res.status(401).json({ error: "Not logged in" });
   }
@@ -437,9 +535,40 @@ router.post("/want/:slug", async (req, res) => {
     return res.json({ wanted: true });
   }
 });
+/* ================= ADMIN: UPDATE MANGA ================= */
+router.post("/admin/manga/:slug", requireLogin, async (req, res) => {
+  const { slug } = req.params;
+  const { cover_url, description } = req.body;
+
+  try {
+    const result = await pool.query(
+      `
+      UPDATE manga
+      SET
+        cover_url = $1,
+        description = $2
+      WHERE slug = $3
+      RETURNING id
+      `,
+      [cover_url, description, slug]
+    );
+
+    if (!result.rowCount) {
+      return res.status(404).json({ error: "Manga not found" });
+    }
+
+    res.json({ success: true });
+  } catch (e) {
+    console.error("UPDATE MANGA ERROR:", e);
+    res.status(500).json({ error: "DB error" });
+  }
+});
+
 
 /* ================= ADMIN ================= */
 
 router.use("/admin", adminRoutes);
+router.use("/settings", settingsRoutes);
+router.use("/patreon", patreonRoutes);
 
 export default router;
