@@ -1,19 +1,6 @@
 [
-  { "id": "lib1",  "name": "Ascyra",  	 	  "path": "/mnt/manga/Kavita/Ascyra",        "enabled": true },
-  { "id": "lib2",  "name": "kovacsd156",    	  "path": "/mnt/manga/Kavita/kovacsd156",        "enabled": true },
-  { "id": "lib3",  "name": "bajos",  	  "path": "/mnt/manga/Kavita/bajos",    "enabled": true },
-  { "id": "lib4",  "name": "Stukker",             "path": "/mnt/manga/Kavita/Stukker/Kicsomagolt Manhwa",    "enabled": true },
-  { "id": "lib5",  "name": "Joker",        	  "path": "/mnt/manga/Kavita/Joker/Kicsomagolt Manwha",   "enabled": true },
-
-  { "id": "lib6",  "name": "Isagi_Yoichi",        "path": "/mnt/manga/Kavita/Isagi_Yoichi/Kicsomagolt Manhwa",   "enabled": true },
-  { "id": "lib7",  "name": "Krisz",       	  "path": "/mnt/manga/Kavita/Krisz/Manwha",   "enabled": false },
-  { "id": "lib8",  "name": "Lacus",               "path": "/mnt/manga/Kavita/Lacus/Manwha",      "enabled": false },
-  { "id": "lib9",  "name": "SKYPRO",    	  "path": "/mnt/manga/Kavita/SKYPRO/Kicsomagolt Manhwa",       "enabled": true },
-  { "id": "lib10", "name": "Sempai",		  "path": "/mnt/manga/Kavita/Sempai/Manhwa", "enabled": false },
-  { "id": "lib11",  "name": "Wat15",              "path": "/mnt/manga/Kavita/Wat15",        "enabled": true },
-  { "id": "lib12", "name": "Fatal_Obsessed",      "path": "/mnt/manga/Kavita/Fatal_obsessed/New", "enabled": true },
-  { "id": "lib13", "name": "Krityaa",             "path": "/mnt/manga/Kavita/Krityaa/New", "enabled": true },
-  { "id": "lib14", "name": "Meriodasu",           "path": "/mnt/manga/Kavita/Meriodasu", "enabled": true }
+  { "id": "lib1",  "name": "test1",  	 	  "path": "/mnt/manga/1",        "enabled": true },
+  { "id": "lib2", "name": "test2",           "path": "/mnt/manga/2", "enabled": false }
 
 
 ]
