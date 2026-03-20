@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <title>PadlizsanFanSub</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favico.png">
 <link rel="stylesheet" href="/css/sidebar.css">
 <link rel="stylesheet" href="/css/search.css">
 <link rel="stylesheet" href="/css/grid.css">
@@ -19,6 +20,20 @@
 <body>
 <div id="header-root"></div>
 <div id="sidebar-root"></div>
+
+<section class="hero">
+
+  <button id="heroPrev" class="hero-arrow left">‹</button>
+
+  <div id="heroContent" class="hero-content fade">
+    <div class="hero-inner"></div>
+  </div>
+
+  <button id="heroNext" class="hero-arrow right">›</button>
+
+  <div id="heroDots" class="hero-dots"></div>
+
+</section>
 
 <main class="content">
 <h2>📖 Most olvasott</h2>
@@ -111,110 +126,67 @@ const filtered = items
 <script>
 (async function () {
   try {
-    const res = await fetch("/api/manga");
-    const mangas = await res.json();
-
     const grid = document.getElementById("newGrid");
+
+    const res = await fetch("/api/new-releases");
+    const items = await res.json();
+
     grid.innerHTML = "";
 
-    const now = Date.now();
-    const WEEK = 4 * 24 * 60 * 60 * 1000;
-
-    const items = [];
-
-    for (const m of mangas) {
-      // chapters
-      const chaptersRes = await fetch(`/api/chapters/${m.slug}`);
-      if (!chaptersRes.ok) continue;
-
-      const chapters = await chaptersRes.json();
-
-      // csak 7 napon belül scannelt
-      const recent = chapters.filter(ch => {
-        if (!ch.scanned_at) return false;
-        return now - new Date(ch.scanned_at).getTime() <= WEEK;
-      });
-
-      if (!recent.length) continue;
-
-      // progress
-      const progressRes = await fetch(`/api/progress/${m.slug}`);
-      const progress = progressRes.ok ? await progressRes.json() : null;
-
-      // ha az utolsó rész már ki van olvasva → ne jelenjen meg
-      if (progress) {
-        const lastChapter = chapters[chapters.length - 1]?.folder;
-        if (progress.chapter === lastChapter) continue;
-      }
-
-      // legfrissebb scan idő
-      const latestScan = recent
-        .map(r => new Date(r.scanned_at))
-        .sort((a, b) => b - a)[0];
-
-      items.push({
-        manga: m,
-        recent,
-        progress,
-        latestScan
-      });
-    }
-
-    // 🔽 RENDEZÉS: legutóbb scannelt elöl
-    items.sort((a, b) => b.latestScan - a.latestScan);
-
-    // kirajzolás
     for (const item of items) {
-      const { manga: m, recent, progress } = item;
-
       const card = document.createElement("div");
       card.className = "card";
 
-      /* ===== COVER ===== */
       const coverLink = document.createElement("a");
       coverLink.className = "cover";
+      coverLink.href = `/chapters.html?slug=${encodeURIComponent(item.slug)}`;
 
-      coverLink.href = progress
-        ? `/reader.html?slug=${encodeURIComponent(m.slug)}&chapter=${encodeURIComponent(progress.chapter)}&page=${progress.page}`
-        : `/chapters.html?slug=${encodeURIComponent(m.slug)}`;
-
-      if (m.cover_url) {
+      if (item.cover_url) {
         const img = document.createElement("img");
-        img.src = m.cover_url;
+        img.src = item.cover_url;
         img.loading = "lazy";
         coverLink.appendChild(img);
       }
 
       const badge = document.createElement("div");
       badge.className = "new-count";
-      badge.textContent = `Új részek: +${recent.length}`;
+      badge.textContent = `Új részek: +${item.new_count}`;
       coverLink.appendChild(badge);
 
-      /* ===== TITLE ===== */
       const title = document.createElement("a");
       title.className = "title";
-      title.href = `/chapters.html?slug=${encodeURIComponent(m.slug)}`;
-      title.textContent = m.title;
+      title.href = coverLink.href;
+      title.textContent = item.title;
 
       card.appendChild(coverLink);
       card.appendChild(title);
       grid.appendChild(card);
     }
-
   } catch (e) {
     console.error("Új részek hiba:", e);
   }
 })();
 </script>
-
 </main>
 
-
+<script src="/js/hero.js"></script>
 <script type="module" src="/js/layout-loader.js"></script>
 <script src="/js/sidebar.js"></script>
 <script src="/js/auth-check.js"></script>
 <div id="footer"></div>
 <script src="/js/footer.js"></script>
-
+<script>
+  var _paq = window._paq = window._paq || [];
+  /* tracker methods like "setCustomDimension" should be called before "trackPageView" */
+  _paq.push(['trackPageView']);
+  _paq.push(['enableLinkTracking']);
+  (function() {
+    var u="//mamato.csimota.duckdns.org/";
+    _paq.push(['setTrackerUrl', u+'matomo.php']);
+    _paq.push(['setSiteId', '1']);
+    var d=document, g=d.createElement('script'), s=d.getElementsByTagName('script')[0];
+    g.async=true; g.src=u+'matomo.js'; s.parentNode.insertBefore(g,s);
+  })();
+</script>
 </body>
 </html>

@@ -2,23 +2,19 @@ import fetch from "node-fetch";
 import { pool } from "./db.js";
 
 export async function syncPatreonForUser(userId) {
-  /* === lekérjük a patreon kapcsolatot === */
   const { rows } = await pool.query(
     `
-	SELECT active, tier
+    SELECT patreon_user_id
     FROM patreon_status
     WHERE user_id = $1
     `,
     [userId]
   );
 
-  if (!rows.length) {
-    return; // nincs összekötve
-  }
+  if (!rows.length) return;
 
   const patreonUserId = rows[0].patreon_user_id;
 
-  /* === Patreon API: memberships === */
   const res = await fetch(
     `https://www.patreon.com/api/oauth2/v2/members?include=currently_entitled_tiers&fields[member]=patron_status`,
     {
@@ -34,7 +30,7 @@ export async function syncPatreonForUser(userId) {
     m => m.relationships.user?.data?.id === patreonUserId
   );
 
-  /* === ha nincs aktív membership === */
+  // ❌ nincs előfizetés
   if (!member) {
     await pool.query(
       `
@@ -47,6 +43,7 @@ export async function syncPatreonForUser(userId) {
       [userId]
     );
 
+    // ADMIN VÉDETT
     await pool.query(
       `
       UPDATE users
@@ -60,37 +57,24 @@ export async function syncPatreonForUser(userId) {
     return;
   }
 
-  /* === tier meghatározás === */
-  const tierTitle =
-    member.relationships.currently_entitled_tiers.data[0]?.id || null;
-
-  let tier = null;
-  if (tierTitle?.includes("Támogató")) tier = "tamogato";
-  if (tierTitle?.includes("Booster")) tier = "booster";
-  if (tierTitle?.includes("Szuper")) tier = "szuper";
-
-  /* === DB frissítés === */
+  // ✅ VAN előfizetés
   await pool.query(
     `
     UPDATE patreon_status
     SET active = true,
-        tier = $1,
         last_sync = now()
-    WHERE user_id = $2
+    WHERE user_id = $1
     `,
-    [tier, userId]
+    [userId]
   );
-
-  /* === ROLE FRISSÍTÉS (ADMIN VÉDETT) === */
-  const role = roleFromTier(tier, true);
 
   await pool.query(
     `
     UPDATE users
-    SET role = $1
-    WHERE id = $2
+    SET role = 'subscriber'
+    WHERE id = $1
       AND role != 'admin'
     `,
-    [role, userId]
+    [userId]
   );
 }

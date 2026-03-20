@@ -109,6 +109,26 @@ async function loadLayout() {
     overlay.classList.remove("show");
   });
 }
+async function loadOnlineCount() {
+  try {
+    const res = await fetch("/api/online-count");
+    if (!res.ok) return;
+
+    const data = await res.json();
+    const el = document.getElementById("onlineCount");
+    if (el) {
+      el.textContent = data.online;
+    }
+  } catch (err) {
+    console.error("Online count error", err);
+  }
+}
+
+// első betöltés
+loadOnlineCount();
+
+// 30mp-enként frissít
+setInterval(loadOnlineCount, 30000);
 
 
 document.addEventListener("DOMContentLoaded", loadLayout);

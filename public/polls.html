@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8">
+  <title>PadlizsanFanSub Szavazások</title>
+
+<link rel="stylesheet" href="/css/main.css">
+
+  <link rel="stylesheet" href="/css/search.css">
+  <link rel="stylesheet" href="/css/header.css">
+  <link rel="stylesheet" href="/css/sidebar.css">
+  <link rel="stylesheet" href="/css/polls.css">
+  <link rel="stylesheet" href="/css/footer.css">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+<div id="header-root"></div>
+<div id="sidebar-root"></div>
+
+<div class="polls-page">
+  <div class="polls-header">
+    <h1>🗳️ Aktív szavazások	</h1>
+    <button id="createPollBtn" class="create-btn hidden">➕ Új szavazás</button>
+ </div>
+
+  <div id="pollsContainer"></div>
+</div>
+  <button class="create-btn" onclick="location.href='/closed-polls.html'">
+     Lezárt szavazások
+  </button>
+
+<script type="module" src="/js/polls.js"></script>
+<div id="footer"></div>
+<script src="/js/footer.js"></script>
+<script type="module" src="/js/layout-loader.js"></script>
+<script src="/js/sidebar.js"></script>
+<script src="/js/auth-check.js"></script>
+
+</body>
+</html>

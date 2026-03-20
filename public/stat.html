@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8">
+  <title>PadlizsanFanSub Stats</title>
+  <link rel="stylesheet" href="/css/main.css">
+  <link rel="stylesheet" href="/css/search.css">
+  <link rel="stylesheet" href="/css/header.css">
+  <link rel="stylesheet" href="/css/sidebar.css">
+  <link rel="stylesheet" href="/css/stat.css">
+  <link rel="stylesheet" href="/css/footer.css">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+<div id="header-root"></div>
+<div id="sidebar-root"></div>
+<h2>📊 Olvasási statisztika</h2>
+
+<table class="stats-table">
+  <thead>
+    <tr>
+      <th>Cím</th>
+      <th>Elkezdte</th>
+      <th>Befejezte</th>
+    </tr>
+  </thead>
+  <tbody id="statsBody"></tbody>
+</table>
+
+<script>
+(async function () {
+
+  const res = await fetch("/api/stats/completion");
+  const data = await res.json();
+
+  const body = document.getElementById("statsBody");
+  body.innerHTML = "";
+
+  for (const row of data) {
+    const tr = document.createElement("tr");
+
+    tr.innerHTML = `
+      <td>${row.title}</td>
+      <td>${row.started}</td>
+      <td>${row.completed}</td>
+    `;
+
+    body.appendChild(tr);
+  }
+
+})();
+</script>
+
+
+<div id="footer"></div>
+<script src="/js/footer.js"></script>
+<script type="module" src="/js/layout-loader.js"></script>
+<script src="/js/sidebar.js"></script>
+<script src="/js/auth-check.js"></script>
+
+</body>
+</html>

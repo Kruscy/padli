@@ -2,14 +2,14 @@
 <html lang="hu">
 <head>
 <meta charset="UTF-8">
-<title>Want To Read</title>
+<title>Padlizsánfansub - Kívánságlista</title>
 <link rel="icon" type="image/png" sizes="32x32" href="/assets/favico.png">
 <link rel="stylesheet" href="/css/sidebar.css">
 <link rel="stylesheet" href="/css/search.css">
 <link rel="stylesheet" href="/css/grid.css">
 <link rel="stylesheet" href="/css/header.css">
-<link rel="stylesheet" href="/css/profile.css">
 <link rel="stylesheet" href="/css/footer.css">
+<link rel="stylesheet" href="/css/wishlist.css">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -20,31 +20,26 @@
 <div id="header-root"></div>
 <div id="sidebar-root"></div>
 
-<main class="content">
-<h1>My Profile</h1>
-<ul id="readingList"></ul>
+<div class="wishlist-page">
 
-<script>
-(async () => {
-  const res = await fetch("/api/progress");
-  if (!res.ok) return;
+  <h1 class="page-title" style="text-align:center">Kívánságlista</h1>
 
-  const data = await res.json();
-  const ul = document.getElementById("readingList");
+<div class="search-wrapper" style="margin:20px auto; max-width:500px;">
+  <input id="searchInput" placeholder="Keresés AniList-ről..." autocomplete="off">
+  <div id="searchResults" class="search-results"></div>
+</div>
 
-  data.forEach(m => {
-    const li = document.createElement("li");
-    li.textContent = m.title;
-    ul.appendChild(li);
-  });
-})();
-</script>
+  <div id="wishlistList" class="wishlist-list"></div>
+
+</div>
+ 
 <div id="footer"></div>
 <script src="/js/footer.js"></script>
 
 <script type="module" src="/js/layout-loader.js"></script>
 <script src="/js/sidebar.js"></script>
 <script src="/js/auth-check.js"></script>
+<script src="/js/wishlist.js"></script>
 
 </body>
 </html>

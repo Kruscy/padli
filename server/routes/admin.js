@@ -1,11 +1,10 @@
-import { Router } from "express";
+import express from "express";
 import { spawn } from "child_process";
 import { pool } from "../db.js";
 import { sendMail } from "../mail.js";
+import { clearNewReleasesCache } from "../cache/new-releases.js";
 
-
-const router = Router();
-
+const router = express.Router();
 /* ================= ADMIN GUARD ================= */
 
 router.use((req, res, next) => {
@@ -19,6 +18,8 @@ router.use((req, res, next) => {
 
 router.post("/scan", (req, res) => {
   try {
+    // 🔥 CACHE TÖRLÉS – AMINT SCAN INDUL
+	clearNewReleasesCache();
     // AZONNAL válaszolunk a frontendnek
     res.json({ ok: true });
 
