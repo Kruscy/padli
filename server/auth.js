@@ -1,5 +1,6 @@
 import bcrypt from "bcrypt";
 import { pool } from "./db.js";
+import { syncPatreonForUser } from "../patreon-sync.js";
 
 export async function register(req, res) {
   const { username, email, password } = req.body;
@@ -44,7 +45,7 @@ export async function login(req, res) {
     username: user.username,
     is_admin: user.is_admin
   };
-
+await syncPatreonForUser(user.id);
   res.json(req.session.user);
 }
 

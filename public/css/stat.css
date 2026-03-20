@@ -1,0 +1,21 @@
+.stats-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 24px;
+}
+
+.stats-table th {
+  text-align: left;
+  padding: 12px;
+  background: #111827;
+  border-bottom: 2px solid #1f2937;
+}
+
+.stats-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #1f2937;
+}
+
+.stats-table tr:hover {
+  background: #0f172a;
+}

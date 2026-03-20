@@ -1,0 +1,108 @@
+.wishlist-page {
+  max-width: 900px;
+  margin: 40px auto;
+  padding: 0 20px;
+}
+
+.claimed-badge {
+  background: rgba(124,92,255,0.15);
+  color: #a78bfa;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  margin: 6px 0;
+  display: inline-block;
+}
+.page-title {
+  font-size: 28px;
+  margin-bottom: 20px;
+}
+
+.wishlist-form {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 25px;
+}
+
+.wishlist-form input {
+  flex: 1;
+  padding: 10px;
+  border-radius: 8px;
+  border: none;
+}
+
+.search-wrapper button {
+  background: linear-gradient(135deg,#7c5cff,#5b3df5);
+  border: none;
+  padding: 10px 18px;
+  border-radius: 10px;
+  color: #fff;
+  cursor: pointer;
+}
+
+.wishlist-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* CARD */
+.wish {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: #0f172a;
+  padding: 14px;
+  border-radius: 12px;
+  transition: 0.2s;
+}
+
+.wish:hover {
+  background: #16203a;
+}
+
+/* KÉP */
+.wish img {
+  width: 70px;
+  height: 100px;
+  object-fit: cover;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+/* TEXT */
+.wish-info {
+  flex: 1;
+}
+
+.wish-info h3 {
+  margin: 0;
+  font-size: 18px;
+}
+.search-results:empty {
+  display: none;
+}
+.wish-info p {
+  margin: 4px 0;
+  font-size: 13px;
+  opacity: 0.7;
+}
+
+/* ADMIN GOMBOK */
+.wish-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.wish-actions button {
+  background: #1f2937;
+  border: none;
+  padding: 6px 10px;
+  border-radius: 8px;
+  color: white;
+  cursor: pointer;
+}
+
+.wish-actions button:hover {
+  background: #374151;
+}

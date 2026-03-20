@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8">
+  <title>PadlizsanFanSub Szavazások</title>
+
+  <link rel="stylesheet" href="/css/search.css">
+  <link rel="stylesheet" href="/css/header.css">
+  <link rel="stylesheet" href="/css/sidebar.css">
+  <link rel="stylesheet" href="/css/closedpolls.css">
+  <link rel="stylesheet" href="/css/footer.css">
+  <link rel="stylesheet" href="/css/main.css">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+<div id="header-root"></div>
+<div id="sidebar-root"></div>
+
+<h2>📦 Lezárt szavazások</h2>
+
+<div id="closedPolls"></div>
+
+<script>
+(async function () {
+
+  const container = document.getElementById("closedPolls");
+
+  const res = await fetch("/api/polls/closed");
+  const polls = await res.json();
+
+  if (!polls.length) {
+    container.innerHTML = "<p>Még nincs lezárt szavazás.</p>";
+    return;
+  }
+
+  for (const poll of polls) {
+
+    const totalVotes = poll.options.reduce((a, b) => a + b.votes, 0);
+
+    const box = document.createElement("div");
+    box.className = "closed-poll";
+
+    const optionsHtml = poll.options
+      .sort((a, b) => b.votes - a.votes)
+      .map(opt => {
+
+        const percent = totalVotes
+          ? Math.round((opt.votes / totalVotes) * 100)
+          : 0;
+
+        return `
+          <div class="result-row">
+            <div class="result-label">${opt.title}</div>
+            <div class="result-bar">
+              <div class="fill" style="width:${percent}%"></div>
+            </div>
+            <div class="result-meta">
+              ${opt.votes} szavazat (${percent}%)
+            </div>
+          </div>
+        `;
+      }).join("");
+
+    box.innerHTML = `
+      <h3>${poll.title}</h3>
+      <p class="closed-date">
+        Lezárva: ${new Date(poll.ends_at).toLocaleDateString()}
+      </p>
+      ${optionsHtml}
+    `;
+
+    container.appendChild(box);
+  }
+
+})();
+</script>
+
+
+<div id="footer"></div>
+<script src="/js/footer.js"></script>
+<script type="module" src="/js/layout-loader.js"></script>
+<script src="/js/sidebar.js"></script>
+<script src="/js/auth-check.js"></script>
+
+</body>
+</html>

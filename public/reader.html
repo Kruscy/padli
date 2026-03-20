@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <title>PadlizsanFanSub – Reader</title>
-
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favico.png">
 <style>
 body {
   margin: 0;
@@ -46,7 +46,7 @@ body {
 
 #chapterInfo {
   opacity: .85;
-  font-size: 14px;
+  font-size: 1.6rem;
 }
 
 /* ===== PAGES ===== */
@@ -81,7 +81,7 @@ body {
   background: #161b22;
   color: #fff;
   border: none;
-  padding: 8px 14px;
+  padding: 1rem 1.8rem;
   border-radius: 8px;
   cursor: pointer;
   font-weight: 600;
@@ -91,7 +91,7 @@ body {
   background: #1f2630;
 }
 .manga-title {
-  font-size: 28px;
+  font-size: 2rem;
   font-weight: 700;
   margin-bottom: 16px;
 }
@@ -217,8 +217,9 @@ async function loadNav() {
   const res = await fetch(`/api/chapters/${slug}`);
   const chapters = (await res.json()).sort(compareChapters);
 
+  const total = chapters.length;
   const index = chapters.findIndex(c => c.folder === chapter);
-  chapterInfo.textContent = `Rész: ${chapter}`;
+  chapterInfo.textContent = `Rész: ${chapter} / ${total}`;
 
   document.getElementById("backBtn").href =
     `/chapters.html?slug=${slug}`;
@@ -261,6 +262,18 @@ document.addEventListener("click", (e) => {
 });
 
 </script>
-
+<script>
+  var _paq = window._paq = window._paq || [];
+  /* tracker methods like "setCustomDimension" should be called before "trackPageView" */
+  _paq.push(['trackPageView']);
+  _paq.push(['enableLinkTracking']);
+  (function() {
+    var u="//mamato.csimota.duckdns.org/";
+    _paq.push(['setTrackerUrl', u+'matomo.php']);
+    _paq.push(['setSiteId', '1']);
+    var d=document, g=d.createElement('script'), s=d.getElementsByTagName('script')[0];
+    g.async=true; g.src=u+'matomo.js'; s.parentNode.insertBefore(g,s);
+  })();
+</script>
 </body>
 </html>

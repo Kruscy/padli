@@ -1,0 +1,43 @@
+.closed-poll {
+  background: #0f172a;
+  padding: 20px;
+  border-radius: 12px;
+  margin-bottom: 24px;
+}
+
+.closed-poll h3 {
+  margin-bottom: 6px;
+}
+
+.closed-date {
+  font-size: 13px;
+  opacity: .6;
+  margin-bottom: 16px;
+}
+
+.result-row {
+  margin-bottom: 12px;
+}
+
+.result-label {
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.result-bar {
+  background: #1f2937;
+  height: 10px;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.result-bar .fill {
+  background: linear-gradient(90deg, #7c5cff, #5b3df5);
+  height: 100%;
+}
+
+.result-meta {
+  font-size: 13px;
+  margin-top: 4px;
+  opacity: .8;
+}

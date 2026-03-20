@@ -3,6 +3,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import session from "express-session";
 import routes from "./routes.js";
+import { activityTracker } from "./middleware/activity.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -31,6 +32,7 @@ app.use(
 
 /* ===== STATIC FRONTEND ===== */
 app.use(express.static(path.join(__dirname, "../public")));
+app.use(activityTracker);
 
 /* ===== API ROUTES ===== */
 app.use("/api", routes);

@@ -76,3 +76,156 @@
   border-radius: 999px;
   font-size: 13px;
 }
+/* ================= HERO WRAPPER ================= */
+
+/* ================= HERO ================= */
+
+.hero {
+  position: relative;
+  width: 100%;
+  max-width: 1200px;
+  margin: 40px auto 60px auto;
+  padding: 0 24px;
+  min-height: 420px;   /* <-- EZ FONTOS */
+}
+
+.hero-content {
+  width: 100%;
+  min-height: 420px;   /* <-- EZ IS */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  opacity: 0;
+  transition: opacity .4s ease;
+}
+
+.hero-content.show {
+  opacity: 1;
+}
+
+.hero-inner {
+  width: 100%;
+  display: flex;
+  gap: 40px;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ===== KÉP ===== */
+
+.hero-image-wrap {
+  flex-shrink: 0;
+}
+
+.heroImage {
+  width: 260px;
+  height: 380px;
+  object-fit: cover;
+  border-radius: 14px;
+  box-shadow: 0 20px 50px rgba(0,0,0,.5);
+}
+
+/* ===== SZÖVEG ===== */
+
+.hero-text {
+  max-width: 600px;
+}
+
+.hero-text h2 {
+  font-size: 32px;
+  margin-bottom: 16px;
+}
+
+.hero-text p {
+  font-size: 15px;
+  line-height: 1.6;
+  opacity: .85;
+  margin-bottom: 24px;
+}
+
+.hero-btn {
+  display: inline-block;
+  padding: 12px 24px;
+  background: linear-gradient(135deg,#7c5cff,#5b3df5);
+  border-radius: 10px;
+  text-decoration: none;
+  color: white;
+  font-weight: 600;
+  transition: .2s;
+}
+
+.hero-btn:hover {
+  transform: translateY(-2px);
+}
+
+/* ===== NYILAK ===== */
+
+.hero-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255,255,255,.08);
+  color: white;
+  font-size: 22px;
+  cursor: pointer;
+  z-index: 5;
+}
+
+.hero-arrow.left { left: 0; }
+.hero-arrow.right { right: 0; }
+
+.hero-arrow:hover {
+  background: rgba(255,255,255,.15);
+}
+
+/* ===== DOTS ===== */
+
+.hero-dots {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.hero-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #444;
+  cursor: pointer;
+}
+
+.hero-dot.active {
+  background: #7c5cff;
+}
+
+/* ===== MOBILE ===== */
+
+@media (max-width: 768px) {
+  .hero-inner {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .heroImage {
+    width: 200px;
+    height: 300px;
+  }
+
+  .hero {
+    min-height: auto;
+  }
+}
+.hero-poll {
+  text-align: center;
+  padding: 60px 40px;
+}
+
+.poll-btn {
+  background: linear-gradient(135deg, #ff5e5e, #ff00cc);
+}

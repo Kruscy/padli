@@ -1,8 +1,7 @@
-import { Router } from "express";
+import express from "express";
 import { pool } from "../db.js";
 
-const router = Router();
-
+const router = express.Router();
 /* ===============================
    GET /api/patreon/status
    =============================== */

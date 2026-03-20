@@ -1,28 +1,30 @@
 .topbar {
   position: sticky;   /* ⬅ EZ HIÁNYZOTT */
+   width: 100%;
+  max-width: 100%;
+box-sizing: border-box;
   top: 0;             /* ⬅ EZ IS KELL */
-/*   left: 0;
-  right: 0; */
-
    z-index: 10000;     /* ⬅ hogy minden felett legyen */
-
   display: flex;
   align-items: center;
-  gap: 20px;
-  padding: 12px 24px;
+  gap: 1rem;
+  padding: 0.75rem 1.5rem;
   background: linear-gradient(180deg, #0f1220, #0b0d12);
   border-bottom: 1px solid #1f2333;
 }
+.topbar > * {
+  min-width: 0;
+}
 .content {
-  padding-top: 65px;
+  padding-top: 4.5rem;
 }
 .menu-btn {
-  font-size: 22px;
+  font-size: clamp(1.2rem, 2vw, 1.5rem);
   background: none;
   border: none;
   color: white;
   cursor: pointer;
-  margin-right: 12px;
+transition: transform .2s ease;
 }
 .menu-btn:hover {
   transform: scale(1.15);
@@ -32,41 +34,59 @@
 .logo {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 18px;
+  gap: 0.6rem;
+  font-size: clamp(1rem, 1.5vw, 1.25rem);
   font-weight: 600;
   font-family: "Poppins", system-ui, sans-serif;
-  font-size: 20px;
-  font-weight: 600;
-
   color: #ffffff;
   text-decoration: none;
 }
 
 .logo img {
-  height: 30px;
+  height: 2rem;
+  width: auto;
 }
 
 .search-wrapper {
-  flex: 1;
+  flex: 1 1 20rem;
   display: flex;
   justify-content: center;
   position: relative;
+min-width: 10rem;
 }
 
 .search-wrapper input {
-  width: 380px;
-  padding: 10px 14px;
-  border-radius: 10px;
+  width: 100%;
+max-width: 30rem;
+  padding: 0.6rem 1rem;
+  border-radius: 0.75rem;
   border: 1px solid #333;
   background: #0e111b;
   color: #fff;
-  font-size: 14px;
+  font-size: 0.9rem;
 }
 
 .search-wrapper input:focus {
   outline: none;
   border-color: #7c5cff;
+}
+
+.search-item {
+  display: flex;
+  gap: 10px;
+  padding: 10px;
+  cursor: pointer;
+}
+
+.search-item:hover {
+  background: #1e293b;
+}
+
+.search-item img {
+  width: 40px;
+  height: 55px;
+  object-fit: cover;
+  border-radius: 6px;
 }
 /* ==== LOGOUT ICON ==== */
 
@@ -77,8 +97,9 @@
 }
 
 .icon-btn img {
-  width: 37px;
+  width: clamp(1.8rem, 2.5vw, 2.3rem);
   opacity: .85;
+  transition: transform .2s ease, opacity .2s ease;
 }
 
 .icon-btn:hover img {
@@ -92,21 +113,12 @@
   margin-left: auto;
   display: flex;
   align-items: center;
-  justify-content: center;
-
-  height: 45x;              /* EZ A KULCS */
-  width: auto;               /* EZ A KULCS */
-
-  text-decoration: none;     /* aláhúzás OFF */
-  line-height: 0;            /* inline bug OFF */
-  overflow: hidden; /* <- nagyon fontos */
 }
 
 .patreon img {
-  height: 40px;              /* tényleges ikon méret */
+  height: clamp(2rem, 3vw, 2.5rem);              /* tényleges ikon méret */
   width: auto;
   display: block;
-
   transition: transform 0.2s ease, filter 0.2s ease;
   filter: brightness(0.9);
 }
@@ -145,7 +157,7 @@
 }
 
 #settingsBtn img {
-  width: 40px;
+  width: clamp(1.8rem, 3vw, 2.3rem);
   opacity: 0.85;
   transition: transform 0.2s ease, opacity 0.2s ease;
 }
@@ -158,7 +170,7 @@
 .settings-menu {
   position: absolute;
   right: 0;
-  top: 46px;
+  top: 100%;
   background: #0f172a;
   border-radius: 12px;
   padding: 6px;
@@ -224,4 +236,68 @@
   margin-top: 8px;
   border-top: 1px solid rgba(255,255,255,.08);
   padding-top: 12px;
+}
+.online-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  font-size: 16px;
+  color: #cbd5f5;
+  border-bottom: 1px solid #1e293b;
+}
+
+.online-dot {
+  width: .6rem;
+  height: .6rem;
+  border-radius: 50%;
+  background: #22c55e;
+}
+
+.online-item span:last-child {
+  font-weight: 600;
+  color: #22c55e;
+}
+/* ===== MOBIL ÁLLÓ (portrait) NAGYÍTÁS ===== */
+@media (max-width: 768px) and (orientation: portrait) {
+
+  .topbar {
+    padding: 1rem;
+    gap: 1rem;
+  }
+
+  .logo {
+    font-size: 1.2rem;
+  }
+
+  .logo img {
+    height: 2.5rem;
+  }
+
+  .menu-btn {
+    font-size: 1.6rem;
+  }
+
+  .search-wrapper input {
+    font-size: 1rem;
+    padding: 0.9rem 1rem;
+  }
+
+  .icon-btn img,
+  #settingsBtn img {
+    width: 2.6rem;
+  }
+
+  .patreon img {
+    height: 2.8rem;
+  }
+
+  .settings-menu a {
+    font-size: 1.1rem;
+    padding: 0.8rem 1rem;
+  }
+
+  .online-item {
+    font-size: 1.1rem;
+  }
 }

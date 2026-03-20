@@ -1,7 +1,11 @@
 const desktopBackgrounds = [
   "/backgrounds/desktop/bg1.jpg",
   "/backgrounds/desktop/bg2.jpg",
-  "/backgrounds/desktop/bg3.png"
+  "/backgrounds/desktop/bg8.png",
+  "/backgrounds/desktop/bg4.png",
+  "/backgrounds/desktop/bg5.png",
+  "/backgrounds/desktop/bg6.png",
+  "/backgrounds/desktop/bg7.png"
 ];
 
 const mobileBackgrounds = [

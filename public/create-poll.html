@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8">
+  <title>PadlizsanFanSub Lezárt szavazások</title>
+  <link rel="stylesheet" href="/css/main.css">
+  <link rel="stylesheet" href="/css/search.css">
+  <link rel="stylesheet" href="/css/header.css">
+  <link rel="stylesheet" href="/css/sidebar.css">
+  <link rel="stylesheet" href="/css/create-poll.css">
+  <link rel="stylesheet" href="/css/footer.css">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+<div id="header-root"></div>
+<div id="sidebar-root"></div>
+<div class="create-page">
+  <h1>🗳️ Új szavazás létrehozása</h1>
+
+  <form id="pollForm" class="create-card">
+
+    <label>Szavazás címe</label>
+    <input id="pollTitle" required>
+
+    <label>Időtartam</label>
+    <select id="duration">
+      <option value="1">1 nap</option>
+      <option value="3">3 nap</option>
+      <option value="7">1 hét</option>
+      <option value="14">2 hét</option>
+      <option value="21">3 hét</option>
+      <option value="30">1 hónap</option>
+      <option value="120">4 hónap</option>
+    </select>
+
+    <h3>Opciók</h3>
+    <div id="optionsContainer"></div>
+
+    <button type="button" id="addOptionBtn" class="add-btn">
+      ➕ Opció hozzáadása
+    </button>
+
+    <button type="submit" class="submit-btn">
+      💾 Szavazás létrehozása
+    </button>
+
+  </form>
+</div>
+
+<script type="module" src="/js/create-poll.js"></script>
+<div id="footer"></div>
+<script src="/js/footer.js"></script>
+<script type="module" src="/js/layout-loader.js"></script>
+<script src="/js/sidebar.js"></script>
+<script src="/js/auth-check.js"></script>
+
+</body>
+</html>
