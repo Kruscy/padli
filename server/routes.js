@@ -10,7 +10,6 @@ import wishlistRoutes from "./routes/wishlist.js";
 import anilistRoutes from "./routes/anilist.js";
 import settingsRoutes from "./routes/settings.js";
 import patreonRoutes from "./routes/patreon.js";
-import { syncPatreonForUser } from "./patreon-sync.js";
 import { getNewReleasesCache, setNewReleasesCache, clearNewReleasesCache} from "./cache/new-releases.js";
 import mangaRoutes from "./routes/manga.js";
 import releasesRoutes from "./routes/releases.js";

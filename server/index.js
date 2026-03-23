@@ -3,6 +3,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import session from "express-session";
 import routes from "./routes.js";
+import userRoutes from "./routes/user.js";
 import { activityTracker } from "./middleware/activity.js";
 
 const app = express();
@@ -36,6 +37,8 @@ app.use(activityTracker);
 
 /* ===== API ROUTES ===== */
 app.use("/api", routes);
+app.use("/api/user", userRoutes);
+app.use("/uploads", express.static("uploads"));
 
 /* ===== SPA FALLBACK ===== */
 app.get("*", (req, res) => {

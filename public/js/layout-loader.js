@@ -9,7 +9,6 @@ async function loadPartial(id, url) {
 }
 
 /* ================= SETTINGS MENU ================= */
-
 function initSettingsMenu() {
   const btn = document.getElementById("settingsBtn");
   const menu = document.getElementById("settingsMenu");
@@ -123,12 +122,11 @@ async function loadOnlineCount() {
     console.error("Online count error", err);
   }
 }
-
 // első betöltés
 loadOnlineCount();
 
 // 30mp-enként frissít
 setInterval(loadOnlineCount, 30000);
 
-
+document.dispatchEvent(new Event("layoutLoaded"));
 document.addEventListener("DOMContentLoaded", loadLayout);

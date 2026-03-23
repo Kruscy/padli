@@ -2,7 +2,7 @@
 <html lang="hu">
 <head>
 <meta charset="UTF-8">
-<title>Want To Read</title>
+<title>PadlizsánFanSub - Profilom</title>
 <link rel="icon" type="image/png" sizes="32x32" href="/assets/favico.png">
 <link rel="stylesheet" href="/css/sidebar.css">
 <link rel="stylesheet" href="/css/search.css">
@@ -11,6 +11,7 @@
 <link rel="stylesheet" href="/css/profile.css">
 <link rel="stylesheet" href="/css/footer.css">
 
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cropperjs/dist/cropper.min.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
@@ -22,21 +23,48 @@
 
 <main class="content">
 <h1>My Profile</h1>
-<ul id="readingList"></ul>
+<div class="avatar-container">
+  <img id="avatar" src="/uploads/default.png" />
+  <div class="avatar-edit" onclick="openUpload()">✏️</div>
+</div>
+<input type="file" id="fileInput" hidden />
+<div id="modal" style="display:none;">
+  <div class="modal-content">
+    <!-- JOBB FELÜL X GOMB -->
+    <div class="modal-close" onclick="closeModal()">×</div>
+    <div class="editor-layout">
+      
+      <!-- BAL: crop -->
+      <div class="crop-container">
+        <img id="preview" />
+      </div>
 
+      <!-- JOBB: live preview -->
+      <div class="preview-side">
+        <div class="preview-circle">
+          <img id="preview-small" />
+        </div>
+        <p>Előnézet</p>
+      </div>
+
+    </div>
+
+    <!-- ZOOM -->
+    <input type="range" id="zoomSlider" min="0" max="3" step="0.01" value="1">
+
+    <button onclick="saveAvatar()">Mentés</button>
+  </div>
+</div>
 <script>
 (async () => {
-  const res = await fetch("/api/progress");
+  const res = await fetch("/api/user/me");
   if (!res.ok) return;
 
   const data = await res.json();
-  const ul = document.getElementById("readingList");
 
-  data.forEach(m => {
-    const li = document.createElement("li");
-    li.textContent = m.title;
-    ul.appendChild(li);
-  });
+  if (data.avatar) {
+    document.getElementById("avatar").src = data.avatar;
+  }
 })();
 </script>
 <div id="footer"></div>
@@ -45,6 +73,7 @@
 <script type="module" src="/js/layout-loader.js"></script>
 <script src="/js/sidebar.js"></script>
 <script src="/js/auth-check.js"></script>
+<script type="module" src="/js/avatar.js"></script>
 
 </body>
 </html>

@@ -22,12 +22,40 @@ router.post("/", requireLogin, async (req, res) => {
     const anilistId = match[1];
 // DUPLIKÁCIÓ CHECK
 const exists = await pool.query(`
-  SELECT 1 FROM wishlist
+  SELECT id FROM wishlist
   WHERE anilist_id = $1
 `, [anilistId]);
 
 if (exists.rowCount) {
-  return res.status(400).json({ error: "Ez már benne van a listában" });
+  const wishId = exists.rows[0].id;
+  const userId = req.session.user.id;
+
+  // megnézzük lájkolta-e már
+  const liked = await pool.query(`
+    SELECT 1 FROM wishlist_likes
+    WHERE wishlist_id = $1 AND user_id = $2
+  `, [wishId, userId]);
+
+  if (liked.rowCount) {
+    // 🔥 már lájkolta
+    return res.json({
+      alreadyExists: true,
+      alreadyLiked: true,
+      message: "Már padlizsánoztad ezt a művet 🍆"
+    });
+  }
+
+  // 🔥 még nem lájkolta → auto like
+  await pool.query(`
+    INSERT INTO wishlist_likes (wishlist_id, user_id)
+    VALUES ($1, $2)
+  `, [wishId, userId]);
+
+  return res.json({
+    alreadyExists: true,
+    alreadyLiked: false,
+    message: "Már fent volt – kapott egy 🍆 tőled!"
+  });
 }
     /* ===== AniList ===== */
     const query = `
