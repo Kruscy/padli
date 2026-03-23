@@ -38,11 +38,17 @@ function setupForm() {
 
     const data = await res.json();
 
-    if (!res.ok) {
-      alert(data.error || "Hiba történt");
-      return;
-    }
+if (!res.ok) {
+  alert(data.error || "Hiba történt");
+  return;
+}
 
+// 🔥 új logika
+if (data.alreadyExists) {
+ window.showToast(data.message);
+} else {
+  window.showToast("Hozzáadva a kívánságlistához!");
+}
     input.value = "";
     load();
   });
@@ -154,9 +160,16 @@ async function addFromSearch(id) {
 
   const data = await res.json();
 
+  // 🔥 EZ HIÁNYZOTT
   if (!res.ok) {
-    alert(data.error);
+    alert(data.error || "Hiba történt");
     return;
+  }
+
+  if (data.alreadyExists) {
+    showToast(data.message);
+  } else {
+    showToast("Hozzáadva!");
   }
 
   resultsBox.innerHTML = "";

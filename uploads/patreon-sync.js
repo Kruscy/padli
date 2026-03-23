@@ -31,6 +31,7 @@ async function fetchAllMembers() {
     members.push(...data.data);
 
     url = data.links?.next || null;
+
     // rate limit védelem
     await delay(1000);
   }
@@ -43,12 +44,11 @@ async function syncPatreon() {
 const TIER_MAP = {
   "26103300": "Booster",
   "26103332": "Támogató",
-  "26843691": "Szuper Támogató",
-  "26103439": "Booster"
+  "26843691": "Szuper Támogató"
 };
   const members = await fetchAllMembers();
-console.log(`Fetched ${members.length} members`);
 
+  console.log(`Fetched ${members.length} members`);
 
   const activeIds = new Set();
 
@@ -74,29 +74,29 @@ if (userRes.rows.length) {
   isAdmin = roleRes.rows[0]?.role === "admin";
 }
 
-// ACTIVE státusz
-let active =
-  m.attributes?.patron_status === "active_patron";
-// Tier ID
-const rawTierId =
-  m.relationships.currently_entitled_tiers?.data?.[0]?.id || null;
-if (rawTierId && !TIER_MAP[rawTierId]) {
-  console.log("UNKNOWN TIER ID:", rawTierId);
+ const active =
+        m.attributes?.patron_status === "active_patron";
+if (isAdmin) {
+  active = true;
 }
-// TIER LOGIKA
+      const rawTierId =
+        m.relationships.currently_entitled_tiers?.data?.[0]?.id || null;
+
 let tier = null;
 
 if (active) {
   tier = TIER_MAP[rawTierId] || null;
 }
-
-// ADMIN FELÜLÍRÁS
-if (isAdmin) {
-  active = true;
-  tier = "Admin";
-}
+ if (isAdmin) {
+  tier = "admin";
+}     
       activeIds.add(patreonUserId);
 
+      console.log({
+        patreonUserId,
+        active,
+        tier
+      });
 
       await pool.query(
         `
@@ -108,6 +108,7 @@ if (isAdmin) {
         `,
         [active, tier, patreonUserId]
       );
+
     } catch (err) {
       console.error("SYNC USER ERROR:", err);
     }

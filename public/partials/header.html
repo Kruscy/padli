@@ -37,10 +37,18 @@
 
 <div class="settings-wrapper">
   <button id="settingsBtn" class="icon-btn settings-btn" title="Settings">
-  <img src="/assets/settings.png" alt="Settings">
-  </button>
+<img id="headerAvatar" src="/uploads/default.png" class="header-avatar"> 
+ </button>
 
   <div id="settingsMenu" class="settings-menu hidden">
+
+<div class="settings-user">
+  <div>
+    <div id="menuUserName">Felhasználó</div>
+    <div class="user-tier" id="menuUserTier"></div>
+  </div>
+</div>
+
 <div class="settings-menu-item online-item">
   <span class="online-item"></span>
  🟢 Online: <span id="onlineCount">...</span>
@@ -49,6 +57,10 @@
     <a href="/profile.html">👤 My Profile</a>
     <a href="/settings.html">⚙️ Settings</a>
 	<a href="/stats.html">Statisztika</a>
+<button id="logoutBtn" class="settings-action logout-item">
+  <img src="/assets/logout.png" class="menu-icon">
+  <span>Kijelentkezés</span>
+</button>
  <!-- ADMIN ONLY -->
  	 <button id="usersBtn"  class="settings-action hidden" type="button" >
       	Felhasználók
@@ -61,9 +73,4 @@
   </div>
 </div>
 
-  <div class="header-actions">
-    <button id="logoutBtn" class="icon-btn">
-      <img src="/assets/logout.png">
-    </button>
-  </div>
 </header>

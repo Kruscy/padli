@@ -1,86 +1,205 @@
-/* ===== PROFILE PAGE ===== */
+/* ===== GLOBAL LAYOUT ===== */
+html, body {
+  height: 100%;
+  margin: 0;
+}
 
-.profile-page {
+body {
+  display: flex;
+  flex-direction: column;
+  background: #020617;
+  color: white;
+  font-family: "Poppins", sans-serif;
+}
+
+/* ===== MAIN CONTENT ===== */
+.content {
+  flex: 1;
   max-width: 900px;
   margin: 0 auto;
-  padding: 32px 24px;
-  color: #fff;
-  font-family: "Poppins", system-ui, sans-serif;
+  padding: 40px 24px;
 }
 
-/* ===== HEADER ===== */
-
-.profile-header {
-  margin-bottom: 32px;
+/* ===== TITLE ===== */
+.content h1 {
+  text-align: left;
+  margin-bottom: 20px;
 }
 
-.profile-header h1 {
-  margin: 0;
-  font-size: 32px;
-  font-weight: 700;
+/* ===== AVATAR BLOKK ===== */
+.avatar-container {
+  position: relative;
+  width: 140px;
+  height: 140px;
+  margin-bottom: 20px;
 }
 
-.profile-header p {
-  margin-top: 6px;
-  opacity: 0.7;
+/* ===== AVATAR KÉP ===== */
+.avatar-container img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid #1f2937;
+}
+
+/* ===== CERUZA ===== */
+.avatar-edit {
+  position: absolute;
+  bottom: 6px;
+  right: 6px;
+  background: #5865f2;
+  color: white;
+  border-radius: 50%;
+  padding: 6px;
   font-size: 14px;
+  cursor: pointer;
+  border: 2px solid #111;
+  transition: all 0.2s ease;
 }
 
-/* ===== SECTION ===== */
+.avatar-edit:hover {
+  transform: scale(1.1);
+}
 
-.profile-section {
+/* ===== MODAL ===== */
+#modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+
+  display: none;
+
+  justify-content: center;
+  align-items: center;
+
+  background: rgba(0,0,0,0.75);
+  backdrop-filter: blur(6px);
+
+  z-index: 9999;
+}
+
+/* ===== MODAL BOX ===== */
+.modal-content {
+  position: relative;
+
   background: #0f172a;
+  padding: 24px;
   border-radius: 16px;
-  padding: 20px 22px;
-  margin-bottom: 24px;
-  box-shadow: 0 12px 35px rgba(0,0,0,.45);
+  width: 420px;
+
+  box-shadow: 0 20px 60px rgba(0,0,0,.6);
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
-.profile-section h2 {
-  margin: 0 0 14px;
-  font-size: 20px;
+/* ===== X GOMB ===== */
+.modal-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+
+  width: 36px;
+  height: 36px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  font-size: 22px;
+  color: white;
+
+  background: rgba(0,0,0,0.6);
+  border-radius: 50%;
+  cursor: pointer;
+
+  z-index: 99999;
+  pointer-events: auto;
+
+  transition: all 0.2s ease;
+}
+
+.modal-close:hover {
+  background: #5865f2;
+  transform: scale(1.1);
+}
+
+/* ===== EDITOR LAYOUT ===== */
+.editor-layout {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ===== BAL OLDAL (CROP) ===== */
+.crop-container {
+  position: relative;
+  z-index: 1;
+
+  width: 260px;
+  height: 260px;
+  border-radius: 50%;
+  overflow: hidden;
+}
+
+/* ===== KÉP ===== */
+#preview {
+  max-width: 100%;
+}
+
+/* ===== JOBB OLDAL ===== */
+.preview-side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ===== KIS KÖR PREVIEW ===== */
+.preview-circle {
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid #333;
+}
+
+.preview-circle img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ===== ZOOM SLIDER ===== */
+#zoomSlider {
+  width: 100%;
+  margin-top: 15px;
+}
+
+/* ===== GOMB ===== */
+#modal button {
+  margin-top: 20px;
+  width: 100%;
+  padding: 12px;
+
+  background: linear-gradient(135deg, #5865f2, #7c84ff);
+
+  border: none;
+  border-radius: 12px;
+  color: white;
   font-weight: 600;
+
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
-/* ===== READING LIST ===== */
-
-.reading-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.reading-list li {
-  padding: 12px 14px;
-  margin-bottom: 8px;
-  background: #161b22;
-  border-radius: 10px;
-  font-size: 15px;
-  cursor: default;
-  transition: background .15s ease, transform .15s ease;
-}
-
-.reading-list li:hover {
-  background: #1f2630;
+#modal button:hover {
   transform: translateY(-1px);
+  box-shadow: 0 5px 20px rgba(88,101,242,0.4);
 }
 
-/* ===== EMPTY STATE ===== */
-
-.empty {
-  opacity: 0.6;
-  font-size: 14px;
-  padding: 10px 0;
-}
-
-/* ===== MOBILE ===== */
-
-@media (max-width: 640px) {
-  .profile-page {
-    padding: 24px 16px;
-  }
-
-  .profile-header h1 {
-    font-size: 26px;
-  }
-}

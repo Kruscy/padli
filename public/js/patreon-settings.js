@@ -23,10 +23,34 @@ async function loadPatreonStatus() {
   }
 }
 
+/* CONNECT */
 document
   .getElementById("patreonConnectBtn")
   ?.addEventListener("click", () => {
     location.href = "/api/patreon/connect";
   });
+
+/* DISCONNECT */
+document
+  .getElementById("patreonDisconnectBtn")
+  ?.addEventListener("click", async () => {
+    if (!confirm("Biztosan leválasztod a Patreon fiókot?")) return;
+
+    await fetch("/api/patreon/disconnect", {
+      method: "POST"
+    });
+
+    location.reload();
+  });
+
+/* SUCCESS MESSAGE */
+if (location.search.includes("patreon=connected")) {
+  alert("💜 Patreon sikeresen összekapcsolva!");
+}
+
+/* ERROR MESSAGE */
+if (location.search.includes("patreon=error")) {
+  alert("❌ Patreon hiba történt!");
+}
 
 loadPatreonStatus();

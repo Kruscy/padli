@@ -1,10 +1,12 @@
 import express from "express";
+import fetch from "node-fetch";
 import { pool } from "../db.js";
 
 const router = express.Router();
+
 /* ===============================
    GET /api/patreon/status
-   =============================== */
+=============================== */
 router.get("/status", async (req, res) => {
   if (!req.session.user) {
     return res.status(401).json({ error: "Not logged in" });
@@ -22,18 +24,20 @@ router.get("/status", async (req, res) => {
     [userId]
   );
 
-  // ❌ nincs összekötve
   if (!rows.length) {
     return res.json({ connected: false });
   }
 
-  // ✅ össze van kötve
   res.json({
     connected: true,
     tier: rows[0].tier,
     active: rows[0].active
   });
 });
+
+/* ===============================
+   GET /api/patreon/connect
+=============================== */
 router.get("/connect", (req, res) => {
   if (!req.session.user) {
     return res.status(401).end();
@@ -50,8 +54,10 @@ router.get("/connect", (req, res) => {
     `https://www.patreon.com/oauth2/authorize?${params.toString()}`
   );
 });
-import fetch from "node-fetch";
 
+/* ===============================
+   GET /api/patreon/callback
+=============================== */
 router.get("/callback", async (req, res) => {
   if (!req.session.user) {
     return res.redirect("/login.html");
@@ -63,7 +69,7 @@ router.get("/callback", async (req, res) => {
   }
 
   try {
-    /* === TOKEN CSERE === */
+    /* === TOKEN === */
     const tokenRes = await fetch("https://www.patreon.com/api/oauth2/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -77,12 +83,22 @@ router.get("/callback", async (req, res) => {
     });
 
     const tokenData = await tokenRes.json();
-
     const accessToken = tokenData.access_token;
 
-    /* === USER INFO === */
+    /* === USER === */
     const meRes = await fetch(
-      "https://www.patreon.com/api/oauth2/v2/identity?fields[user]=full_name",
+      "https://www.patreon.com/api/oauth2/v2/identity",
+      {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      }
+    );
+
+    const me = await meRes.json();
+    const patreonUserId = me.data.id;
+
+    /* === MEMBERSHIP === */
+    const memberRes = await fetch(
+      "https://www.patreon.com/api/oauth2/v2/identity?include=memberships.currently_entitled_tiers&fields[member]=patron_status",
       {
         headers: {
           Authorization: `Bearer ${accessToken}`
@@ -90,28 +106,70 @@ router.get("/callback", async (req, res) => {
       }
     );
 
-    const me = await meRes.json();
-    const patreonUserId = me.data.id;
+    const memberData = await memberRes.json();
 
-    /* === DB MENTÉS === */
+    const membership = memberData.included?.find(
+      (i) => i.type === "member"
+    );
+
+    let active = false;
+    let tier = null;
+
+    const TIER_MAP = {
+      "26103300": "Booster",
+      "26103332": "Támogató",
+      "26843691": "Szuper Támogató"
+    };
+
+    if (membership) {
+      active =
+        membership.attributes?.patron_status === "active_patron";
+
+      const tierId =
+        membership.relationships?.currently_entitled_tiers?.data?.[0]?.id;
+
+      if (active) {
+        tier = TIER_MAP[tierId] || null;
+      }
+    }
+
+    /* === DB === */
     await pool.query(
       `
-      INSERT INTO patreon_status (user_id, patreon_user_id, active)
-      VALUES ($1, $2, true)
+      INSERT INTO patreon_status (user_id, patreon_user_id, active, tier)
+      VALUES ($1, $2, $3, $4)
       ON CONFLICT (user_id)
       DO UPDATE SET
         patreon_user_id = EXCLUDED.patreon_user_id,
-        active = true,
+        active = EXCLUDED.active,
+        tier = EXCLUDED.tier,
         last_sync = now()
       `,
-      [req.session.user.id, patreonUserId]
+      [req.session.user.id, patreonUserId, active, tier]
     );
 
     res.redirect("/settings.html?patreon=connected");
+
   } catch (err) {
     console.error("PATREON CALLBACK ERROR:", err);
     res.redirect("/settings.html?patreon=error");
   }
+});
+
+/* ===============================
+   POST /api/patreon/disconnect
+=============================== */
+router.post("/disconnect", async (req, res) => {
+  if (!req.session.user) {
+    return res.status(401).json({ error: "Not logged in" });
+  }
+
+  await pool.query(
+    `DELETE FROM patreon_status WHERE user_id = $1`,
+    [req.session.user.id]
+  );
+
+  res.json({ success: true });
 });
 
 export default router;
