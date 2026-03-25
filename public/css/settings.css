@@ -190,3 +190,33 @@
 .hidden {
   display: none;
 }
+/* ===== ANILIST ===== */
+
+#tab-anilist {
+  max-width: 500px;
+}
+
+#tab-anilist p {
+  margin-bottom: 14px;
+  opacity: .85;
+}
+
+.anilist-btn {
+  background: #ff424d;;
+  border: none;
+  padding: 12px 18px;
+  border-radius: 6px;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.anilist-btn:hover {
+  filter: brightness(1.1);
+}
+
+.connected-text {
+  color: #22c55e;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
