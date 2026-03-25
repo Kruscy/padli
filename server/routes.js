@@ -252,12 +252,6 @@ router.post("/auth/login", async (req, res) => {
       username: user.username,
       role: user.role
     };
-// login route-ban
-try {
-  await syncPatreonForUser(user.id);
-} catch (e) {
-  console.error("PATREON SYNC FAILED:", e);
-}
 
 
 	// remember me

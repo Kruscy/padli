@@ -23,15 +23,15 @@
     <!-- BAL OLDALI MENÜ -->
     <aside class="settings-nav">
       <h3>Account</h3>
-      <button data-tab="account" class="active">👤 Felhasználó</button>
+      <button data-tab="account" class="active">👤 Fiók</button>
       <button data-tab="patreon">💜 Patreon</button>
-      <button data-tab="anilist" disabled>📚 AniList</button>
+      <button data-tab="anilist">📚 AniList</button>
     </aside>
 
     <!-- JOBB OLDALI TARTALOM -->
     <main class="settings-content">
       <section id="tab-account" class="tab active">
-    <h1>⚙️ Beállítások</h1>
+    <h1>⚙️ Fiók</h1>
 
     <form id="settingsForm">
 
@@ -94,16 +94,31 @@
   </div>
 </section>
 
+<section id="tab-anilist" class="tab">
+  <h2>📚 AniList</h2>
 
-      <section id="tab-anilist" class="tab">
-        <p>🚧 Hamarosan…</p>
-      </section>
+  <div id="anilist-disconnected">
+    <p>Kösd össze az AniList fiókodat a szinkronhoz.</p>
+    <button id="anilistConnectBtn" class="anilist-btn">
+      Összekapcsolás
+    </button>
+  </div>
+
+  <div id="anilist-connected" class="hidden">
+    <p class="connected-text">✔ Összekapcsolva</p>
+    <button id="anilistDisconnectBtn" class="disconnect-btn">
+      Leválasztás
+    </button>
+  </div>
+</section>
+
     </main>
 
   <script src="/js/settings.js"></script>
 </div>
 <div id="footer"></div>
 <script src="/js/footer.js"></script>
+<script src="/js/anilist-settings.js"></script>
 <script src="/js/patreon-settings.js"></script>
 <script type="module" src="/js/layout-loader.js"></script>
 <script src="/js/sidebar.js"></script>

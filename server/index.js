@@ -8,7 +8,7 @@ import { activityTracker } from "./middleware/activity.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-
+app.set("trust proxy", 1);
 /* ===== ES MODULE __dirname FIX ===== */
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -26,7 +26,8 @@ app.use(
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      sameSite: "lax",
+      secure: true,
+      sameSite: "none",
     },
   })
 );

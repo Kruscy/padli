@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <title>PadlizsanFanSub – Reader</title>
-<link rel="icon" type="image/png" sizes="32x32" href="/assets/favico.png">
+
 <style>
 body {
   margin: 0;
@@ -12,7 +12,7 @@ body {
   font-family: system-ui, sans-serif;
 }
 
-/* ===== TOP BAR ===== */
+/* ===== TOP ===== */
 .topbar {
   position: fixed;
   top: 0;
@@ -27,8 +27,7 @@ body {
   z-index: 100;
 }
 
-.topbar a,
-.topbar button {
+.topbar a, .topbar button {
   background: #161b22;
   color: #fff;
   border: none;
@@ -39,14 +38,8 @@ body {
   font-weight: 600;
 }
 
-.topbar a:hover,
-.topbar button:hover {
-  background: #1f2630;
-}
-
 #chapterInfo {
   opacity: .85;
-  font-size: 1.6rem;
 }
 
 /* ===== PAGES ===== */
@@ -62,7 +55,7 @@ body {
   display: block;
 }
 
-/* ===== BOTTOM BAR ===== */
+/* ===== BOTTOM ===== */
 .bottombar {
   position: fixed;
   bottom: 0;
@@ -74,7 +67,6 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 0 16px;
-  z-index: 100;
 }
 
 .bottombar button {
@@ -84,85 +76,58 @@ body {
   padding: 1rem 1.8rem;
   border-radius: 8px;
   cursor: pointer;
-  font-weight: 600;
 }
-
-.bottombar button:hover {
-  background: #1f2630;
-}
-.manga-title {
-  font-size: 2rem;
-  font-weight: 700;
-  margin-bottom: 16px;
-}
-
 </style>
 </head>
+
 <body>
 
-<!-- ===== TOP BAR ===== -->
 <div class="topbar">
   <a id="backBtn">⬅ Vissza</a>
-<h1 id="mangaTitle" class="manga-title">Loading…</h1>
-
-  <div id="chapterInfo" class="manga-title">Loading…</div>
+  <div id="chapterInfo">Loading…</div>
 </div>
 
-<!-- ===== PAGES ===== -->
 <div id="pages"></div>
 
-<!-- ===== BOTTOM BAR ===== -->
 <div class="bottombar">
-  <button id="prevBtn">← Előző rész</button>
-  <button id="nextBtn">Következő rész →</button>
+  <button id="prevBtn">← Előző</button>
+  <button id="nextBtn">Következő →</button>
 </div>
-<script>
-(async () => {
-  const slug = new URLSearchParams(location.search).get("slug");
-  if (!slug) return;
-
-  try {
-    const mangas = await (await fetch("/api/manga")).json();
-    const manga = mangas.find(m => m.slug === slug);
-    if (!manga) return;
-
-    document.getElementById("mangaTitle").textContent = manga.title;
-    document.title = manga.title + " – Részek";
-  } catch (e) {
-    console.error("Cím betöltési hiba:", e);
-  }
-})();
-</script>
 
 <script>
-/* ================= PARAMS ================= */
 const params = new URLSearchParams(location.search);
 const slug = params.get("slug");
-const chapter = params.get("chapter");
-const startPage = parseInt(params.get("page") || "1", 10);
+let chapter = params.get("chapter");
+let startPage = parseInt(params.get("page") || "0", 10);
 
 const pagesEl = document.getElementById("pages");
 const chapterInfo = document.getElementById("chapterInfo");
 
-/* ================= HELPERS ================= */
-function chapterKey(folder) {
-  return folder.split(".").map(n => parseInt(n, 10));
-}
-
-function compareChapters(a, b) {
-  const ak = chapterKey(a.folder);
-  const bk = chapterKey(b.folder);
-  for (let i = 0; i < Math.max(ak.length, bk.length); i++) {
-    const av = ak[i] ?? 0;
-    const bv = bk[i] ?? 0;
-    if (av !== bv) return av - bv;
-  }
-  return 0;
-}
-
 /* ================= PROGRESS ================= */
 let lastSavedPage = 0;
+let lastSent = 0;
 let saveTimeout = null;
+let savedProgress = null;
+
+async function loadProgress() {
+  try {
+    const res = await fetch(`/api/progress?slug=${slug}`);
+    const data = await res.json();
+
+    if (data && data.chapter) {
+      savedProgress = data;
+
+      if (!chapter || chapter !== data.chapter) {
+        location.href = `/reader.html?slug=${slug}&chapter=${data.chapter}&page=${data.page}`;
+        return;
+      }
+
+      startPage = data.page || 0;
+    }
+  } catch (err) {
+    console.error("PROGRESS LOAD ERROR:", err);
+  }
+}
 
 function getCurrentPage() {
   const imgs = [...document.querySelectorAll("#pages img")];
@@ -174,6 +139,7 @@ function getCurrentPage() {
       current = i + 1;
     }
   });
+
   return current;
 }
 
@@ -182,20 +148,34 @@ async function saveProgress(page) {
 
   clearTimeout(saveTimeout);
   saveTimeout = setTimeout(async () => {
+
     await fetch("/api/progress", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ slug, chapter, page })
     });
+
+    // 🔥 AniList queue
+    await fetch("/api/anilist/queue", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slug, chapter })
+    });
+
     lastSavedPage = page;
+
   }, 600);
 }
 
 window.addEventListener("scroll", () => {
-  saveProgress(getCurrentPage());
+  const now = Date.now();
+  if (now - lastSent > 2000) {
+    saveProgress(getCurrentPage());
+    lastSent = now;
+  }
 });
 
-/* ================= LOAD PAGES ================= */
+/* ================= LOAD ================= */
 async function loadPages() {
   const res = await fetch(`/api/pages/${slug}/${chapter}`);
   const files = await res.json();
@@ -207,19 +187,35 @@ async function loadPages() {
     pagesEl.appendChild(img);
 
     if (i + 1 === startPage) {
-      setTimeout(() => img.scrollIntoView({ behavior: "auto" }), 100);
+      setTimeout(() => img.scrollIntoView(), 100);
     }
   });
 }
 
 /* ================= NAV ================= */
+function chapterKey(folder) {
+  return folder.split(".").map(n => parseInt(n, 10));
+}
+
+function compareChapters(a, b) {
+  const ak = chapterKey(a.folder);
+  const bk = chapterKey(b.folder);
+
+  for (let i = 0; i < Math.max(ak.length, bk.length); i++) {
+    const av = ak[i] ?? 0;
+    const bv = bk[i] ?? 0;
+    if (av !== bv) return av - bv;
+  }
+  return 0;
+}
+
 async function loadNav() {
   const res = await fetch(`/api/chapters/${slug}`);
   const chapters = (await res.json()).sort(compareChapters);
 
-  const total = chapters.length;
   const index = chapters.findIndex(c => c.folder === chapter);
-  chapterInfo.textContent = `Rész: ${chapter} / ${total}`;
+
+  chapterInfo.textContent = `Rész: ${chapter} / ${chapters.length}`;
 
   document.getElementById("backBtn").href =
     `/chapters.html?slug=${slug}`;
@@ -231,8 +227,11 @@ async function loadNav() {
     }
   };
 
-  document.getElementById("nextBtn").onclick = () => {
+  document.getElementById("nextBtn").onclick = async () => {
     if (index < chapters.length - 1) {
+
+      await saveProgress(getCurrentPage());
+
       location.href =
         `/reader.html?slug=${slug}&chapter=${chapters[index + 1].folder}`;
     }
@@ -240,8 +239,12 @@ async function loadNav() {
 }
 
 /* ================= INIT ================= */
-loadPages();
-loadNav();
+(async () => {
+  await loadProgress();
+  await loadPages();
+  await loadNav();
+})();
+
 /* ================= UI TOGGLE ================= */
 const topbar = document.querySelector(".topbar");
 const bottombar = document.querySelector(".bottombar");
@@ -249,7 +252,6 @@ const bottombar = document.querySelector(".bottombar");
 let uiVisible = true;
 
 document.addEventListener("click", (e) => {
-  // gombokra / linkekre ne reagáljon
   if (e.target.closest("button") || e.target.closest("a")) return;
 
   uiVisible = !uiVisible;
@@ -260,20 +262,7 @@ document.addEventListener("click", (e) => {
   topbar.style.pointerEvents = uiVisible ? "auto" : "none";
   bottombar.style.pointerEvents = uiVisible ? "auto" : "none";
 });
+</script>
 
-</script>
-<script>
-  var _paq = window._paq = window._paq || [];
-  /* tracker methods like "setCustomDimension" should be called before "trackPageView" */
-  _paq.push(['trackPageView']);
-  _paq.push(['enableLinkTracking']);
-  (function() {
-    var u="//mamato.csimota.duckdns.org/";
-    _paq.push(['setTrackerUrl', u+'matomo.php']);
-    _paq.push(['setSiteId', '1']);
-    var d=document, g=d.createElement('script'), s=d.getElementsByTagName('script')[0];
-    g.async=true; g.src=u+'matomo.js'; s.parentNode.insertBefore(g,s);
-  })();
-</script>
 </body>
 </html>
