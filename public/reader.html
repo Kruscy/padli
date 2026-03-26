@@ -20,9 +20,9 @@ body {
   right: 0;
   height: 56px;
   background: rgba(0,0,0,.85);
-  display: flex;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
   align-items: center;
-  justify-content: space-between;
   padding: 0 16px;
   z-index: 100;
 }
@@ -81,10 +81,10 @@ body {
 </head>
 
 <body>
-
 <div class="topbar">
   <a id="backBtn">⬅ Vissza</a>
-  <div id="chapterInfo">Loading…</div>
+  <div id="mangaTitle" style="text-align:center; font-weight:600;"></div>
+  <div id="chapterNum" style="text-align:right; opacity:0.75; font-size:0.85rem;"></div>
 </div>
 
 <div id="pages"></div>
@@ -210,34 +210,34 @@ function compareChapters(a, b) {
 }
 
 async function loadNav() {
-  const res = await fetch(`/api/chapters/${slug}`);
-  const chapters = (await res.json()).sort(compareChapters);
+  const [chaptersRes, metaRes] = await Promise.all([
+    fetch(`/api/chapters/${slug}`),
+    fetch(`/api/manga/${slug}`)
+  ]);
+
+  const chapters = (await chaptersRes.json()).sort(compareChapters);
+  const meta = await metaRes.json();
 
   const index = chapters.findIndex(c => c.folder === chapter);
 
-  chapterInfo.textContent = `Rész: ${chapter} / ${chapters.length}`;
+  document.getElementById("mangaTitle").textContent = meta.title || slug;
+  document.getElementById("chapterNum").textContent = `${chapter} (${index + 1} / ${chapters.length})`;
 
-  document.getElementById("backBtn").href =
-    `/chapters.html?slug=${slug}`;
+  document.getElementById("backBtn").href = `/chapters.html?slug=${slug}`;
 
   document.getElementById("prevBtn").onclick = () => {
     if (index > 0) {
-      location.href =
-        `/reader.html?slug=${slug}&chapter=${chapters[index - 1].folder}`;
+      location.href = `/reader.html?slug=${slug}&chapter=${chapters[index - 1].folder}`;
     }
   };
 
   document.getElementById("nextBtn").onclick = async () => {
     if (index < chapters.length - 1) {
-
       await saveProgress(getCurrentPage());
-
-      location.href =
-        `/reader.html?slug=${slug}&chapter=${chapters[index + 1].folder}`;
+      location.href = `/reader.html?slug=${slug}&chapter=${chapters[index + 1].folder}`;
     }
   };
 }
-
 /* ================= INIT ================= */
 (async () => {
   await loadProgress();

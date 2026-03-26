@@ -15,6 +15,7 @@ import mangaRoutes from "./routes/manga.js";
 import releasesRoutes from "./routes/releases.js";
 import pollRoutes from "./routes/polls.js";
 import statsRoutes from "./routes/stats.js";
+import announcementRoutes from "./routes/announcements.js";
 
 const router = express.Router();
 
@@ -406,5 +407,6 @@ router.use("/settings", settingsRoutes);
 router.use("/patreon", patreonRoutes);
 router.use("/polls", pollRoutes);
 router.use("/stats", statsRoutes);
+router.use("/announcements", announcementRoutes);
 
 export default router;

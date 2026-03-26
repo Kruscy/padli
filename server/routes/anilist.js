@@ -16,33 +16,46 @@ if (!fs.existsSync(LOG_DIR)) {
     console.error("❌ LOG DIR CREATE ERROR:", err);
   }
 }
-// ===== LOG FILE NÉV =====
+
+// ===== LOG FILE KIVÁLASZTÁS =====
 function getLogFile() {
-  const now = new Date();
+  let index = 1;
 
-  const fileName = `queue_${now.getFullYear()}-${
-    String(now.getMonth() + 1).padStart(2, "0")
-  }-${String(now.getDate()).padStart(2, "0")}_${
-    String(now.getHours()).padStart(2, "0")
-  }-${String(now.getMinutes()).padStart(2, "0")}.log`;
+  while (true) {
+    const filePath = path.join(LOG_DIR, `queue_${index}.log`);
 
-  return path.join(LOG_DIR, fileName);
+    // ha nincs még ilyen file → ezt használjuk
+    if (!fs.existsSync(filePath)) {
+      return filePath;
+    }
+
+    // ha létezik, megnézzük a méretét
+    const stat = fs.statSync(filePath);
+
+    // ha kisebb mint 10MB → ide írunk
+    if (stat.size < 10 * 1024 * 1024) {
+      return filePath;
+    }
+
+    // ha tele → következő fájl
+    index++;
+  }
 }
 
 // ===== LOG ÍRÁS =====
 function writeLog(message) {
   try {
-    const file = getLogFile();
-
-    // max 10MB check
-    if (fs.existsSync(file)) {
-      const stat = fs.statSync(file);
-      if (stat.size > 10 * 1024 * 1024) return; // skip ha nagy
+    // biztos legyen mappa
+    if (!fs.existsSync(LOG_DIR)) {
+      fs.mkdirSync(LOG_DIR, { recursive: true });
     }
+
+    const file = getLogFile();
 
     const line = `[${new Date().toISOString()}] ${message}\n`;
 
     fs.appendFileSync(file, line);
+
   } catch (err) {
     console.error("LOG ERROR:", err);
   }
@@ -344,11 +357,6 @@ router.post("/queue", requireLogin, async (req, res) => {
     // ===== LOG CLEAN =====
     cleanOldLogs();
 
-    // ===== LOG WRITE =====
-    writeLog(
-      `USER:${userId} | ${slug} | RAW:${parsed.raw} | CLEAN:${parsed.cleaned} | PROGRESS:${progress}`
-    );
-
     // ===== DUPLIKÁCIÓ TÖRLÉS =====
     await pool.query(`
       DELETE FROM anilist_queue
@@ -357,11 +365,38 @@ router.post("/queue", requireLogin, async (req, res) => {
         AND anilist_id = $2
     `, [userId, anilistId]);
 
+const existing = await pool.query(`
+  SELECT progress
+  FROM anilist_queue
+  WHERE user_id = $1
+    AND anilist_id = $2
+  ORDER BY created_at DESC
+  LIMIT 1
+`, [userId, anilistId]);
+
+
+if (existing.rows.length) {
+  const lastProgress = existing.rows[0].progress;
+
+  if (lastProgress === progress) {
+    return res.json({ ok: true });
+  }
+
+  if (lastProgress > progress) {
+    return res.json({ ok: true });
+  }
+}
+
     // ===== INSERT =====
     await pool.query(`
       INSERT INTO anilist_queue (user_id, anilist_id, progress)
       VALUES ($1, $2, $3)
     `, [userId, anilistId, progress]);
+   // ===== LOG WRITE =====
+    writeLog(
+      `USER:${userId} | ${slug} | RAW:${parsed.raw} | CLEAN:${parsed.cleaned} | PROGRESS:${progress}`
+    );
+
 
     res.json({ ok: true });
 
