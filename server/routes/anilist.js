@@ -307,7 +307,7 @@ router.post("/queue", requireLogin, async (req, res) => {
 
     // ===== USER =====
     const userRes = await pool.query(`
-      SELECT anilist_token, anilist_connected
+      SELECT anilist_token, anilist_connected, username
       FROM users
       WHERE id = $1
     `, [userId]);
@@ -331,14 +331,14 @@ router.post("/queue", requireLogin, async (req, res) => {
     `, [slug]);
 
     if (!mangaRes.rows.length) {
-      writeLog(`❌ NINCS SLUG: ${slug}`);
+      writeLog(`❌ NINCS SLUG: ${slug} | USER:${user.username}`);
       return res.json({ ok: true });
     }
 
     const manga = mangaRes.rows[0];
 
     if (!manga.anilist_id) {
-      writeLog(`❌ NINCS ANILIST ID: ${manga.title}`);
+      writeLog(`❌ NINCS ANILIST ID: ${manga.title} | USER:${user.username}`);
       return res.json({ ok: true });
     }
 
@@ -394,7 +394,7 @@ if (existing.rows.length) {
     `, [userId, anilistId, progress]);
    // ===== LOG WRITE =====
     writeLog(
-      `USER:${userId} | ${slug} | RAW:${parsed.raw} | CLEAN:${parsed.cleaned} | PROGRESS:${progress}`
+      `USER:${user.username} | ${slug} | RAW:${parsed.raw} | CLEAN:${parsed.cleaned} | PROGRESS:${progress}`
     );
 
 

@@ -64,9 +64,6 @@ async function initAdminControls() {
   const usersBtn = document.getElementById("usersBtn");
   if (usersBtn) {
     usersBtn.classList.remove("hidden");
-
-    usersBtn.addEventListener("click", () => {
-      window.location.href = "/users.html";
     });
   }
 }

@@ -81,7 +81,7 @@ router.post("/manga/:slug", async (req, res) => {
 router.get("/users", async (req, res) => {
   try {
     const { rows } = await pool.query(`
-      SELECT id, username, email, role, created_at, ps.tier, ps.active
+      SELECT id, username, email, role, created_at, ps.tier, ps.active, u.anilist_connected
       FROM users u
       LEFT JOIN patreon_status ps
         ON ps.user_id = u.id
