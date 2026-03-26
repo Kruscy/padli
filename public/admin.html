@@ -52,15 +52,18 @@ async function loadUsers() {
   const tbody = document.getElementById("usersTableBody");
   tbody.innerHTML = "";
   users.forEach(u => {
+    const patreonActive = u.active === true;
+    const anilistActive = u.anilist_connected === true;
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${u.id}</td>
       <td>${u.username}</td>
       <td>${u.email}</td>
-      <td>${u.role}</td>
-      <td>${u.active ? "✅" : "—"}</td>
-      <td>${u.tier || "—"}</td>
-      <td>${new Date(u.created_at).toLocaleDateString("hu-HU")}</td>
+      <td><span class="role role-${u.role}">${u.role}</span></td>
+      <td><span class="patreon ${patreonActive ? 'on' : 'off'}">${patreonActive ? '✅ Aktív' : '❌ Nincs'}</span></td>
+      <td>${u.tier || '—'}</td>
+      <td><span class="patreon ${anilistActive ? 'on' : 'off'}">${anilistActive ? '✅ Aktív' : '❌ Nincs'}</span></td>
+      <td>${new Date(u.created_at).toLocaleDateString('hu-HU')}</td>
     `;
     tbody.appendChild(tr);
   });
@@ -131,7 +134,7 @@ document.addEventListener("DOMContentLoaded", () => {
     <thead>
       <tr>
         <th>ID</th><th>Felhasználónév</th><th>Email</th>
-        <th>Role</th><th>Patreon</th><th>Tier</th><th>Létrehozva</th>
+        <th>Role</th><th>Patreon</th><th>Tier</th><th>AniList</th><th>Létrehozva</th>
       </tr>
     </thead>
     <tbody id="usersTableBody"></tbody>
