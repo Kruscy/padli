@@ -1,0 +1,81 @@
+.admin-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 1.5rem 2rem 0;
+  border-bottom: 2px solid #2a2a3e;
+  margin-bottom: 1.5rem;
+}
+.tab-btn {
+  background: none;
+  border: none;
+  color: #aaa;
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 10px 20px;
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  font-family: Poppins, sans-serif;
+}
+.tab-btn.active {
+  color: #fff;
+  border-bottom-color: #7c3aed;
+}
+.tab-panel { display: none; padding: 0 2rem 2rem; }
+.tab-panel.active { display: block; }
+
+.ann-form {
+  background: #1a1a2e;
+  border-radius: 12px;
+  padding: 1.5rem;
+  max-width: 600px;
+  margin-bottom: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ann-form input, .ann-form textarea {
+  background: #0d0d1a;
+  border: 1px solid #2a2a3e;
+  color: #fff;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 0.95rem;
+  font-family: Poppins, sans-serif;
+  width: 100%;
+  box-sizing: border-box;
+}
+.ann-form textarea { min-height: 100px; resize: vertical; }
+.ann-form button {
+  background: #7c3aed;
+  color: #fff;
+  border: none;
+  padding: 10px 24px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  align-self: flex-start;
+}
+.ann-list { display: flex; flex-direction: column; gap: 12px; max-width: 600px; }
+.ann-item {
+  background: #1a1a2e;
+  border-radius: 10px;
+  padding: 1rem 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+.ann-item-info { flex: 1; }
+.ann-item-info h3 { margin: 0 0 4px; font-size: 1rem; }
+.ann-item-info p { margin: 0; font-size: 0.8rem; color: #aaa; }
+.ann-delete {
+  background: #7f1d1d;
+  color: #fff;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  white-space: nowrap;
+}
