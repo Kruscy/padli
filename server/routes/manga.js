@@ -56,31 +56,88 @@ router.get("/manga/:slug", requireLogin, async (req, res) => {
 router.get("/chapters/:slug", requireLogin, async (req, res) => {
   try {
     const { slug } = req.params;
+    const userId = req.session.user?.id;
+    const userRole = req.session.user?.role;
 
-    const { rows } = await pool.query(
-      `
-      SELECT c.folder, c.title, c.scanned_at
-      FROM chapter c
-      JOIN manga m ON m.id = c.manga_id
-      WHERE m.slug = $1
-ORDER BY
-  CAST(SPLIT_PART(REGEXP_REPLACE(c.folder, '[^0-9\.]', '', 'g'), '.', 1) AS INT),
-  CAST(COALESCE(NULLIF(SPLIT_PART(REGEXP_REPLACE(c.folder, '[^0-9\.]', '', 'g'), '.', 2), ''), '0') AS INT)
-      `,
-      [slug]
-    );
+    // ===== SZABAD-E? =====
+    let isFree = true;
+    try {
+      if (userRole === "admin") {
+        isFree = false;
+      } else {
+        const ps = await pool.query(
+          `SELECT active FROM patreon_status WHERE user_id = $1 LIMIT 1`,
+          [userId]
+        );
+        if (ps.rows.length && ps.rows[0].active === true) {
+          isFree = false;
+        }
+      }
+    } catch (patronErr) {
+      console.error("Patreon check error:", patronErr);
+      // hiba esetén marad isFree = true, de a lista megjelenik
+    }
 
-    res.json(rows);
+const { rows } = await pool.query(
+  `SELECT c.folder, c.title, c.scanned_at, c.unlocks_at
+   FROM chapter c
+   JOIN manga m ON m.id = c.manga_id
+   WHERE m.slug = $1
+   ORDER BY
+     CAST(SPLIT_PART(REGEXP_REPLACE(c.folder, '[^0-9\.]', '', 'g'), '.', 1) AS INT),
+     CAST(COALESCE(NULLIF(SPLIT_PART(REGEXP_REPLACE(c.folder, '[^0-9\.]', '', 'g'), '.', 2), ''), '0') AS INT)`,
+  [slug]
+);
+
+const now = new Date();
+const result = rows.map(ch => {
+  const locked = isFree && ch.unlocks_at && new Date(ch.unlocks_at) > now;
+  return { ...ch, locked };
+});
+
+res.json({ chapters: result, lockHours: parseInt(process.env.LOCK_HOURS || "24", 10) });
+
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: "DB error" });
   }
 });
-
 /* ================= PAGE LIST ================= */
-
 router.get("/pages/:slug/:chapter", requireLogin, async (req, res) => {
   const { slug, chapter } = req.params;
+  const userId = req.session.user?.id;
+  const userRole = req.session.user?.role;
+
+  // ===== ZÁROLÁS ELLENŐRZÉS =====
+  try {
+    if (userRole !== "admin") {
+      const ps = await pool.query(
+        `SELECT active FROM patreon_status WHERE user_id = $1 LIMIT 1`,
+        [userId]
+      );
+      const isPatron = ps.rows.length && ps.rows[0].active === true;
+
+      if (!isPatron) {
+
+const chRes = await pool.query(
+  `SELECT c.unlocks_at FROM chapter c
+   JOIN manga m ON m.id = c.manga_id
+   WHERE m.slug = $1 AND c.folder = $2 LIMIT 1`,
+  [slug, chapter]
+);
+
+if (chRes.rows.length) {
+  const unlocks = chRes.rows[0].unlocks_at;
+  if (unlocks && new Date(unlocks) > new Date()) {
+    return res.status(403).json({ error: "locked" });
+  }
+}
+
+}
+    }
+  } catch (lockErr) {
+    console.error("Lock check error:", lockErr);
+  }
 
   const result = await pool.query(
     `

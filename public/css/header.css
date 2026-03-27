@@ -241,6 +241,7 @@ max-width: 30rem;
   font-weight: 600;
   cursor: pointer;
   transition: background .15s ease, transform .15s ease;
+}
 /* hover */
 .settings-action:hover {
   background: linear-gradient(180deg, #9a3412, #c2410c);
@@ -366,7 +367,8 @@ max-width: 30rem;
   display: flex;
   align-items: center;
   gap: 10px;
-
+   text-align: center;
+  justify-content: center;
   padding: 12px;
   border-bottom: 1px solid rgba(255,255,255,0.05);
 }

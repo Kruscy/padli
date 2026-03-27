@@ -1,6 +1,8 @@
 import fs from "fs";
 import path from "path";
 import { pool } from "./db.js";
+import dotenv from "dotenv";
+dotenv.config();
 
 /* ================= LOCK ================= */
 
@@ -31,6 +33,45 @@ function slugify(str) {
 
 function isImage(file) {
   return /\.(jpg|jpeg|png|webp)$/i.test(file);
+}
+/* ================= UNLOCK TIMES ================= */
+const lockHours = parseInt(process.env.LOCK_HOURS || "24", 10);
+
+async function setUnlockTimes() {
+  console.log("⏰ Setting unlock times...");
+
+  const mangaRes = await pool.query(`SELECT id, slug FROM manga`);
+
+  for (const manga of mangaRes.rows) {
+    const chapters = await pool.query(
+      `SELECT id, scanned_at FROM chapter WHERE manga_id = $1 ORDER BY scanned_at ASC`,
+      [manga.id]
+    );
+
+    const byDay = {};
+    for (const ch of chapters.rows) {
+      const day = new Date(ch.scanned_at).toISOString().slice(0, 10);
+      if (!byDay[day]) byDay[day] = [];
+      byDay[day].push(ch);
+    }
+
+    for (const day of Object.keys(byDay)) {
+      const dayChapters = byDay[day];
+      for (let i = 0; i < dayChapters.length; i++) {
+        const ch = dayChapters[i];
+        const unlocksAt = new Date(
+          new Date(ch.scanned_at).getTime() + lockHours * (i + 1) * 3600000
+        );
+        await pool.query(
+          `UPDATE chapter SET unlocks_at = $1 WHERE id = $2`,
+          [unlocksAt, ch.id]
+        );
+      }
+    }
+    console.log(`✅ ${manga.slug} unlock times set`);
+  }
+
+  console.log("✅ Unlock times set!");
 }
 
 /* ================= LOAD LIBRARIES ================= */
@@ -127,19 +168,15 @@ async function scan() {
         }
 
         try {
-          await pool.query(
-            `
-            INSERT INTO chapter (manga_id, title, folder, library_id)
-            VALUES ($1, $2, $3, $4)
-            ON CONFLICT (manga_id, folder) DO NOTHING
-            `,
-            [
-              mangaId,
-              ch.name,
-              ch.name,
-              libraryId
-            ]
-          );
+
+
+await pool.query(
+  `INSERT INTO chapter (manga_id, title, folder, library_id)
+   VALUES ($1, $2, $3, $4)
+   ON CONFLICT (manga_id, folder) DO NOTHING`,
+  [mangaId, ch.name, ch.name, libraryId]
+);
+
         } catch (err) {
           console.error(
             `❌ DB error (chapter): ${mangaTitle} / ${ch.name}`,
@@ -158,6 +195,7 @@ async function scan() {
 /* ================= RUN ================= */
 
 scan()
+  .then(() => setUnlockTimes())
   .catch(err => {
     console.error("❌ Scan failed:", err);
     process.exit(1);
