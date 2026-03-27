@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="/css/header.css">
   <link rel="stylesheet" href="/css/sidebar.css">
   <link rel="stylesheet" href="/css/search.css">
+   <link rel="stylesheet" href="/css/locked.css">
   <link rel="stylesheet" href="/css/chapters.css">
 <link rel="stylesheet" href="/css/footer.css">
 
@@ -51,7 +52,38 @@
 
   </div>
 </div>
+<!-- LOCKED MODAL -->
+<div id="lockedModal" class="locked-modal hidden">
+  <div id="lockedBackdrop" class="locked-backdrop"></div>
+  <div class="locked-box">
 
+    <!-- NEM ÖSSZEKÖTVE -->
+    <div id="lockStateDisconnected" class="hidden">
+      <img src="/assets/pat2.png" class="lock-patreon-img">
+      <h2>🔒 Prémium tartalom</h2>
+      <p>Ez a fejezet még nem érhető el ingyenesen.<br>
+      Kösd össze Patreon fiókodat, hogy azonnal hozzáférhess!</p>
+      <button id="lockConnectBtn" class="lock-patreon-btn">
+        💜 Patreon összekapcsolása
+      </button>
+      <p class="lock-sub">Az összekapcsolás után az aktív előfizetők azonnal olvashatják az új részeket.</p>
+    </div>
+
+    <!-- ÖSSZEKÖTVE DE NEM FIZETŐ -->
+    <div id="lockStateNotPaying" class="hidden">
+      <img src="/assets/pat2.png" class="lock-patreon-img">
+      <h2>🔒 Támogasd az oldalt!</h2>
+      <p>Ez a fejezet az előfizetők számára már elérhető.<br>
+      Ingyenes tagoknak <b>24 óra</b> várakozás szükséges az új részekhez.</p>
+      <a href="https://patreon.com/Padlizsanfansub" target="_blank" class="lock-patreon-btn">
+        💜 Előfizetés a Patreonon
+      </a>
+      <p class="lock-sub">Támogatóként azonnal hozzáférsz minden új részhez, és segíted a fordítócsapat munkáját! 🍆</p>
+    </div>
+
+    <button id="lockCloseBtn" class="lock-close">✕ Bezárás</button>
+  </div>
+</div>
 </main>
 
 <script>
@@ -75,48 +107,64 @@ function parseChapterNumber(str) {
 
   /* ===== CHAPTERS ===== */
   try {
-    const res = await fetch(`/api/chapters/${slug}`);
-    let chapters = await res.json();
+const res = await fetch(`/api/chapters/${slug}`);
+const data = await res.json();
+let chapters = data.chapters;
+const lockHours = data.lockHours || 24;
 
-    /* ✅ HELYES SORRENDEZÉS (15 < 15.5 < 16) */
-    chapters.sort((a, b) => {
-      return parseChapterNumber(a.folder) - parseChapterNumber(b.folder);
+/* ✅ HELYES SORRENDEZÉS (15 < 15.5 < 16) */
+chapters.sort((a, b) => {
+  return parseChapterNumber(a.folder) - parseChapterNumber(b.folder);
+});
+
+const list = document.getElementById("chapters");
+list.innerHTML = "";
+
+// LESZ:
+chapters.forEach(ch => {
+  const row = document.createElement("a");
+  row.className = "chapter-row";
+
+  if (ch.locked) {
+    ch._availableIn = ch.unlocks_at
+      ? Math.ceil((new Date(ch.unlocks_at) - new Date()) / 3600000)
+      : 0;
+
+    row.href = "#";
+    row.classList.add("locked");
+    row.addEventListener("click", (e) => {
+      e.preventDefault();
+      showLockedModal();
     });
+  } else {
+    row.href = `/reader.html?slug=${slug}&chapter=${encodeURIComponent(ch.folder)}`;
+  }
 
-    const list = document.getElementById("chapters");
-    list.innerHTML = "";
+  const read = progress && progress.chapter === ch.folder;
 
-    chapters.forEach(ch => {
-      const row = document.createElement("a");
-      row.className = "chapter-row";
-      row.href = `/reader.html?slug=${slug}&chapter=${encodeURIComponent(ch.folder)}`;
+  const status = document.createElement("span");
+  status.className = `read ${read ? "yes" : "no"}`;
+  status.textContent = ch.locked ? "🔒" : (read ? "✅" : "⬜");
 
-      /* 🔹 olvasottság */
-      const read = progress && progress.chapter === ch.folder;
+  const title = document.createElement("span");
+  title.className = "chapter-title";
+  title.textContent = ch.folder;
 
-      const status = document.createElement("span");
-      status.className = `read ${read ? "yes" : "no"}`;
-      status.textContent = read ? "✅" : "⬜";
+  const date = document.createElement("span");
+  date.className = "scan-date";
+  if (ch.locked && ch.scanned_at) {
+    date.textContent = ch._availableIn > 0 ? `⏳ ${ch._availableIn} óra múlva` : "Hamarosan";
+    date.style.color = "#f59e0b";
+  } else if (ch.scanned_at) {
+    const d = new Date(ch.scanned_at);
+    date.textContent = d.toISOString().slice(0, 10);
+  } else {
+    date.textContent = "—";
+  }
 
-      /* 🔹 cím */
-      const title = document.createElement("span");
-      title.className = "chapter-title";
-      title.textContent = ch.folder;
-
-      /* 🔹 scan dátum */
-      const date = document.createElement("span");
-      date.className = "scan-date";
-      if (ch.scanned_at) {
-        const d = new Date(ch.scanned_at);
-        date.textContent = d.toISOString().slice(0, 10);
-      } else {
-        date.textContent = "—";
-      }
-
-      row.append(status, title, date);
-      list.appendChild(row);
-    });
-
+  row.append(status, title, date);
+  list.appendChild(row);
+}); 
   } catch (e) {
     console.error("Chapter load error", e);
   }
@@ -351,7 +399,40 @@ saveBtn.addEventListener("click", async () => {
   }
 });
 });
+async function showLockedModal() {
+  const modal = document.getElementById("lockedModal");
+  const stateDisconnected = document.getElementById("lockStateDisconnected");
+  const stateNotPaying = document.getElementById("lockStateNotPaying");
 
+  stateDisconnected.classList.add("hidden");
+  stateNotPaying.classList.add("hidden");
+
+  // patreon státusz lekérés
+  try {
+    const res = await fetch("/api/patreon/status");
+    const data = await res.json();
+
+    if (!data.connected) {
+      stateDisconnected.classList.remove("hidden");
+    } else {
+      stateNotPaying.classList.remove("hidden");
+    }
+  } catch {
+    stateNotPaying.classList.remove("hidden");
+  }
+
+  modal.classList.remove("hidden");
+
+  document.getElementById("lockCloseBtn").onclick = () => modal.classList.add("hidden");
+  document.getElementById("lockedBackdrop").onclick = () => modal.classList.add("hidden");
+
+  const connectBtn = document.getElementById("lockConnectBtn");
+  if (connectBtn) {
+    connectBtn.onclick = () => {
+      window.location.href = "/api/patreon/connect";
+    };
+  }
+}
 </script>
 
 

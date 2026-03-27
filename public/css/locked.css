@@ -1,0 +1,88 @@
+.chapter-row.locked {
+  opacity: 0.6;
+  cursor: pointer;
+}
+
+.chapter-row.locked:hover {
+  opacity: 0.8;
+  background: rgba(124, 58, 237, 0.1);
+}
+
+.locked-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.locked-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.75);
+}
+
+.locked-box {
+  position: relative;
+  background: #1a1a2e;
+  border-radius: 16px;
+  padding: 2.5rem 2rem;
+  max-width: 420px;
+  width: 90%;
+  z-index: 1;
+  color: #fff;
+  text-align: center;
+}
+
+.lock-patreon-img {
+  height: 48px;
+  margin-bottom: 1rem;
+}
+
+.locked-box h2 {
+  font-size: 1.4rem;
+  margin-bottom: 0.75rem;
+}
+
+.locked-box p {
+  font-size: 0.95rem;
+  line-height: 1.6;
+  opacity: 0.85;
+  margin-bottom: 1.25rem;
+}
+
+.lock-patreon-btn {
+  display: inline-block;
+  background: linear-gradient(135deg, #7c3aed, #5b21b6);
+  color: #fff;
+  border: none;
+  padding: 12px 28px;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: none;
+  transition: transform 0.2s ease;
+}
+
+.lock-patreon-btn:hover {
+  transform: translateY(-2px);
+}
+
+.lock-sub {
+  font-size: 0.8rem !important;
+  opacity: 0.6 !important;
+  margin-top: 0.75rem;
+}
+
+.lock-close {
+  margin-top: 1.5rem;
+  background: none;
+  border: 1px solid rgba(255,255,255,0.2);
+  color: #fff;
+  padding: 8px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}

@@ -178,6 +178,51 @@ window.addEventListener("scroll", () => {
 /* ================= LOAD ================= */
 async function loadPages() {
   const res = await fetch(`/api/pages/${slug}/${chapter}`);
+
+if (res.status === 403) {
+  let connected = false;
+  try {
+    const ps = await fetch("/api/patreon/status");
+    if (ps.ok) {
+      const pd = await ps.json();
+      connected = pd.connected === true;
+    }
+  } catch {}
+
+  pagesEl.innerHTML = `
+    <div style="text-align:center; padding: 4rem 2rem; color:#fff; max-width:420px; margin:70px auto 0 auto;">
+      <div style="font-size:3rem; margin-bottom:1rem;">🔒</div>
+      <img src="/assets/pat2.png" style="height:80px;width:auto; margin-bottom:1rem; display:inline-block;">
+      <h2 style="margin-bottom:1rem;">${connected ? '🔒 Támogasd az oldalt!' : '🔒 Prémium tartalom'}</h2>
+      <p style="opacity:0.8; margin-bottom:1.5rem;">
+        ${connected
+          ? 'Ez a fejezet az előfizetők számára már elérhető.<br>Ingyenes tagoknak <b>24 óra</b> várakozás szükséges.'
+          : 'Ez a fejezet még nem érhető el ingyenesen.<br>Kösd össze Patreon fiókodat, hogy azonnal hozzáférhess!'}
+      </p>
+      ${connected
+        ? `<a href="https://patreon.com/Padlizsanfansub" target="_blank"
+              style="display:inline-block; background:linear-gradient(135deg,#7c3aed,#5b21b6);
+                     color:#fff; padding:12px 28px; border-radius:10px;
+                     font-weight:700; text-decoration:none; margin-bottom:1rem;">
+             💜 Előfizetés a Patreonon
+           </a>`
+        : `<button onclick="window.location.href='/api/patreon/connect'"
+              style="display:inline-block; background:linear-gradient(135deg,#7c3aed,#5b21b6);
+                     color:#fff; padding:12px 28px; border-radius:10px;
+                     font-weight:700; border:none; cursor:pointer; margin-bottom:1rem;">
+             💜 Patreon összekapcsolása
+           </button>`}
+      <br>
+      <button onclick="window.location.href='/chapters.html?slug=${slug}'"
+         style="display:inline-block; margin-top:1rem; background:none; border:none;
+                color:#aaa; text-decoration:underline; font-size:0.9rem; cursor:pointer;">
+        ← Vissza a fejezetlistához
+      </button>
+    </div>
+  `;
+  return;
+}
+
   const files = await res.json();
 
   files.forEach((f, i) => {
@@ -215,7 +260,8 @@ async function loadNav() {
     fetch(`/api/manga/${slug}`)
   ]);
 
-  const chapters = (await chaptersRes.json()).sort(compareChapters);
+  const chaptersData = await chaptersRes.json();
+const chapters = (chaptersData.chapters || chaptersData).sort(compareChapters);
   const meta = await metaRes.json();
 
   const index = chapters.findIndex(c => c.folder === chapter);
@@ -233,7 +279,60 @@ async function loadNav() {
 
   document.getElementById("nextBtn").onclick = async () => {
     if (index < chapters.length - 1) {
-      await saveProgress(getCurrentPage());
+    const nextChapter = chapters[index + 1].folder;
+
+    // lock check
+    const checkRes = await fetch(`/api/pages/${slug}/${nextChapter}`);
+
+if (checkRes.status === 403) {
+  let connected = false;
+  try {
+    const ps = await fetch("/api/patreon/status");
+    if (ps.ok) {
+      const pd = await ps.json();
+      connected = pd.connected === true;
+    }
+  } catch {}
+
+  const actionHtml = connected
+    ? `<a href="https://patreon.com/Padlizsanfansub" target="_blank"
+          style="display:inline-block; background:linear-gradient(135deg,#7c3aed,#5b21b6);
+                 color:#fff; padding:12px 28px; border-radius:10px;
+                 font-weight:700; text-decoration:none; margin-bottom:1rem;">
+         💜 Előfizetés a Patreonon
+       </a>`
+    : `<button onclick="window.location.href='/api/patreon/connect'"
+          style="display:inline-block; background:linear-gradient(135deg,#7c3aed,#5b21b6);
+                 color:#fff; padding:12px 28px; border-radius:10px;
+                 font-weight:700; border:none; cursor:pointer; margin-bottom:1rem;">
+           💜 Patreon összekapcsolása
+       </button>`;
+
+  const titleHtml = connected ? '🔒 Támogasd az oldalt!' : '🔒 Prémium tartalom';
+
+  const textHtml = connected
+    ? 'Ez a fejezet az előfizetők számára már elérhető.<br>Ingyenes tagoknak <b>24 óra</b> várakozás szükséges.'
+    : 'Ez a fejezet még nem érhető el ingyenesen.<br>Kösd össze Patreon fiókodat, hogy azonnal hozzáférhess!';
+
+  pagesEl.innerHTML = `
+    <div style="text-align:center; padding: 4rem 2rem; color:#fff; max-width:420px; margin:70px auto 0 auto;">
+      <div style="font-size:3rem; margin-bottom:1rem;">🔒</div>
+      <img src="/assets/pat2.png" style="height:80px; width:auto; margin-bottom:1rem; display:inline-block;">
+      <h2 style="margin-bottom:1rem;">${titleHtml}</h2>
+      <p style="opacity:0.8; margin-bottom:1.5rem;">${textHtml}</p>
+      ${actionHtml}
+      <br>
+      <button onclick="window.location.href='/chapters.html?slug=${slug}'"
+         style="display:inline-block; margin-top:1rem; background:none; border:none;
+                color:#aaa; text-decoration:underline; font-size:0.9rem; cursor:pointer;">
+        ← Vissza a fejezetlistához
+      </button>
+    </div>
+  `;
+  return;
+}
+
+     await saveProgress(getCurrentPage());
       location.href = `/reader.html?slug=${slug}&chapter=${chapters[index + 1].folder}`;
     }
   };
@@ -263,6 +362,6 @@ document.addEventListener("click", (e) => {
   bottombar.style.pointerEvents = uiVisible ? "auto" : "none";
 });
 </script>
-
+<script type="module" src="/js/layout-loader.js"></script>
 </body>
 </html>

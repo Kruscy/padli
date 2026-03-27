@@ -57,11 +57,11 @@
         const progress = await progressRes.json();
         if (!progress) return null;
 
-        const chapters = await chaptersRes.json();
-        if (!chapters.length) return null;
+const chaptersData = await chaptersRes.json();
+const chapters = chaptersData.chapters || chaptersData;
+if (!chapters.length) return null;
 
-        const lastChapter = chapters[chapters.length - 1].folder;
-
+const lastChapter = chapters[chapters.length - 1].folder;
         // ❌ ha elérte az utolsó részt → ne jelenjen meg
         if (progress.chapter === lastChapter) return null;
 
