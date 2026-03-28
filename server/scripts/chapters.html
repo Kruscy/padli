@@ -689,8 +689,8 @@ async function showLockedModal() {
 
     const avgBadge = document.createElement("span");
     avgBadge.id = "ratingAvgBadge";
-    avgBadge.className = "manga-badge badge-rating";
-    avgBadge.innerHTML = `${ratingCount} szavazat`;
+    avgBadge.className = "manga-badge badge-score";
+    avgBadge.innerHTML = `🍆 ${avgRating} (${ratingCount} szavazat)`;
     infoBar.appendChild(avgBadge);
   }
 

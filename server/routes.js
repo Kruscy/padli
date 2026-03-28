@@ -16,6 +16,9 @@ import releasesRoutes from "./routes/releases.js";
 import pollRoutes from "./routes/polls.js";
 import statsRoutes from "./routes/stats.js";
 import announcementRoutes from "./routes/announcements.js";
+import mangaAdminRoutes from "./routes/manga-admin.js";
+import progressRoutes from "./routes/progress.js";
+import ratingRoutes from "./routes/rating.js";
 
 const router = express.Router();
 
@@ -408,5 +411,8 @@ router.use("/patreon", patreonRoutes);
 router.use("/polls", pollRoutes);
 router.use("/stats", statsRoutes);
 router.use("/announcements", announcementRoutes);
+router.use("/admin", mangaAdminRoutes);
+router.use("/progress", progressRoutes);
+router.use("/rating", ratingRoutes);
 
 export default router;

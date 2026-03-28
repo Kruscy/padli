@@ -29,43 +29,27 @@ router.get("/manga/:slug", requireLogin, async (req, res) => {
   const { slug } = req.params;
 
   const { rows } = await pool.query(
-    `SELECT
-      m.title, m.slug, m.cover_url, m.description,
-      m.status, m.average_score, m.total_chapters,
-      COALESCE(ARRAY_AGG(DISTINCT g.name) FILTER (WHERE g.name IS NOT NULL), '{}') AS genres,
-      COALESCE(ARRAY_AGG(DISTINCT t.name) FILTER (WHERE t.name IS NOT NULL), '{}') AS tags
-     FROM manga m
-     LEFT JOIN manga_genre mg ON mg.manga_id = m.id
-     LEFT JOIN genre g ON g.id = mg.genre_id
-     LEFT JOIN manga_tag mt ON mt.manga_id = m.id
-     LEFT JOIN tag t ON t.id = mt.tag_id
-     WHERE m.slug = $1
-     GROUP BY m.id`,
+    `
+    SELECT
+      m.title,
+      m.slug,
+      m.cover_url,
+      m.description,
+      COALESCE(
+        ARRAY_AGG(g.name) FILTER (WHERE g.name IS NOT NULL),
+        '{}'
+      ) AS tags
+    FROM manga m
+    LEFT JOIN manga_genre mg ON mg.manga_id = m.id
+    LEFT JOIN genre g ON g.id = mg.genre_id
+    WHERE m.slug = $1
+    GROUP BY m.id
+    `,
     [slug]
   );
 
   if (!rows.length) return res.status(404).end();
   res.json(rows[0]);
-});
-
-/* ================= recommended ================= */
-router.get("/manga/:slug/recommendations", requireLogin, async (req, res) => {
-  const { slug } = req.params;
-
-  try {
-    const { rows } = await pool.query(
-      `SELECT r.anilist_id, r.title, r.cover_url, lm.slug AS local_slug
-       FROM recommendation r
-       JOIN manga m ON m.slug = $1
-       LEFT JOIN manga lm ON lm.anilist_id = r.anilist_id
-       WHERE r.manga_id = m.id`,
-      [slug]
-    );
-    res.json(rows);
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: "DB error" });
-  }
 });
 /* ================= CHAPTER LIST ================= */
 
