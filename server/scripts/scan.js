@@ -36,6 +36,7 @@ function isImage(file) {
 }
 /* ================= UNLOCK TIMES ================= */
 const lockHours = parseInt(process.env.LOCK_HOURS || "24", 10);
+
 async function setUnlockTimes() {
   console.log("⏰ Setting unlock times...");
 
@@ -43,75 +44,35 @@ async function setUnlockTimes() {
 
   for (const manga of mangaRes.rows) {
     const chapters = await pool.query(
-      `SELECT id, scanned_at, unlocks_at FROM chapter
-       WHERE manga_id = $1
-       ORDER BY scanned_at ASC`,
+      `SELECT id, scanned_at FROM chapter WHERE manga_id = $1 ORDER BY scanned_at ASC`,
       [manga.id]
     );
 
-    if (!chapters.rows.length) continue;
-
-    const unsetChapters = chapters.rows.filter(ch => !ch.unlocks_at);
-    if (!unsetChapters.length) continue;
-
-    const freshChapters = unsetChapters.filter(ch =>
-      (Date.now() - new Date(ch.scanned_at)) / 3600000 < lockHours
-    );
-    const oldChapters = unsetChapters.filter(ch =>
-      (Date.now() - new Date(ch.scanned_at)) / 3600000 >= lockHours
-    );
-
-    if (oldChapters.length) {
-      const oldIds = oldChapters.map(ch => ch.id).join(",");
-      await pool.query(
-        `UPDATE chapter SET unlocks_at = now() - interval '1 second' WHERE id IN (${oldIds})`
-      );
+    const byDay = {};
+    for (const ch of chapters.rows) {
+      const day = new Date(ch.scanned_at).toISOString().slice(0, 10);
+      if (!byDay[day]) byDay[day] = [];
+      byDay[day].push(ch);
     }
 
-    if (freshChapters.length) {
-      const lastSet = await pool.query(
-        `SELECT unlocks_at FROM chapter
-         WHERE manga_id = $1
-           AND unlocks_at IS NOT NULL
-           AND unlocks_at > now()
-         ORDER BY unlocks_at DESC
-         LIMIT 1`,
-        [manga.id]
-      );
-
-      let lastUnlocksAt = lastSet.rows.length
-        ? new Date(lastSet.rows[0].unlocks_at)
-        : null;
-
-      const updates = [];
-
-      for (const ch of freshChapters) {
-        let unlocksAt;
-        if (!lastUnlocksAt || lastUnlocksAt < new Date()) {
-          unlocksAt = new Date(Date.now() + lockHours * 3600000);
-        } else {
-          unlocksAt = new Date(lastUnlocksAt.getTime() + lockHours * 3600000);
-        }
-        lastUnlocksAt = unlocksAt;
-        updates.push(`(${ch.id}, '${unlocksAt.toISOString()}')`);
-      }
-
-      if (updates.length) {
-        await pool.query(`
-          UPDATE chapter AS c
-          SET unlocks_at = v.unlocks_at::timestamptz
-          FROM (VALUES ${updates.join(",")}) AS v(id, unlocks_at)
-          WHERE c.id = v.id::int
-        `);
+    for (const day of Object.keys(byDay)) {
+      const dayChapters = byDay[day];
+      for (let i = 0; i < dayChapters.length; i++) {
+        const ch = dayChapters[i];
+        const unlocksAt = new Date(
+          new Date(ch.scanned_at).getTime() + lockHours * (i + 1) * 3600000
+        );
+        await pool.query(
+          `UPDATE chapter SET unlocks_at = $1 WHERE id = $2`,
+          [unlocksAt, ch.id]
+        );
       }
     }
-
-    console.log(`✅ ${manga.slug} – ${oldChapters.length} régi szabad, ${freshChapters.length} friss zárolt`);
+    console.log(`✅ ${manga.slug} unlock times set`);
   }
 
   console.log("✅ Unlock times set!");
 }
-
 
 /* ================= LOAD LIBRARIES ================= */
 
@@ -209,17 +170,13 @@ async function scan() {
         try {
 
 
-let folderMtime = new Date();
-try {
-  folderMtime = fs.statSync(chapterPath).mtime;
-} catch {}
-
 await pool.query(
-  `INSERT INTO chapter (manga_id, title, folder, library_id, scanned_at)
-   VALUES ($1, $2, $3, $4, $5)
+  `INSERT INTO chapter (manga_id, title, folder, library_id)
+   VALUES ($1, $2, $3, $4)
    ON CONFLICT (manga_id, folder) DO NOTHING`,
-  [mangaId, ch.name, ch.name, libraryId, folderMtime]
+  [mangaId, ch.name, ch.name, libraryId]
 );
+
         } catch (err) {
           console.error(
             `❌ DB error (chapter): ${mangaTitle} / ${ch.name}`,

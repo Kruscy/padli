@@ -79,3 +79,34 @@
   font-weight: 600;
   white-space: nowrap;
 }
+.manga-admin-block {
+  margin-bottom: 8px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid #2a2a3e;
+}
+
+.manga-admin-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: #1a1a2e;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background 0.15s;
+}
+
+.manga-admin-header:hover {
+  background: #2a2a4e;
+}
+
+.manga-toggle-icon {
+  font-size: 0.8rem;
+  opacity: 0.6;
+}
+
+.manga-admin-chapters {
+  background: #0d0d1a;
+  overflow-x: auto;
+}
