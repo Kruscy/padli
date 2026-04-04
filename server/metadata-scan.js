@@ -112,7 +112,6 @@ async function fetchWithRetry(body) {
     }
   }
 }
-
 /* ================= MAIN ================= */
 
 async function scanMetadata() {
@@ -273,6 +272,126 @@ async function scanMetadata() {
   console.log(`📊 Total processed: ${processed}`);
 }
 
+/* ================= SINGLE MANGA REFRESH (export) ================= */
+ 
+export async function refreshMetadataForManga(mangaId, anilistId = null) {
+  let media = null;
+ 
+  if (anilistId) {
+    // Ha van konkrét AniList ID, azzal keresünk – nem kell találgatni cím alapján
+    const ID_QUERY = `
+      query ($id: Int) {
+        Media(id: $id, type: MANGA) {
+          id
+          title { romaji english }
+          coverImage { extraLarge large }
+          genres
+          description
+          status
+          averageScore
+          chapters
+          tags { name rank isMediaSpoiler }
+          recommendations(perPage: 10) {
+            nodes {
+              mediaRecommendation {
+                id
+                title { english romaji }
+                coverImage { large }
+              }
+            }
+          }
+        }
+      }
+    `;
+    const json = await fetchWithRetry({ query: ID_QUERY, variables: { id: anilistId } });
+    media = json?.data?.Media;
+  } else {
+    // Nincs ID → cím alapján keresünk (a fent definiált QUERY változóval)
+    const mangaRes = await pool.query(
+      `SELECT title FROM manga WHERE id = $1`, [mangaId]
+    );
+    if (!mangaRes.rowCount) throw new Error(`Manga not found: ${mangaId}`);
+    const searchTitle = cleanTitle(mangaRes.rows[0].title);
+    const json = await fetchWithRetry({ query: QUERY, variables: { search: searchTitle } });
+    media = json?.data?.Media;
+  }
+ 
+  await pool.query(`UPDATE manga SET anilist_last_try = now() WHERE id = $1`, [mangaId]);
+ 
+  if (!media) {
+    await pool.query(`UPDATE manga SET anilist_failed = TRUE WHERE id = $1`, [mangaId]);
+    throw new Error("No AniList match found");
+  }
+ 
+  let description = null;
+  if (media.description) {
+    description = await translateToHungarian(media.description);
+  }
+ 
+  // FELÜLÍR mindent – ez szándékos frissítés, nem COALESCE!
+  await pool.query(
+    `UPDATE manga
+     SET anilist_id     = $1,
+         cover_url      = $2,
+         description    = $3,
+         status         = $4,
+         average_score  = $5,
+         total_chapters = $6,
+         anilist_failed = FALSE
+     WHERE id = $7`,
+    [
+      media.id,
+      media.coverImage?.extraLarge || media.coverImage?.large || null,
+      description,
+      media.status || null,
+      media.averageScore || null,
+      media.chapters || null,
+      mangaId
+    ]
+  );
+ 
+  // Genres: töröl és újraír
+  await pool.query(`DELETE FROM manga_genre WHERE manga_id = $1`, [mangaId]);
+  for (const genreName of media.genres || []) {
+    const gRes = await pool.query(
+      `INSERT INTO genre (name) VALUES ($1)
+       ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name RETURNING id`,
+      [genreName]
+    );
+    await pool.query(
+      `INSERT INTO manga_genre (manga_id, genre_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+      [mangaId, gRes.rows[0].id]
+    );
+  }
+ 
+  // Tags: töröl és újraír
+  await pool.query(`DELETE FROM manga_tag WHERE manga_id = $1`, [mangaId]);
+  for (const tag of media.tags || []) {
+    if (tag.isMediaSpoiler) continue;
+    const tRes = await pool.query(
+      `INSERT INTO tag (name) VALUES ($1)
+       ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name RETURNING id`,
+      [tag.name]
+    );
+    await pool.query(
+      `INSERT INTO manga_tag (manga_id, tag_id, rank) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+      [mangaId, tRes.rows[0].id, tag.rank]
+    );
+  }
+ 
+  // Recommendations: töröl és újraír
+  await pool.query(`DELETE FROM recommendation WHERE manga_id = $1`, [mangaId]);
+  for (const node of media.recommendations?.nodes || []) {
+    const rec = node.mediaRecommendation;
+    if (!rec) continue;
+    await pool.query(
+      `INSERT INTO recommendation (manga_id, anilist_id, title, cover_url) VALUES ($1, $2, $3, $4)`,
+      [mangaId, rec.id, rec.title?.english || rec.title?.romaji || null, rec.coverImage?.large || null]
+    );
+  }
+ 
+  return { anilist_id: media.id, title: media.title?.english || media.title?.romaji };
+}
 /* ================= RUN ================= */
 
 scanMetadata()

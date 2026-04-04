@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8">
+  <title>PadlizsanFanSub – Támogatók</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favico.png">
+  <link rel="stylesheet" href="/css/header.css">
+  <link rel="stylesheet" href="/css/sidebar.css">
+<link rel="stylesheet" href="/css/main.css">
+  <link rel="stylesheet" href="/css/search.css">
+  <link rel="stylesheet" href="/css/footer.css">
+  <link rel="stylesheet" href="/css/supporters.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+<div id="header-root"></div>
+<div id="sidebar-root"></div>
+
+<main class="content">
+  <div class="supporters-hero">
+    <span class="deco">🍆💜</span>
+    <h1>Támogatóink</h1>
+    <p>Ezek az emberek tették lehetővé a PadlizsanFanSub működését.<br>Hatalmas köszönet minden egyes támogatásért!</p>
+  </div>
+
+  <div id="supportersRoot">
+    <div class="loading-spinner">⏳ Betöltés...</div>
+  </div>
+
+  <div class="supporters-cta">
+    <p>Te is szeretnéd támogatni a fordítócsapatot? Csatlakozz Patreonon!</p>
+    <a href="https://patreon.com/Padlizsanfansub" target="_blank" class="patreon-btn">
+      💜 Támogatás a Patreonon
+    </a>
+  </div>
+</main>
+
+<script type="module" src="/js/layout-loader.js"></script>
+<script src="/js/sidebar.js"></script>
+<script src="/js/auth-check.js"></script>
+<script src="/js/supporters.js"></script>
+<div id="footer"></div>
+<script src="/js/footer.js"></script>
+<script>
+  var _paq = window._paq = window._paq || [];
+  _paq.push(['trackPageView']);
+  _paq.push(['enableLinkTracking']);
+  (function() {
+    var u="//mamato.csimota.duckdns.org/";
+    _paq.push(['setTrackerUrl', u+'matomo.php']);
+    _paq.push(['setSiteId', '1']);
+    var d=document, g=d.createElement('script'), s=d.getElementsByTagName('script')[0];
+    g.async=true; g.src=u+'matomo.js'; s.parentNode.insertBefore(g,s);
+  })();
+</script>
+</body>
+</html>

@@ -5,6 +5,7 @@ import session from "express-session";
 import routes from "./routes.js";
 import userRoutes from "./routes/user.js";
 import { activityTracker } from "./middleware/activity.js";
+import "./discord-bot.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;

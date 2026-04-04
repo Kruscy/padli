@@ -167,8 +167,8 @@ max-width: 30rem;
 }
 
 .settings-wrapper.admin #headerAvatar {
-  border: 2px solid red !important; /* Vörös aura az adminhoz */
-  box-shadow: 0 0 15px 5px red !important; /* Vörös fény körül */
+  border: 2px solid purple !important; /* Vörös aura az adminhoz */
+  box-shadow: 0 0 15px 5px purple !important; /* Vörös fény körül */
 }
 
 .settings-btn:hover .gear {
