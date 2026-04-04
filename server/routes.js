@@ -19,6 +19,8 @@ import announcementRoutes from "./routes/announcements.js";
 import mangaAdminRoutes from "./routes/manga-admin.js";
 import progressRoutes from "./routes/progress.js";
 import ratingRoutes from "./routes/rating.js";
+import chatRoutes from "./routes/chat.js";
+import supportersRouter from "./routes/supporters.js";
 
 const router = express.Router();
 
@@ -369,35 +371,6 @@ router.post("/want/:slug", requireLogin, async (req, res) => {
     return res.json({ wanted: true });
   }
 });
-/* ================= ADMIN: UPDATE MANGA ================= */
-router.post("/admin/manga/:slug", requireLogin, async (req, res) => {
-  const { slug } = req.params;
-  const { cover_url, description } = req.body;
-
-  try {
-    const result = await pool.query(
-      `
-      UPDATE manga
-      SET
-        cover_url = $1,
-        description = $2
-      WHERE slug = $3
-      RETURNING id
-      `,
-      [cover_url, description, slug]
-    );
-
-    if (!result.rowCount) {
-      return res.status(404).json({ error: "Manga not found" });
-    }
-
-    res.json({ success: true });
-  } catch (e) {
-    console.error("UPDATE MANGA ERROR:", e);
-    res.status(500).json({ error: "DB error" });
-  }
-});
-
 
 /* ================= ADMIN ================= */
 
@@ -414,5 +387,7 @@ router.use("/announcements", announcementRoutes);
 router.use("/admin", mangaAdminRoutes);
 router.use("/progress", progressRoutes);
 router.use("/rating", ratingRoutes);
+router.use("/chat", chatRoutes);
+router.use("/supporters", supportersRouter);
 
 export default router;

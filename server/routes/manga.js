@@ -24,6 +24,38 @@ router.get("/manga", requireLogin, async (_req, res) => {
     res.status(500).json({ error: "DB error" });
   }
 });
+router.get("/manga-list", requireLogin, async (_req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT
+        m.slug,
+    m.anilist_id,
+        COALESCE(ARRAY_AGG(DISTINCT g.name) FILTER (WHERE g.name IS NOT NULL), '{}') AS genres,
+        COALESCE(ARRAY_AGG(DISTINCT t.name) FILTER (WHERE t.name IS NOT NULL), '{}') AS tags
+      FROM manga m
+      LEFT JOIN manga_genre mg ON mg.manga_id = m.id
+      LEFT JOIN genre g ON g.id = mg.genre_id
+      LEFT JOIN manga_tag mt ON mt.manga_id = m.id
+      LEFT JOIN tag t ON t.id = mt.tag_id
+      GROUP BY m.id
+    `);
+
+    // slug → { genres, tags } map
+    const result = {};
+    rows.forEach(r => {
+      result[r.slug] = {
+        genres: r.genres,
+        tags: r.tags,
+        anilist_id: r.anilist_id
+      };
+    });
+
+    res.json(result);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "DB error" });
+  }
+});
 /* ================= MANGA METADATA ================= */
 router.get("/manga/:slug", requireLogin, async (req, res) => {
   const { slug } = req.params;
@@ -32,6 +64,7 @@ router.get("/manga/:slug", requireLogin, async (req, res) => {
     `SELECT
       m.title, m.slug, m.cover_url, m.description,
       m.status, m.average_score, m.total_chapters,
+      m.uploaders, m.anilist_id,
       COALESCE(ARRAY_AGG(DISTINCT g.name) FILTER (WHERE g.name IS NOT NULL), '{}') AS genres,
       COALESCE(ARRAY_AGG(DISTINCT t.name) FILTER (WHERE t.name IS NOT NULL), '{}') AS tags
      FROM manga m

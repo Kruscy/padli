@@ -7,8 +7,8 @@
 <link rel="stylesheet" href="/css/search.css">
 <link rel="stylesheet" href="/css/grid.css">
 <link rel="stylesheet" href="/css/header.css">
-<link rel="stylesheet" href="/css/profile.css">
 <link rel="stylesheet" href="/css/footer.css">
+<link rel="stylesheet" href="/css/filter.css">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -18,90 +18,22 @@
 <body>
 <div id="header-root"></div>
 <div id="sidebar-root"></div>
+<div class="filter-panel" id="filterPanel"></div>
+<div class="filter-summary" id="filterSummary"></div>
+<span id="filterCount" class="filter-count" style="padding:0 1.5rem 0.5rem; display:block; max-width:1200px; margin:0 auto; font-size:0.8rem;"></span>
 
 <main class="content">
 <div id="grid"></div>
+<div class="filter-no-results" id="filterNoResults">Nincs találat a kiválasztott szűrőkre.</div>
 </main>
-<script>
-(async function () {
-  try {
-    const res = await fetch("/api/manga");
-    const mangas = await res.json();
-
-    const grid = document.getElementById("grid");
-    grid.innerHTML = "";
-
-    // 🔹 progress map (slug → progress)
-    const progressMap = {};
-
-    // 🔹 minden mangához megpróbáljuk lekérni a progress-t
-    await Promise.all(
-      mangas.map(async (m) => {
-        try {
-          const r = await fetch(`/api/progress/${m.slug}`);
-          if (r.ok) {
-            const p = await r.json();
-            if (p) progressMap[m.slug] = p;
-          }
-        } catch {
-          // ha nincs progress → semmi gond
-        }
-      })
-    );
-
-mangas.forEach(m => {
-  const card = document.createElement("div");
-  card.className = "card";
-
-  /* ===== COVER (KÉP) ===== */
-  const coverLink = document.createElement("a");
-  coverLink.className = "cover";
-
-  // default: chapters
-  coverLink.href = `/chapters.html?slug=${encodeURIComponent(m.slug)}`;
-
-  if (m.cover_url) {
-    const img = document.createElement("img");
-    img.src = m.cover_url;
-    img.loading = "lazy";
-    coverLink.appendChild(img);
-  } else {
-    coverLink.textContent = "No Cover";
-  }
-
-  // ▶ FOLYTATÁS – csak ha van progress
-  if (progressMap[m.slug]) {
-    const badge = document.createElement("div");
-    badge.className = "continue-badge";
-    badge.textContent = "▶ Folytatás";
-    coverLink.appendChild(badge);
-
-    coverLink.href =
-      `/reader.html?slug=${encodeURIComponent(m.slug)}&chapter=${encodeURIComponent(progressMap[m.slug].chapter)}&page=${progressMap[m.slug].page}`;
-  }
-
-  /* ===== TITLE (CÍM) ===== */
-  const titleLink = document.createElement("a");
-  titleLink.className = "title";
-  titleLink.href = `/chapters.html?slug=${encodeURIComponent(m.slug)}`;
-  titleLink.textContent = m.title;
-
-  card.appendChild(coverLink);
-  card.appendChild(titleLink);
-  grid.appendChild(card);
-});
-
-  } catch (e) {
-    console.error("Failed to load manga", e);
-  }
-})();
-</script>
 <div id="footer"></div>
-<script src="/js/footer.js"></script>
 
 <script type="module" src="/js/layout-loader.js"></script>
 <script src="/js/sidebar.js"></script>
 <script src="/js/auth-check.js"></script>
+<script src="/js/footer.js"></script>
+<script src="/js/filter.js"></script>
+
 
 </body>
 </html>

@@ -1,4 +1,5 @@
 let isAdmin = false;
+let anilistToSlug = {};
 
 /* ================= INIT ================= */
 (async function init() {
@@ -10,6 +11,13 @@ let isAdmin = false;
       isAdmin = true;
     }
   }
+  try {
+    const mlRes = await fetch("/api/manga-list");
+    const mlData = await mlRes.json();
+    Object.entries(mlData).forEach(([slug, data]) => {
+      if (data.anilist_id) anilistToSlug[data.anilist_id] = slug;
+    });
+  } catch {}
 
   setupForm(); // ✅ FONTOS
   load();
@@ -148,6 +156,10 @@ async function search(q) {
 }
 
 async function addFromSearch(id) {
+  if (anilistToSlug[id]) {
+    window.location.href = `/chapters.html?slug=${anilistToSlug[id]}`;
+    return;
+  }
   const res = await fetch("/api/wishlist", {
     method: "POST",
     headers: {

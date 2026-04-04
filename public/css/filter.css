@@ -1,0 +1,132 @@
+/* ===== FILTER PANEL ===== */
+.filter-panel {
+  padding: 1rem 1.5rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.filter-section {
+  margin-bottom: 0.75rem;
+  background: #0f1220;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #1f2333;
+}
+
+.filter-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  user-select: none;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #aaa;
+  transition: color 0.15s;
+}
+
+.filter-section-header:hover { color: #fff; }
+
+.filter-toggle-icon {
+  font-size: 0.75rem;
+  transition: transform 0.2s;
+}
+
+.filter-section.open .filter-toggle-icon {
+  transform: rotate(90deg);
+}
+
+.filter-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 1rem 1rem;
+}
+
+.filter-tags.collapsed { display: none; }
+
+/* Genre tag */
+.filter-genre-btn {
+  padding: 4px 14px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  background: #1e293b;
+  color: #7dd3fc;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  font-family: Poppins, sans-serif;
+}
+
+.filter-genre-btn:hover { background: #2a3f5f; }
+
+.filter-genre-btn.selected {
+  border-color: #7dd3fc;
+  background: #1e3a5f;
+}
+
+/* Tag btn */
+.filter-tag-btn {
+  padding: 4px 14px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  background: #1a1a2e;
+  color: #a78bfa;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  font-family: Poppins, sans-serif;
+}
+
+.filter-tag-btn:hover { background: #2a1a4e; }
+
+.filter-tag-btn.selected {
+  border-color: #a78bfa;
+  background: #2d1b69;
+}
+
+/* Active filter summary */
+.filter-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 0 1.5rem 0.5rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  font-size: 0.8rem;
+  color: #aaa;
+  min-height: 28px;
+}
+
+.filter-clear-btn {
+  background: #3f1d1d;
+  color: #fca5a5;
+  border: none;
+  padding: 3px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 600;
+  font-family: Poppins, sans-serif;
+  transition: background 0.15s;
+}
+
+.filter-clear-btn:hover { background: #7f1d1d; }
+
+.filter-count {
+  color: #7c5cff;
+  font-weight: 600;
+}
+
+/* No results */
+.filter-no-results {
+  text-align: center;
+  color: #aaa;
+  padding: 3rem;
+  font-size: 0.95rem;
+  display: none;
+}

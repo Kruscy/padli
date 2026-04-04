@@ -2,6 +2,7 @@ import express from "express";
 import multer from "multer";
 import { pool } from "../db.js";
 import path from "path";
+import { requireLogin } from "../middleware/auth.js";
 
 const router = express.Router();
 console.log("USER ROUTE LOADED");
@@ -54,6 +55,7 @@ router.get("/me", async (req, res) => {
     const user = result.rows[0];
 
     res.json({
+      id: userId,
       username: user.username,
       avatar: user.avatar || "/uploads/default.png",
       tier: user.tier || null
@@ -63,5 +65,25 @@ router.get("/me", async (req, res) => {
     console.error(err);
     res.status(500).json({ error: "Server error" });
   }
+});
+// Születési dátum lekérése
+router.get("/birth-date", requireLogin, async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT birth_date FROM users WHERE id = $1`,
+    [req.session.user.id]
+  );
+  res.json({ birth_date: rows[0]?.birth_date || null });
+});
+
+// Születési dátum mentése
+router.post("/birth-date", requireLogin, async (req, res) => {
+  const { birth_date } = req.body;
+  if (!birth_date) return res.status(400).json({ error: "Hiányzó dátum" });
+
+  await pool.query(
+    `UPDATE users SET birth_date = $1 WHERE id = $2`,
+    [birth_date, req.session.user.id]
+  );
+  res.json({ ok: true });
 });
 export default router;

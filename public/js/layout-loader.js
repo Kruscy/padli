@@ -106,6 +106,24 @@ async function loadLayout() {
     sidebar.classList.remove("open");
     overlay.classList.remove("show");
   });
+ // szuletesnap
+const birthJS = document.createElement("script");
+birthJS.src = "/js/birth-date.js";
+document.body.appendChild(birthJS);
+  // Chat widget betöltése
+  const chatCSS = document.createElement("link");
+  chatCSS.rel = "stylesheet";
+  chatCSS.href = "/css/chat.css";
+  document.head.appendChild(chatCSS);
+
+if (!document.getElementById("chatWidget")) {
+  const chatJS = document.createElement("script");
+  chatJS.src = "/js/chat.js";
+  chatJS.onload = () => {
+  if (typeof initChat === "function") initChat();
+  };
+  document.body.appendChild(chatJS);
+}
 }
 async function loadOnlineCount() {
   try {

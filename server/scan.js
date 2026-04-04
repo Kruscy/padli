@@ -34,84 +34,87 @@ function slugify(str) {
 function isImage(file) {
   return /\.(jpg|jpeg|png|webp)$/i.test(file);
 }
+function getChapterNumber(title) {
+  const match = title.match(/\d+/);
+  return match ? parseInt(match[0], 10) : 0;
+}
 /* ================= UNLOCK TIMES ================= */
 const lockHours = parseInt(process.env.LOCK_HOURS || "24", 10);
 async function setUnlockTimes() {
-  console.log("⏰ Setting unlock times...");
+  console.log("⏰ Setting unlock times (skip first 15)...");
 
   const mangaRes = await pool.query(`SELECT id, slug FROM manga`);
 
   for (const manga of mangaRes.rows) {
-    const chapters = await pool.query(
-      `SELECT id, scanned_at, unlocks_at FROM chapter
-       WHERE manga_id = $1
-       ORDER BY scanned_at ASC`,
+    const res = await pool.query(
+      `SELECT id, title, unlocks_at
+       FROM chapter
+       WHERE manga_id = $1`,
       [manga.id]
     );
 
-    if (!chapters.rows.length) continue;
+    if (!res.rows.length) continue;
 
-    const unsetChapters = chapters.rows.filter(ch => !ch.unlocks_at);
-    if (!unsetChapters.length) continue;
+    // 🔢 szám kiszedése (utolsó szám + tizedes)
+    function getChapterNumber(title) {
+      const matches = title.match(/\d+(\.\d+)?/g);
+      if (!matches) return 0;
 
-    const freshChapters = unsetChapters.filter(ch =>
-      (Date.now() - new Date(ch.scanned_at)) / 3600000 < lockHours
-    );
-    const oldChapters = unsetChapters.filter(ch =>
-      (Date.now() - new Date(ch.scanned_at)) / 3600000 >= lockHours
-    );
-
-    if (oldChapters.length) {
-      const oldIds = oldChapters.map(ch => ch.id).join(",");
-      await pool.query(
-        `UPDATE chapter SET unlocks_at = now() - interval '1 second' WHERE id IN (${oldIds})`
-      );
+      const last = matches[matches.length - 1];
+      return parseFloat(last);
     }
 
-    if (freshChapters.length) {
-      const lastSet = await pool.query(
-        `SELECT unlocks_at FROM chapter
-         WHERE manga_id = $1
-           AND unlocks_at IS NOT NULL
-           AND unlocks_at > now()
-         ORDER BY unlocks_at DESC
-         LIMIT 1`,
-        [manga.id]
-      );
+    // 📊 rendezés
+    const chapters = res.rows.sort(
+      (a, b) => getChapterNumber(a.title) - getChapterNumber(b.title)
+    );
 
-      let lastUnlocksAt = lastSet.rows.length
-        ? new Date(lastSet.rows[0].unlocks_at)
-        : null;
+    let lastUnlock = null;
+    let updated = 0;
 
-      const updates = [];
+    for (let i = 0; i < chapters.length; i++) {
+      const ch = chapters[i];
 
-      for (const ch of freshChapters) {
-        let unlocksAt;
-        if (!lastUnlocksAt || lastUnlocksAt < new Date()) {
-          unlocksAt = new Date(Date.now() + lockHours * 3600000);
-        } else {
-          unlocksAt = new Date(lastUnlocksAt.getTime() + lockHours * 3600000);
+      // 🟢 első 15 → mindig unlock
+      if (i < 15) {
+        if (!ch.unlocks_at || new Date(ch.unlocks_at) > new Date()) {
+          await pool.query(
+            `UPDATE chapter SET unlocks_at = now() - interval '1 second' WHERE id = $1`,
+            [ch.id]
+          );
         }
-        lastUnlocksAt = unlocksAt;
-        updates.push(`(${ch.id}, '${unlocksAt.toISOString()}')`);
+
+        lastUnlock = new Date(); // hogy a lánc innen induljon
+        continue;
       }
 
-      if (updates.length) {
-        await pool.query(`
-          UPDATE chapter AS c
-          SET unlocks_at = v.unlocks_at::timestamptz
-          FROM (VALUES ${updates.join(",")}) AS v(id, unlocks_at)
-          WHERE c.id = v.id::int
-        `);
+      let newUnlock;
+
+      if (ch.unlocks_at) {
+        lastUnlock = new Date(ch.unlocks_at);
+        continue;
       }
+
+      if (!lastUnlock) {
+        newUnlock = new Date(Date.now() + lockHours * 3600000);
+      } else {
+        newUnlock = new Date(lastUnlock.getTime() + lockHours * 3600000);
+      }
+
+      await pool.query(
+        `UPDATE chapter SET unlocks_at = $1 WHERE id = $2`,
+        [newUnlock, ch.id]
+      );
+
+      lastUnlock = newUnlock;
+      updated++;
     }
 
-    console.log(`✅ ${manga.slug} – ${oldChapters.length} régi szabad, ${freshChapters.length} friss zárolt`);
+    console.log(`✅ ${manga.slug} – ${updated} chapter lockolva (15 free)`);
   }
 
   console.log("✅ Unlock times set!");
 }
-
 
 /* ================= LOAD LIBRARIES ================= */
 
