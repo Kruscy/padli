@@ -16,6 +16,115 @@ export const REPLY_DELAY_MS = config.replyDelay.questionMs;
 const BOT_NAMES = config.bot.triggerNames;
 const LOG = "\uD83C\uDF46"; // 🍆
 
+/* ── DB CONFIG + KARAKTEREK CACHE ───────────────────────── */
+let dbConfig = {};        // padli_config tábla értékei
+let dbReplies = {};       // padli_replies tábla – típusonként csoportosítva
+let dbTagWords = {};      // padli_tag_words – tag_name -> words[]
+let dbGenreWords = {};      // padli_genre_words -  genre_name -> words[] (opcionális)
+let dbCharacters = [];    // padli_characters + stories
+let configLoadedAt = 0;
+const CONFIG_TTL = 5 * 60 * 1000; // 5 perc
+
+async function loadDbConfig() {
+  if (Date.now() - configLoadedAt < CONFIG_TTL) return;
+  try {
+    // Config értékek
+    const { rows: cfgRows } = await dbPool.query(
+      "SELECT key, value FROM padli_config"
+    );
+    cfgRows.forEach(r => {
+      try { dbConfig[r.key] = JSON.parse(r.value); } catch { dbConfig[r.key] = r.value; }
+    });
+
+    // Válasz variációk
+    const { rows: repRows } = await dbPool.query(
+      "SELECT type, text FROM padli_replies WHERE active = true"
+    );
+    dbReplies = {};
+    repRows.forEach(r => {
+      (dbReplies[r.type] = dbReplies[r.type] || []).push(r.text);
+    });
+
+    // Tag szavak
+    const { rows: tagRows } = await dbPool.query(
+      "SELECT tag_name, words FROM padli_tag_words"
+    );
+    dbTagWords = {};
+    tagRows.forEach(r => { dbTagWords[r.tag_name.toLowerCase()] = r.words; });
+
+    // Karakterek + történetek
+    const { rows: charRows } = await dbPool.query(
+      "SELECT c.id, c.name, c.description, c.personality, " +
+      "COALESCE(json_agg(s ORDER BY s.id) FILTER (WHERE s.id IS NOT NULL AND s.active = true), '[]') AS stories " +
+      "FROM padli_characters c " +
+      "LEFT JOIN padli_stories s ON s.character_id = c.id " +
+      "WHERE c.active = true GROUP BY c.id ORDER BY c.id"
+    );
+    dbCharacters = charRows;
+// Genre-k betöltése a config genre táblából (ha van padli_genre_words tábla)
+    // Ha nincs DB genre → marad a statikus config.genres
+    try {
+      const { rows: genreRows } = await dbPool.query(
+        "SELECT genre_name, words FROM padli_genre_words ORDER BY genre_name"
+      );
+      if (genreRows.length > 0) {
+        dbGenreWords = {};
+        genreRows.forEach(r => { dbGenreWords[r.genre_name] = r.words; });
+        plog("DB_CONFIG", "genre szavak betoltve: " + genreRows.length);
+      }
+    } catch {
+      // Tábla nem létezik → statikus config.genres marad, nem baj
+    }
+    configLoadedAt = Date.now();
+    plog("DB_CONFIG", "betoltve: " + cfgRows.length + " config, " + charRows.length + " karakter, " + tagRows.length + " tag");
+  } catch (err) {
+    console.error(LOG + " DB config load error: " + err.message);
+  }
+}
+
+// Config újratöltés jelzés kezelése
+process.on("padli-config-reload", () => {
+  configLoadedAt = 0;
+  plog("DB_CONFIG", "reload jelzes fogadva");
+});
+
+// DB config értéket vesz ki, ha nincs → a statikus configból
+function getCfg(key, fallback) {
+  return dbConfig[key] !== undefined ? dbConfig[key] : fallback;
+}
+
+// DB válasz variáció, ha nincs → statikus config
+function getReply(type) {
+  const arr = dbReplies[type];
+  if (arr && arr.length) return arr[Math.floor(Math.random() * arr.length)];
+  // Fallback a statikus configra
+  const fb = config.fixedReplies[type];
+  if (Array.isArray(fb)) return fb[Math.floor(Math.random() * fb.length)];
+  return fb || null;
+}
+
+// Karakterek system prompt kibővítése
+function buildCharacterContext() {
+  if (!dbCharacters.length) return "";
+  let ctx = "\n\nISMERT KARAKTEREK A KÖZÖSSÉGBŐL (ezeket ismered, róluk tudasz beszélni):";
+  for (const char of dbCharacters) {
+    ctx += "\n- " + char.name;
+    if (char.description) ctx += ": " + char.description;
+    if (char.personality) ctx += " [Személyiség: " + char.personality + "]";
+    if (char.stories && char.stories.length) {
+      ctx += " | Történetek: " + char.stories.map(s => s.title).join(", ");
+    }
+  }
+  return ctx;
+}
+
+// Teljes system prompt DB karakterekkel kiegészítve
+function getSystemPrompt() {
+  const base = config.systemPrompt;
+  const charCtx = buildCharacterContext();
+  return base + charCtx;
+}
+
 /* ── LOG ────────────────────────────────────────────────── */
 function ensureLogDir() {
   if (!fs.existsSync(config.log.dir)) fs.mkdirSync(config.log.dir, { recursive: true });
@@ -465,6 +574,46 @@ async function searchAniList(searchTerm, mediaType) {
   } catch (err) { console.error(LOG + " AniList error: " + err.message); return null; }
 }
 
+/* ── API: ANILIST KARAKTER KERESÉS ──────────────────────── */
+async function searchAniListCharacter(searchTerm) {
+  const cacheKey = "anilist:char:" + searchTerm;
+  const cached = cacheGet(cacheKey);
+  if (cached !== null) return cached;
+  try {
+    const query = `query($search:String){
+      Page(perPage:3) {
+        characters(search:$search) {
+          name { full native alternative }
+          description(asHtml:false)
+          media(perPage:2) {
+            nodes { title { romaji english } type }
+          }
+        }
+      }
+    }`;
+    const res = await fetch(ANILIST_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      body: JSON.stringify({ query, variables: { search: searchTerm } })
+    });
+    const data = await res.json();
+    const chars = data?.data?.Page?.characters || [];
+    if (!chars.length) { cacheSet(cacheKey, null); return null; }
+    // Relevancia ellenőrzés
+    const norm = searchTerm.toLowerCase();
+    const found = chars.find(c => {
+      const names = [c.name?.full, c.name?.native, ...(c.name?.alternative || [])];
+      return names.some(n => n && isTitleRelevant(n, norm));
+    }) || chars[0];
+    const result = {
+      name: found.name?.full || found.name?.native || searchTerm,
+      description: (found.description || "").slice(0, 300),
+      media: (found.media?.nodes || []).slice(0, 2).map(m => m.title?.english || m.title?.romaji).filter(Boolean)
+    };
+    cacheSet(cacheKey, result);
+    return result;
+  } catch (err) { console.error(LOG + " AniList char error: " + err.message); return null; }
+}
 /* ── API: JIKAN ─────────────────────────────────────────── */
 async function searchJikan(searchTerm, mediaType) {
   const cacheKey = "jikan:" + mediaType + ":" + searchTerm;
@@ -599,8 +748,23 @@ export function isQuestion(content) { return content.trim().endsWith("?"); }
 
 /* ── GENRE KINYERES ─────────────────────────────────────── */
 function extractGenreTags(question) {
-  const l = question.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
-  const found = config.genres.filter(({ words }) => words.some(w => l.includes(w))).map(({ genre }) => genre);
+  const l = question.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+// 1. Statikus config genre-k - de ha van DB override, azt használja
+  const found = config.genres.filter(({ genre, words }) => {
+    const activeWords = dbGenreWords[genre] || words; // DB felülírja ha van
+    return activeWords.some(w => l.includes(w));
+  }).map(({ genre }) => genre);
+  // 2. DB tag szavak – ha a user szava egyezik a tag szó listájával
+  for (const [tagName, words] of Object.entries(dbTagWords)) {
+    if (!found.map(f => f.toLowerCase()).includes(tagName.toLowerCase())) {
+      if (words.some(w => l.includes(w.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")))) {
+        found.push(tagName);
+        plog("TAG_WORD_MATCH", tagName + " -> " + l.slice(0,40));
+      }
+    }
+  }
+
   return config.features.enableNegation ? filterNegatedGenres(question, found) : found;
 }
 
@@ -693,6 +857,9 @@ async function generateReply(question, conversationHistory, userKey) {
   conversationHistory = conversationHistory || [];
   userKey = userKey || null;
 
+  // DB config betöltés (cache-elt, 5 percenként frissül)
+  await loadDbConfig();
+
   const { scores } = scoreIntents(question);
   const intent = resolveIntent(scores);
   plog("INTENT", "-> " + (intent || "search"));
@@ -701,7 +868,7 @@ async function generateReply(question, conversationHistory, userKey) {
   if (intent === "adult") {
     plog("ADULT", "visszautasitva");
     padliLog({ event: "adult_rejected", query: question });
-    return config.fixedReplies.adult;
+    return getReply("adult") || config.fixedReplies.adult;
   }
 
   if (intent === "patreon") {
@@ -740,12 +907,38 @@ async function generateReply(question, conversationHistory, userKey) {
   const mediaType = detectMediaType(question);
 
   if (!searchTerm) {
-    const refWords = ["hány részes","hány epizód","hány fejezet","főszereplő","miről szól",
-      "mikor jön","befejezett","és az","és a","ki írta","és hány","az is"];
+     const refWords = ["hány részes","hány epizód","hány fejezet","főszereplő","miről szól",
+  "mikor jön","befejezett","és az","és a","ki írta","és hány","az is",
+  "mesel","mesélj","mesélj még","mesélj róla","mondjal","mondjal még",
+  "mire képes","mit tud","ki ez","ki ő","ő is","róla","belőle","erről"];    
     if (refWords.some(w => question.toLowerCase().includes(w))) {
       const remembered = getTopicMemory(userKey);
       if (remembered) {
         searchTerm = remembered;
+        // Ha a remembered érték egy saját karakter neve, jelöljük meg
+        const isRememberedChar = dbCharacters.some(c =>
+          c.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+          .includes(remembered.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,""))
+        );
+        if (isRememberedChar) {
+          // Karakter kérdés triggerelése topic memory-ból
+          const norm = remembered.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+          const dbChar = dbCharacters.find(c => {
+            const cNorm = c.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+            return cNorm.includes(norm) || norm.includes(cNorm);
+          });
+          if (dbChar) {
+            const stories = (dbChar.stories || []).slice(0, 2).map(s => s.title + ": " + s.content.slice(0, 150)).join(" | ");
+            const charCtx = "[SAJÁT KÖZÖSSÉGI KARAKTER: \"" + dbChar.name + "\" - " + (dbChar.description || "") +
+              (dbChar.personality ? " | Személyiség: " + dbChar.personality : "") +
+              (stories ? " | Történetek: " + stories : "") + "]";
+            return await askOllama([
+              { role: "system", content: getSystemPrompt() },
+              { role: "user", content: "Válaszolj magyarul, 1-2 mondatban: " + question + "\n" + charCtx }
+            ]);
+          }
+        }
+
         const age = Math.round((Date.now() - (topicMemory.get(userKey)?.ts || 0)) / 1000);
         plog("TOPIC_MEMORY", searchTerm + " (" + age + "mp regebbi)");
         padliLog({ event: "topic_memory_hit", searchTerm, age });
@@ -791,7 +984,8 @@ async function generateReply(question, conversationHistory, userKey) {
       const recs = await searchLocalByGenreTag(genres);
       if (recs && recs.length > 0) {
         const filtered = config.recommendation.avoidRepeats ? recs.filter(r => !recommendedTitles.has(r.title)) : recs;
-        const toShow = (filtered.length > 0 ? filtered : recs).slice(0, config.recommendation.maxResults);
+        const maxRes = getCfg("maxResults", config.recommendation.maxResults);
+        const toShow = (filtered.length > 0 ? filtered : recs).slice(0, maxRes);
         toShow.forEach(r => recommendedTitles.add(r.title));
         plog("RECOMMEND", toShow.length + " talalat: " + toShow.map(r => r.title).join(", "));
         const list = toShow.map(r => {
@@ -827,14 +1021,54 @@ async function generateReply(question, conversationHistory, userKey) {
     plog("NO_TERM", "nincs keresesi kifejezes");
     const hist = buildHistory(conversationHistory, null).slice(-3);
     return await askOllama([
-      { role: "system", content: config.systemPrompt },
+      { role: "system", content: getSystemPrompt() },
       ...hist,
       { role: "user", content: "Reagálj természetesen és barátságosan erre az üzenetre, NE idézd vissza szó szerint: " +
         content.replace(/padli[,]?\s*/gi,"").trim().slice(0,80) +
         "\n[NE ismételd vissza amit a user írt. Ha hülyéskedik, hülyéskedj vissza. Ha kérdez valamit, kérdezz rá értelmesen.]" }
     ]);
   }
+// ── KARAKTER KÉRDÉS DETEKTÁLÁS ──────────────────────────
+  const charTriggers = ["ki az","ki ez","ki a","ki volt","mesélj","mondjal","tudod ki","ismered","karakter","szereplő","főhős","protagonista"];
+  const isCharQuestion = charTriggers.some(w => question.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").includes(w.normalize("NFD").replace(/[\u0300-\u036f]/g,"")));
 
+  if (isCharQuestion && searchTerm) {
+    // 1. Saját DB karakterek közt keresünk (fuzzy, részleges egyezés)
+    const norm = searchTerm.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+    const dbChar = dbCharacters.find(c => {
+      const cNorm = c.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+      return cNorm.includes(norm) || norm.includes(cNorm) || norm.split(" ").some(w => w.length > 2 && cNorm.includes(w));
+    });
+
+    if (dbChar) {
+        plog("CHAR_DB", "talalat: " + dbChar.name);
+      padliLog({ event: "char_db_hit", name: dbChar.name, query: question });
+      // Topic memory-ba a karakter neve kerül, hogy a következő kérdés is rátaláljon
+      if (userKey) setTopicMemory(userKey, dbChar.name);
+
+      const stories = (dbChar.stories || []).slice(0, 2).map(s => s.title + ": " + s.content.slice(0, 150)).join(" | ");
+      const charCtx = "[SAJÁT KÖZÖSSÉGI KARAKTER: \"" + dbChar.name + "\"-" + (dbChar.description || "") +
+        (dbChar.personality ? " | Személyiség: " + dbChar.personality : "") +
+        (stories ? " | Történetek: " + stories : "") + "]";
+      return await askOllama([
+        { role: "system", content: getSystemPrompt() },
+        { role: "user", content: "Válaszolj magyarul, 1-2 mondatban: " + question + "\n" + charCtx }
+      ]);
+    }
+
+    // 2. Ha nincs saját DB-ben → AniList karakter keresés
+    plog("CHAR_ANILIST", "keresem: " + searchTerm);
+    const aniChar = await searchAniListCharacter(searchTerm);
+    if (aniChar) {
+      padliLog({ event: "char_anilist_hit", name: aniChar.name, query: question });
+      const mediaStr = aniChar.media.length ? " | Megjelenik: " + aniChar.media.join(", ") : "";
+      const charCtx = "[AniList karakter: \"" + aniChar.name + "\" - " + aniChar.description + mediaStr + "]";
+      return await askOllama([
+        { role: "system", content: getSystemPrompt() },
+        { role: "user", content: "Válaszolj magyarul, 1-2 mondatban: " + question + "\n" + charCtx }
+      ]);
+    }
+  }
   plog("API_SEARCH", "\"" + searchTerm + "\" | tipus: " + mediaType);
   const [localResult, anilistResult] = await Promise.all([
     searchLocalDBFuzzy(searchTerm),
@@ -867,11 +1101,12 @@ async function generateReply(question, conversationHistory, userKey) {
     // NE küldje el a searchTermet az Ollama-nak – az ismétléshez vezet
     contextStr = "\n[A keresők nem találtak eredményt. " +
       "NE találj ki adatokat és NE ismételd vissza amit a user írt. " +
-      "Kérdezz rá lazán hogy pontosítsa – pl. más cím, műfaj. Max 1 mondat.]";
+      "Kérdezz rá lazán hogy pontosítsa – pl. más cím, műfaj. Max 1 mondat. " +
+      "Ha visszautasítasz: " + (getReply("noData") || "Nem vagyok benne biztos.") + "]";
   }
 
   const history = buildHistory(conversationHistory, searchTerm);
-  const msgs = [{ role: "system", content: config.systemPrompt }, ...history];
+  const msgs = [{ role: "system", content: getSystemPrompt() }, ...history];
   // NE ismételje vissza az eredeti kérdést – csak a kontextust és egy semleges kérést küldünk
   const cleanQ = "Válaszolj magyarul, 1-2 mondatban." + contextStr;
   if (msgs[msgs.length - 1]?.role === "user") msgs[msgs.length - 1].content = cleanQ;
@@ -956,7 +1191,7 @@ export async function handleChatMessageForAI(msg, broadcastFn) {
       padliLog({ event: "offtopic", query: content, author });
       // Off-topic: ne fix szöveg, hanem az Ollama lazán reagál
       const offReply = await askOllama([
-        { role: "system", content: config.systemPrompt + "\nHa nem manga/anime témáról kérdeznek: lazán reagálj, hülyéskedj ha kell, tereld vissza a témára. NE ismételd vissza amit a user írt. Max 1-2 mondat." },
+        { role: "system", content: getSystemPrompt() + "\nHa nem manga/anime témáról kérdeznek: lazán reagálj, hülyéskedj ha kell, tereld vissza a témára. NE ismételd vissza amit a user írt. Max 1-2 mondat." },
         { role: "user", content: "Reagálj erre természetesen és lazán, NE idézd vissza: " + content.replace(/padli[,]?\s*/gi,"").trim() }
       ]);
       if (offReply) { await sendPadliMessage(offReply, broadcastFn); lastReplyTime.set(userKey, Date.now()); }

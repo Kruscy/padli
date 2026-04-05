@@ -1,22 +1,29 @@
-/* Oldal struktúra */
-html, body {
+/* ── OLDAL STRUKTÚRA ────────────────────────────────────── */
+
+html {
   height: 100%;
-  margin: 0;
 }
 
 body {
+  min-height: 100vh;
+  margin: 0;
   display: flex;
   flex-direction: column;
 }
 
-/* minden fő tartalom */
-main {
-  flex: 1;
+/* Minden fő tartalom elem kitölti a maradékot */
+main,
+.blog-main,
+.content,
+.polls-page,
+.auth-page {
+  flex: 1 0 auto;
 }
 
-/* Footer */
+/* ── FOOTER ─────────────────────────────────────────────── */
+
 .site-footer {
-  margin-top: auto;
+  flex-shrink: 0;
   background: #0e0f12;
   color: #aaa;
   font-size: 14px;
@@ -24,12 +31,7 @@ main {
 
 .footer-divider {
   height: 1px;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    #2a2f3a,
-    transparent
-  );
+  background: linear-gradient(90deg, transparent, #2a2f3a, transparent);
 }
 
 .footer-content {
@@ -44,4 +46,19 @@ main {
 
 .site-footer a:hover {
   text-decoration: underline;
+}
+
+.footer-links {
+  margin-top: 6px;
+}
+
+.footer-links a {
+  color: #888;
+  font-size: 0.85rem;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.footer-links a:hover {
+  color: #7c3aed;
 }

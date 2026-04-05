@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Dinamikusan töltődik JS-ből -->
+  <title id="pageTitle">Blog – PadlizsanFanSub</title>
+  <meta name="description" id="metaDesc" content="PadlizsanFanSub blog bejegyzés">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" id="canonicalLink" href="https://padlizsanfansub.hu/blog-post.html">
+
+  <!-- Open Graph (JS tölti fel) -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" id="ogTitle" content="">
+  <meta property="og:description" id="ogDesc" content="">
+  <meta property="og:image" id="ogImage" content="">
+  <meta property="og:url" id="ogUrl" content="">
+  <meta property="og:locale" content="hu_HU">
+  <meta property="og:site_name" content="PadlizsanFanSub">
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" id="twTitle" content="">
+  <meta name="twitter:description" id="twDesc" content="">
+  <meta name="twitter:image" id="twImage" content="">
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favico.png">
+  <link rel="stylesheet" href="/css/header.css">
+  <link rel="stylesheet" href="/css/sidebar.css">
+  <link rel="stylesheet" href="/css/footer.css">
+  <link rel="stylesheet" href="/css/blog.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+
+</head>
+<body>
+
+<nav class="blog-nav">
+  <a href="/" class="blog-nav-logo">🍆 PadlizsanFanSub</a>
+  <div class="blog-nav-right" id="blogNavRight">
+    <!-- JS tölti fel -->
+  </div>
+</nav>
+
+<main class="blog-main">
+  <div class="blog-container post-container">
+
+    <div id="postLoading" class="blog-loading">
+      <div class="blog-spinner"></div>
+    </div>
+
+    <article id="postArticle" class="blog-post hidden">
+      <!-- Breadcrumb -->
+      <nav class="post-breadcrumb" aria-label="breadcrumb">
+        <a href="/">Főoldal</a>
+        <span>›</span>
+        <a href="/blog.html">Blog</a>
+        <span>›</span>
+        <span id="postBreadcrumb"></span>
+      </nav>
+
+      <!-- Fejléc -->
+      <header class="post-header">
+        <div class="post-meta-top">
+          <span class="post-category" id="postCategory"></span>
+          <span class="post-date" id="postDate"></span>
+          <span class="post-author" id="postAuthor"></span>
+        </div>
+        <h1 id="postTitle"></h1>
+        <p class="post-lead" id="postLead"></p>
+      </header>
+
+      <!-- Borítókép -->
+      <div id="postCoverWrap" class="post-cover-wrap hidden">
+        <img id="postCover" src="" alt="" class="post-cover">
+      </div>
+
+      <!-- Tartalom -->
+      <div class="post-content" id="postContent"></div>
+
+      <!-- Lábléc -->
+      <footer class="post-footer">
+        <div class="post-tags" id="postTags"></div>
+        <div class="post-share">
+          <span>Megosztás:</span>
+          <a id="shareFb" href="#" target="_blank" rel="noopener" class="share-btn share-fb">Facebook</a>
+          <a id="shareX"  href="#" target="_blank" rel="noopener" class="share-btn share-x">X / Twitter</a>
+          <button class="share-btn share-copy" id="shareCopy">Link másolása</button>
+        </div>
+      </footer>
+
+      <a href="/blog.html" class="back-to-blog">← Vissza a blogra</a>
+    </article>
+
+    <!-- Kapcsolódó bejegyzések -->
+    <section id="relatedSection" class="related-section hidden">
+      <h2>Kapcsolódó bejegyzések</h2>
+      <div id="relatedGrid" class="blog-grid"></div>
+    </section>
+
+  </div>
+</main>
+
+<div id="footer"></div>
+<script src="/js/footer.js"></script>
+<script src="/js/blog-post.js"></script>
+
+</body>
+</html>

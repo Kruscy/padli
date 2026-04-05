@@ -1,367 +1,51 @@
 <!DOCTYPE html>
 <html lang="hu">
 <head>
-<meta charset="UTF-8">
-<title>PadlizsanFanSub – Reader</title>
-
-<style>
-body {
-  margin: 0;
-  background: #000;
-  color: #fff;
-  font-family: system-ui, sans-serif;
-}
-
-/* ===== TOP ===== */
-.topbar {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 56px;
-  background: rgba(0,0,0,.85);
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
-  padding: 0 16px;
-  z-index: 100;
-}
-
-.topbar a, .topbar button {
-  background: #161b22;
-  color: #fff;
-  border: none;
-  padding: 8px 14px;
-  border-radius: 8px;
-  cursor: pointer;
-  text-decoration: none;
-  font-weight: 600;
-}
-
-#chapterInfo {
-  opacity: .85;
-}
-
-/* ===== PAGES ===== */
-#pages {
-  padding-top: 70px;
-  padding-bottom: 70px;
-  max-width: 900px;
-  margin: 0 auto;
-}
-
-#pages img {
-  width: 100%;
-  display: block;
-}
-
-/* ===== BOTTOM ===== */
-.bottombar {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 56px;
-  background: rgba(0,0,0,.85);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 16px;
-}
-
-.bottombar button {
-  background: #161b22;
-  color: #fff;
-  border: none;
-  padding: 1rem 1.8rem;
-  border-radius: 8px;
-  cursor: pointer;
-}
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PadlizsanFanSub – Reader</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favico.png">
+  <link rel="stylesheet" href="/css/reader.css">
 </head>
-
 <body>
+
+<!-- TOPBAR -->
 <div class="topbar">
-  <a id="backBtn">⬅ Vissza</a>
-  <div id="mangaTitle" style="text-align:center; font-weight:600;"></div>
-  <div id="chapterNum" style="text-align:right; opacity:0.75; font-size:0.85rem;"></div>
+  <a id="backBtn" href="#">⬅ Vissza</a>
+  <div id="mangaTitle"></div>
+  <div id="chapterNum"></div>
 </div>
 
+<!-- KÖNYV MÓD NYILAK -->
+<button class="book-arrow left"  id="bookPrev" aria-label="Előző oldal">‹</button>
+<button class="book-arrow right" id="bookNext" aria-label="Következő oldal">›</button>
+
+<!-- OLDALAK -->
 <div id="pages"></div>
 
+<!-- BOTTOMBAR -->
 <div class="bottombar">
   <button id="prevBtn">← Előző</button>
+
+  <div class="bottombar-center">
+    <!-- Teljes képernyő -->
+    <button class="btn-icon" id="btnFullscreen" title="Teljes képernyő" onclick="toggleFullscreen()">⤢</button>
+
+    <!-- Olvasási mód váltó -->
+    <button class="btn-icon btn-mode" data-mode="scroll" title="Folyamatos görgetés" onclick="cycleMode()">📜</button>
+    <button class="btn-icon btn-mode" data-mode="book"   title="Könyv mód (bal/jobb oldal)" style="display:none">📖</button>
+  </div>
+
   <button id="nextBtn">Következő →</button>
 </div>
 
+<!-- Könyv mód nyilak kattintáskezelő -->
 <script>
-const params = new URLSearchParams(location.search);
-const slug = params.get("slug");
-let chapter = params.get("chapter");
-let startPage = parseInt(params.get("page") || "0", 10);
-
-const pagesEl = document.getElementById("pages");
-const chapterInfo = document.getElementById("chapterInfo");
-
-/* ================= PROGRESS ================= */
-let lastSavedPage = 0;
-let lastSent = 0;
-let saveTimeout = null;
-let savedProgress = null;
-
-async function loadProgress() {
-  try {
-    const res = await fetch(`/api/progress?slug=${slug}`);
-    const data = await res.json();
-
-    if (data && data.chapter) {
-      savedProgress = data;
-
-      if (!chapter || chapter !== data.chapter) {
-        location.href = `/reader.html?slug=${slug}&chapter=${data.chapter}&page=${data.page}`;
-        return;
-      }
-
-      startPage = data.page || 0;
-    }
-  } catch (err) {
-    console.error("PROGRESS LOAD ERROR:", err);
-  }
-}
-
-function getCurrentPage() {
-  const imgs = [...document.querySelectorAll("#pages img")];
-  let current = 1;
-  const mid = window.innerHeight / 2;
-
-  imgs.forEach((img, i) => {
-    if (img.getBoundingClientRect().top < mid) {
-      current = i + 1;
-    }
-  });
-
-  return current;
-}
-
-async function saveProgress(page) {
-  if (!page || page === lastSavedPage) return;
-
-  clearTimeout(saveTimeout);
-  saveTimeout = setTimeout(async () => {
-
-    await fetch("/api/progress", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ slug, chapter, page })
-    });
-
-    // 🔥 AniList queue
-    await fetch("/api/anilist/queue", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ slug, chapter })
-    });
-
-    lastSavedPage = page;
-
-  }, 600);
-}
-
-window.addEventListener("scroll", () => {
-  const now = Date.now();
-  if (now - lastSent > 2000) {
-    saveProgress(getCurrentPage());
-    lastSent = now;
-  }
-});
-
-/* ================= LOAD ================= */
-async function loadPages() {
-  const res = await fetch(`/api/pages/${slug}/${chapter}`);
-
-if (res.status === 403) {
-  let connected = false;
-  try {
-    const ps = await fetch("/api/patreon/status");
-    if (ps.ok) {
-      const pd = await ps.json();
-      connected = pd.connected === true;
-    }
-  } catch {}
-
-  pagesEl.innerHTML = `
-    <div style="text-align:center; padding: 4rem 2rem; color:#fff; max-width:420px; margin:70px auto 0 auto;">
-      <img src="/assets/padlizsanfansublakat.png" style="height:120px; width:auto; margin-bottom:1rem; display:inline-block;">
-      <img src="/assets/pat2.png" style="height:80px;width:auto; margin-bottom:1rem; display:inline-block;">
-      <h2 style="margin-bottom:1rem;">${connected ? '🔒 Támogasd az oldalt!' : '🔒 Prémium tartalom'}</h2>
-      <p style="opacity:0.8; margin-bottom:1.5rem;">
-        ${connected
-          ? 'Ez a fejezet az előfizetők számára már elérhető.<br>Ingyenes tagoknak <b>24 óra</b> várakozás szükséges.'
-          : 'Ez a fejezet még nem érhető el ingyenesen.<br>Kösd össze Patreon fiókodat, hogy azonnal hozzáférhess!'}
-      </p>
-      ${connected
-        ? `<a href="https://patreon.com/Padlizsanfansub" target="_blank"
-              style="display:inline-block; background:linear-gradient(135deg,#7c3aed,#5b21b6);
-                     color:#fff; padding:12px 28px; border-radius:10px;
-                     font-weight:700; text-decoration:none; margin-bottom:1rem;">
-             💜 Előfizetés a Patreonon
-           </a>`
-        : `<button onclick="window.location.href='/api/patreon/connect'"
-              style="display:inline-block; background:linear-gradient(135deg,#7c3aed,#5b21b6);
-                     color:#fff; padding:12px 28px; border-radius:10px;
-                     font-weight:700; border:none; cursor:pointer; margin-bottom:1rem;">
-             💜 Patreon összekapcsolása
-           </button>`}
-      <br>
-      <button onclick="window.location.href='/chapters.html?slug=${slug}'"
-         style="display:inline-block; margin-top:1rem; background:none; border:none;
-                color:#aaa; text-decoration:underline; font-size:0.9rem; cursor:pointer;">
-        ← Vissza a fejezetlistához
-      </button>
-    </div>
-  `;
-  return;
-}
-
-  const files = await res.json();
-
-  files.forEach((f, i) => {
-    const img = document.createElement("img");
-    img.src = `/api/image/${slug}/${chapter}/${encodeURIComponent(f)}`;
-    img.loading = "lazy";
-    pagesEl.appendChild(img);
-
-    if (i + 1 === startPage) {
-      setTimeout(() => img.scrollIntoView(), 100);
-    }
-  });
-}
-
-/* ================= NAV ================= */
-function chapterKey(folder) {
-  return folder.split(".").map(n => parseInt(n, 10));
-}
-
-function compareChapters(a, b) {
-  const ak = chapterKey(a.folder);
-  const bk = chapterKey(b.folder);
-
-  for (let i = 0; i < Math.max(ak.length, bk.length); i++) {
-    const av = ak[i] ?? 0;
-    const bv = bk[i] ?? 0;
-    if (av !== bv) return av - bv;
-  }
-  return 0;
-}
-
-async function loadNav() {
-  const [chaptersRes, metaRes] = await Promise.all([
-    fetch(`/api/chapters/${slug}`),
-    fetch(`/api/manga/${slug}`)
-  ]);
-
-  const chaptersData = await chaptersRes.json();
-const chapters = (chaptersData.chapters || chaptersData).sort(compareChapters);
-  const meta = await metaRes.json();
-
-  const index = chapters.findIndex(c => c.folder === chapter);
-
-  document.getElementById("mangaTitle").textContent = meta.title || slug;
-  document.getElementById("chapterNum").textContent = `${chapter} (${index + 1} / ${chapters.length})`;
-
-  document.getElementById("backBtn").href = `/chapters.html?slug=${slug}`;
-
-  document.getElementById("prevBtn").onclick = () => {
-    if (index > 0) {
-      location.href = `/reader.html?slug=${slug}&chapter=${chapters[index - 1].folder}`;
-    }
-  };
-
-  document.getElementById("nextBtn").onclick = async () => {
-    if (index < chapters.length - 1) {
-    const nextChapter = chapters[index + 1].folder;
-
-    // lock check
-    const checkRes = await fetch(`/api/pages/${slug}/${nextChapter}`);
-
-if (checkRes.status === 403) {
-  let connected = false;
-  try {
-    const ps = await fetch("/api/patreon/status");
-    if (ps.ok) {
-      const pd = await ps.json();
-      connected = pd.connected === true;
-    }
-  } catch {}
-
-  const actionHtml = connected
-    ? `<a href="https://patreon.com/Padlizsanfansub" target="_blank"
-          style="display:inline-block; background:linear-gradient(135deg,#7c3aed,#5b21b6);
-                 color:#fff; padding:12px 28px; border-radius:10px;
-                 font-weight:700; text-decoration:none; margin-bottom:1rem;">
-         💜 Előfizetés a Patreonon
-       </a>`
-    : `<button onclick="window.location.href='/api/patreon/connect'"
-          style="display:inline-block; background:linear-gradient(135deg,#7c3aed,#5b21b6);
-                 color:#fff; padding:12px 28px; border-radius:10px;
-                 font-weight:700; border:none; cursor:pointer; margin-bottom:1rem;">
-           💜 Patreon összekapcsolása
-       </button>`;
-
-  const titleHtml = connected ? '🔒 Támogasd az oldalt!' : '🔒 Prémium tartalom';
-
-  const textHtml = connected
-    ? 'Ez a fejezet az előfizetők számára már elérhető.<br>Ingyenes tagoknak <b>24 óra</b> várakozás szükséges.'
-    : 'Ez a fejezet még nem érhető el ingyenesen.<br>Kösd össze Patreon fiókodat, hogy azonnal hozzáférhess!';
-
-  pagesEl.innerHTML = `
-    <div style="text-align:center; padding: 4rem 2rem; color:#fff; max-width:420px; margin:70px auto 0 auto;">
-      <img src="/assets/padlizsanfansublakat.png" style="height:120px; width:auto; margin-bottom:1rem; display:inline-block;">
-      <img src="/assets/pat2.png" style="height:80px; width:auto; margin-bottom:1rem; display:inline-block;">
-      <h2 style="margin-bottom:1rem;">${titleHtml}</h2>
-      <p style="opacity:0.8; margin-bottom:1.5rem;">${textHtml}</p>
-      ${actionHtml}
-      <br>
-      <button onclick="window.location.href='/chapters.html?slug=${slug}'"
-         style="display:inline-block; margin-top:1rem; background:none; border:none;
-                color:#aaa; text-decoration:underline; font-size:0.9rem; cursor:pointer;">
-        ← Vissza a fejezetlistához
-      </button>
-    </div>
-  `;
-  return;
-}
-
-     await saveProgress(getCurrentPage());
-      location.href = `/reader.html?slug=${slug}&chapter=${chapters[index + 1].folder}`;
-    }
-  };
-}
-/* ================= INIT ================= */
-(async () => {
-  await loadProgress();
-  await loadPages();
-  await loadNav();
-})();
-
-/* ================= UI TOGGLE ================= */
-const topbar = document.querySelector(".topbar");
-const bottombar = document.querySelector(".bottombar");
-
-let uiVisible = true;
-
-document.addEventListener("click", (e) => {
-  if (e.target.closest("button") || e.target.closest("a")) return;
-
-  uiVisible = !uiVisible;
-
-  topbar.style.opacity = uiVisible ? "1" : "0";
-  bottombar.style.opacity = uiVisible ? "1" : "0";
-
-  topbar.style.pointerEvents = uiVisible ? "auto" : "none";
-  bottombar.style.pointerEvents = uiVisible ? "auto" : "none";
-});
+  document.getElementById("bookPrev")?.addEventListener("click", () => bookPrev());
+  document.getElementById("bookNext")?.addEventListener("click", () => bookNext());
 </script>
+
+<script src="/js/reader.js"></script>
 <script type="module" src="/js/layout-loader.js"></script>
 </body>
 </html>

@@ -21,6 +21,8 @@ import progressRoutes from "./routes/progress.js";
 import ratingRoutes from "./routes/rating.js";
 import chatRoutes from "./routes/chat.js";
 import supportersRouter from "./routes/supporters.js";
+import blogRoutes from "./routes/blog.js";
+import padliAdminRoutes from "./routes/padli-admin.js";
 
 const router = express.Router();
 
@@ -389,5 +391,7 @@ router.use("/progress", progressRoutes);
 router.use("/rating", ratingRoutes);
 router.use("/chat", chatRoutes);
 router.use("/supporters", supportersRouter);
+router.use("/blog", blogRoutes);
+router.use("/admin/padli", padliAdminRoutes);
 
 export default router;
