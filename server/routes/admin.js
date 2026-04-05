@@ -5,6 +5,8 @@ import { sendMail } from "../mail.js";
 import { clearNewReleasesCache } from "../cache/new-releases.js";
 import multer from "multer";
 import { refreshMetadataForManga } from "../refresh-metadata.js";
+import fs from "fs";
+import path from "path";
 
 const router = express.Router();
 /* ================= ADMIN GUARD ================= */
@@ -265,6 +267,61 @@ if (anilist_id) {
   } catch (err) {
     console.error("refresh-metadata error:", err);
     res.status(500).json({ error: err.message || "DB error" });
+  }
+});
+
+/* ================= KÉPFELTÖLTÉS (blog) ================= */
+
+const blogImageStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = "uploads/blog";
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    const ext = (file.mimetype.split("/")[1] || "jpg").toLowerCase();
+    cb(null, `blog-${Date.now()}-${Math.random().toString(36).slice(2,7)}.${ext}`);
+  }
+});
+
+const blogImageUpload = multer({
+  storage: blogImageStorage,
+  limits: { fileSize: 8 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const ok = ["image/jpeg","image/png","image/gif","image/webp"].includes(file.mimetype);
+    cb(null, ok);
+  }
+});
+
+router.post("/upload-image", blogImageUpload.single("image"), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "Nincs fájl vagy nem kép formátum" });
+  res.json({ url: `/uploads/blog/${req.file.filename}`, name: req.file.filename });
+});
+
+/* ================= KÉPEK LISTÁZÁSA (uploads mappa) ================= */
+
+router.get("/images", (req, res) => {
+  const blogDir   = path.join(process.cwd(), "uploads", "blog");
+  const imageExts = new Set([".jpg",".jpeg",".png",".gif",".webp"]);
+
+  try {
+    if (!fs.existsSync(blogDir)) {
+      fs.mkdirSync(blogDir, { recursive: true });
+      return res.json([]);
+    }
+
+    const files = fs.readdirSync(blogDir)
+      .filter(f => imageExts.has(path.extname(f).toLowerCase()))
+      .map(f => {
+        const stat = fs.statSync(path.join(blogDir, f));
+        return { name: f, url: `/uploads/blog/${f}`, size: stat.size, mtime: stat.mtimeMs };
+      })
+      .sort((a, b) => b.mtime - a.mtime);
+
+    res.json(files);
+  } catch (err) {
+    console.error("Images list error:", err);
+    res.status(500).json({ error: "Hiba a fájlok listázásánál" });
   }
 });
 

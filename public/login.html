@@ -3,47 +3,288 @@
 <head>
 <title>Padlizsán Fansub – Manga magyarul | Magyar manga fordítások</title>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="Magyar manga fordítások egy helyen. Olvasd el kedvenc mangáidat magyarul – regisztrálj és csatlakozz a Padlizsán Fansub közösséghez!">
   <meta name="keywords" content="manga magyarul, magyar manga, manga fordítás, fansub, ingyenes manga">
   <link rel="stylesheet" href="/css/footer.css">
   <link rel="stylesheet" href="/css/auth.css" />
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/favico.png">
+  <style>
+    /* ── DESKTOP: kéthasábos ───────────────────────────── */
+    .login-page-wrap {
+      display: flex;
+      min-height: 100vh;
+      background: #0c0c12;
+    }
+
+    .login-left {
+      width: 420px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 32px;
+      background: #0f0f18;
+      border-right: 1px solid rgba(255,255,255,.07);
+      position: sticky;
+      top: 0;
+      height: 100vh;
+    }
+
+    .login-right {
+      flex: 1;
+      padding: 48px 40px;
+      overflow-y: auto;
+    }
+
+    /* ── BLOG ELŐNÉZET ─────────────────────────────────── */
+    .login-right-header {
+      margin-bottom: 24px;
+    }
+    .login-right-header h2 {
+      font-size: 1.2rem;
+      color: #f0f0fa;
+      margin: 0 0 4px;
+      font-family: Georgia, serif;
+    }
+    .login-right-header p {
+      font-size: .85rem;
+      color: #666;
+      margin: 0;
+    }
+    .login-right-header a { color: #7c5cff; text-decoration: none; }
+    .login-right-header a:hover { text-decoration: underline; }
+
+    .login-blog-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 18px;
+    }
+
+    .login-blog-card {
+      background: #13131f;
+      border: 1px solid rgba(255,255,255,.07);
+      border-radius: 12px;
+      overflow: hidden;
+      text-decoration: none;
+      color: inherit;
+      display: flex;
+      flex-direction: column;
+      transition: transform .18s, box-shadow .18s;
+    }
+    .login-blog-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 10px 28px rgba(0,0,0,.4);
+      text-decoration: none;
+    }
+    .login-blog-thumb {
+      width: 100%;
+      aspect-ratio: 16/9;
+      object-fit: cover;
+      display: block;
+    }
+    .login-blog-thumb-ph {
+      width: 100%;
+      aspect-ratio: 16/9;
+      background: linear-gradient(135deg, #1a1a30, #0f0f1e);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+    }
+    .login-blog-body {
+      padding: 14px 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      flex: 1;
+    }
+    .login-blog-cat {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: #7c5cff;
+    }
+    .login-blog-body h3 {
+      font-size: .92rem;
+      color: #f0f0fa;
+      margin: 0;
+      line-height: 1.4;
+      font-family: Georgia, serif;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .login-blog-body p {
+      font-size: .8rem;
+      color: #777;
+      margin: 0;
+      line-height: 1.5;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .login-blog-meta {
+      font-size: .73rem;
+      color: #555;
+      margin-top: 2px;
+    }
+    .login-blog-more {
+      display: inline-block;
+      margin-top: 24px;
+      padding: 9px 22px;
+      border: 1px solid rgba(124,92,255,.35);
+      border-radius: 8px;
+      color: #7c5cff;
+      text-decoration: none;
+      font-size: .86rem;
+      font-weight: 600;
+      transition: all .18s;
+    }
+    .login-blog-more:hover {
+      background: rgba(124,92,255,.1);
+      border-color: #7c5cff;
+      text-decoration: none;
+    }
+    .login-blog-loading { color: #555; font-size: .88rem; padding: 12px 0; }
+
+    /* ── MOBIL: eredeti auth-page, + blog alul ─────────── */
+    @media (max-width: 768px) {
+      .login-page-wrap {
+        display: block; /* vissza sima block */
+        min-height: auto;
+        background: none;
+      }
+
+      /* mobil: az eredeti auth-page stílus érvényesül */
+      .login-left {
+        all: unset; /* törlünk mindent */
+        display: block;
+      }
+
+      .login-right {
+        padding: 24px 18px 48px;
+        background: #0c0c12;
+      }
+
+      .login-right-header h2 { font-size: 1.05rem; }
+
+      .login-blog-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+
+      .login-blog-more {
+        display: block;
+        text-align: center;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .login-blog-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
 </head>
 <body>
 
-<div class="auth-page" id="authPage">
-  <div class="auth-card">
-    <h1>PadlizsanFanSub</h1>
+<div class="login-page-wrap">
 
-    <form id="loginForm">
-      <input id="login" placeholder="Email vagy felhasználónév" />
-      <input id="password" type="password" placeholder="Jelszó" />
-      <button>Login</button>
-    </form>
+  <!-- Login (mobilon: eredeti kinézet) -->
+  <div class="login-left">
+    <div class="auth-page" id="authPage">
+      <div class="auth-card">
+        <h1>PadlizsanFanSub</h1>
 
-    <div id="error" class="error"></div>
+        <form id="loginForm">
+          <input id="login" placeholder="Email vagy felhasználónév" />
+          <input id="password" type="password" placeholder="Jelszó" />
+          <button>Login</button>
+        </form>
 
-    <p>Nincs még fiókod? <a href="/register.html">Regisztráció</a></p>
-    <p class="forgot">
-      <a href="/forgot-password.html">Elfelejtetted a jelszavad?</a>
-    </p>
-    <div class="remember-wrap">
-      <label class="remember">
-        <input type="checkbox" id="rememberMe" />
-        <span>Maradjak bejelentkezve</span>
-      </label>
+        <div id="error" class="error"></div>
+
+        <p>Nincs még fiókod? <a href="/register.html">Regisztráció</a></p>
+        <p class="forgot">
+          <a href="/forgot-password.html">Elfelejtetted a jelszavad?</a>
+        </p>
+        <div class="remember-wrap">
+          <label class="remember">
+            <input type="checkbox" id="rememberMe" />
+            <span>Maradjak bejelentkezve</span>
+          </label>
+        </div>
+        <p class="privacy-note">
+          Az oldal használatával elfogadod az
+          <a href="/privacy.html" target="_blank">Adatvédelmi Nyilatkozatot</a>.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Blog előnézet -->
+  <div class="login-right">
+    <div class="login-right-header">
+      <h2>📝 Legújabb a blogról</h2>
+      <p>Nem akarsz bejelentkezni? <a href="/blog.html">Csak olvasnál? →</a></p>
     </div>
 
-    <p class="privacy-note">
-      Az oldal használatával elfogadod az
-      <a href="/privacy.html" target="_blank">Adatvédelmi Nyilatkozatot</a>.
-    </p>
+    <div class="login-blog-grid" id="loginBlogGrid">
+      <div class="login-blog-loading">Betöltés...</div>
+    </div>
+
+    <a href="/blog.html" class="login-blog-more">Összes bejegyzés →</a>
   </div>
+
 </div>
 
 <div id="footer"></div>
 <script src="/js/footer.js"></script>
 <script src="/js/background.js"></script>
 <script src="/js/login.js"></script>
+<script>
+(async function () {
+  const grid = document.getElementById("loginBlogGrid");
+  const CAT_LABELS = { hir:"Hírek", ajanlo:"Ajánló", forditas:"Fordítás", kozosseg:"Közösség" };
+  const CAT_ICONS  = { hir:"📰", ajanlo:"📚", forditas:"✍️", kozosseg:"💬" };
+  try {
+    const res = await fetch("/api/blog?limit=6");
+    const posts = res.ok ? await res.json() : [];
+    if (!posts.length) {
+      grid.innerHTML = '<p style="color:#555;font-size:.88rem">Hamarosan érkeznek bejegyzések!</p>';
+      return;
+    }
+    grid.innerHTML = "";
+    posts.forEach(p => {
+      const cat  = CAT_LABELS[p.category] || p.category || "";
+      const icon = CAT_ICONS[p.category]  || "📝";
+      const date = p.created_at
+        ? new Date(p.created_at).toLocaleDateString("hu-HU", {year:"numeric",month:"long",day:"numeric"})
+        : "";
+      const a = document.createElement("a");
+      a.className = "login-blog-card";
+      a.href = `/blog-post.html?slug=${encodeURIComponent(p.slug)}`;
+      a.innerHTML = `
+        ${p.cover_url
+          ? `<img src="${p.cover_url}" class="login-blog-thumb" loading="lazy" alt="">`
+          : `<div class="login-blog-thumb-ph">${icon}</div>`}
+        <div class="login-blog-body">
+          <span class="login-blog-cat">${cat}</span>
+          <h3>${p.title||""}</h3>
+          <p>${p.excerpt||""}</p>
+          <div class="login-blog-meta">${date}</div>
+        </div>
+      `;
+      grid.appendChild(a);
+    });
+  } catch {
+    grid.innerHTML = '<p style="color:#555;font-size:.88rem">Nem sikerült betölteni.</p>';
+  }
+})();
+</script>
 </body>
 </html>

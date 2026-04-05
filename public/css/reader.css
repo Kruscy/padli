@@ -1,0 +1,359 @@
+/* ============================================================
+   reader.css – PadlizsanFanSub olvasó
+   ============================================================ */
+
+:root {
+  --topbar-h: 56px;
+  --bottombar-h: 64px;
+  --ui-bg: rgba(0,0,0,.88);
+  --btn-bg: #1e1e2e;
+  --btn-hover: #2a2a3e;
+  --accent: #7c3aed;
+}
+
+/* ── ALAP ────────────────────────────────────────────────── */
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: #000;
+  color: #fff;
+  font-family: system-ui, sans-serif;
+  overflow-x: hidden;
+}
+
+/* ── TOPBAR ──────────────────────────────────────────────── */
+
+.topbar {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: var(--topbar-h);
+  background: var(--ui-bg);
+  backdrop-filter: blur(8px);
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  padding: 0 16px;
+  gap: 12px;
+  z-index: 100;
+  transition: opacity .25s;
+}
+
+.topbar a, .topbar button {
+  background: var(--btn-bg);
+  color: #fff;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: .88rem;
+  white-space: nowrap;
+  transition: background .15s;
+}
+
+.topbar a:hover, .topbar button:hover { background: var(--btn-hover); }
+
+#mangaTitle {
+  text-align: center;
+  font-weight: 600;
+  font-size: .95rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#chapterNum {
+  text-align: right;
+  opacity: .75;
+  font-size: .82rem;
+  white-space: nowrap;
+}
+
+/* ── OLDALAK ─────────────────────────────────────────────── */
+
+#pages {
+  padding-top: calc(var(--topbar-h) + 14px);
+  padding-bottom: calc(var(--bottombar-h) + 14px);
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+/* Folyamatos mód */
+#pages.mode-scroll img {
+  width: 100%;
+  display: block;
+}
+
+/* Könyv mód – asztalon */
+#pages.mode-book {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 4px;
+  max-width: 100%;
+  padding-left: 60px;
+  padding-right: 60px;
+}
+
+#pages.mode-book .book-page {
+  flex: 1;
+  max-width: 50%;
+  display: none;
+}
+
+#pages.mode-book .book-page.visible {
+  display: block;
+}
+
+#pages.mode-book .book-page img {
+  width: 100%;
+  display: block;
+}
+
+/* ── KÖNYV NAV NYILAK ────────────────────────────────────── */
+
+.book-arrow {
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 48px;
+  height: 80px;
+  background: rgba(255,255,255,.06);
+  border: none;
+  color: #fff;
+  font-size: 1.4rem;
+  cursor: pointer;
+  border-radius: 8px;
+  z-index: 90;
+  transition: background .18s;
+  display: none;
+}
+
+.book-arrow:hover { background: rgba(255,255,255,.14); }
+.book-arrow.left  { left: 8px; }
+.book-arrow.right { right: 8px; }
+
+body.mode-book .book-arrow { display: flex; align-items: center; justify-content: center; }
+
+/* ── BOTTOMBAR ───────────────────────────────────────────── */
+
+.bottombar {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  height: var(--bottombar-h);
+  background: var(--ui-bg);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  z-index: 100;
+  transition: opacity .25s;
+}
+
+.bottombar-center {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.bottombar button {
+  background: var(--btn-bg);
+  color: #fff;
+  border: none;
+  padding: 10px 18px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: .88rem;
+  font-weight: 600;
+  transition: background .15s;
+  white-space: nowrap;
+}
+
+.bottombar button:hover { background: var(--btn-hover); }
+
+.bottombar button.active {
+  background: var(--accent);
+}
+
+#prevBtn, #nextBtn {
+  padding: 10px 20px;
+  font-size: .9rem;
+}
+
+/* Ikonos gombok */
+.btn-icon {
+  padding: 8px 12px !important;
+  font-size: 1.1rem !important;
+  min-width: 42px;
+}
+
+/* ── LAKAT OLDAL ─────────────────────────────────────────── */
+
+.lock-page {
+  text-align: center;
+  padding: 4rem 2rem;
+  color: #fff;
+  max-width: 420px;
+  margin: 70px auto 0;
+}
+
+.lock-page img { display: inline-block; margin-bottom: 1rem; }
+.lock-page h2  { margin-bottom: 1rem; }
+.lock-page p   { opacity: .8; margin-bottom: 1.5rem; }
+
+.lock-btn {
+  display: inline-block;
+  background: linear-gradient(135deg, #7c3aed, #5b21b6);
+  color: #fff;
+  padding: 12px 28px;
+  border-radius: 10px;
+  font-weight: 700;
+  text-decoration: none;
+  border: none;
+  cursor: pointer;
+  margin-bottom: 1rem;
+}
+
+.lock-back {
+  display: inline-block;
+  margin-top: 1rem;
+  background: none;
+  border: none;
+  color: #aaa;
+  text-decoration: underline;
+  font-size: .9rem;
+  cursor: pointer;
+}
+
+/* ── TELJES KÉPERNYŐ ─────────────────────────────────────── */
+
+body.fullscreen .topbar,
+body.fullscreen .bottombar {
+  opacity: 0;
+  pointer-events: none;
+}
+
+body.fullscreen #pages {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+body.fullscreen .book-arrow {
+  opacity: .4;
+}
+
+body.fullscreen .book-arrow:hover {
+  opacity: 1;
+}
+
+/* ── LAPOZÁS ANIMÁCIÓ (könyv mód) ────────────────────────── */
+
+.page-flip-enter {
+  animation: flipIn .3s ease forwards;
+}
+
+.page-flip-leave {
+  animation: flipOut .3s ease forwards;
+}
+
+@keyframes flipIn {
+  from { opacity: 0; transform: translateX(30px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes flipOut {
+  from { opacity: 1; transform: translateX(0); }
+  to   { opacity: 0; transform: translateX(-30px); }
+}
+
+/* ── BETÖLTÉS PLACEHOLDER ────────────────────────────────── */
+
+.img-placeholder {
+  width: 100%;
+  background: #111;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #333;
+  font-size: .8rem;
+  min-height: 200px;
+}
+
+/* ============================================================
+   MOBIL (@media max-width: 768px)
+   ============================================================ */
+
+@media (max-width: 768px) {
+
+  :root {
+    --topbar-h: 52px;
+    --bottombar-h: 72px;
+  }
+
+  .topbar {
+    padding: 0 10px;
+    gap: 6px;
+  }
+
+  .topbar a, .topbar button {
+    padding: 7px 10px;
+    font-size: .8rem;
+  }
+
+  #mangaTitle {
+    font-size: .82rem;
+  }
+
+  #chapterNum {
+    font-size: .72rem;
+  }
+
+  /* Nagyobb gombok mobilon */
+  .bottombar {
+    height: var(--bottombar-h);
+    padding: 0 10px;
+  }
+
+  .bottombar button {
+    padding: 12px 16px;
+    font-size: .9rem;
+    border-radius: 10px;
+  }
+
+  #prevBtn, #nextBtn {
+    padding: 13px 18px;
+    font-size: .95rem;
+  }
+
+  .btn-icon {
+    padding: 10px 13px !important;
+    font-size: 1.2rem !important;
+    min-width: 46px;
+  }
+
+  .bottombar-center {
+    gap: 7px;
+  }
+
+  /* Könyv mód mobilon: egy oldal */
+  #pages.mode-book {
+    padding-left: 0;
+    padding-right: 0;
+    display: block;
+  }
+
+  #pages.mode-book .book-page.visible {
+    display: block;
+    max-width: 100%;
+  }
+
+  .book-arrow {
+    width: 44px;
+    height: 100px;
+    font-size: 1.6rem;
+  }
+}

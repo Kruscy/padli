@@ -2,7 +2,7 @@
 <html lang="hu">
 <head>
 <meta charset="UTF-8">
-<title>PadlizsanFanSub – Admin</title>
+<title>PadlizsanFanSub - Admin</title>
 <link rel="stylesheet" href="/css/sidebar.css">
 <link rel="stylesheet" href="/css/admin.css">
 <link rel="stylesheet" href="/css/main.css">
@@ -22,6 +22,8 @@
   <button class="tab-btn active" data-tab="tab-users">👤 Felhasználók</button>
   <button class="tab-btn" data-tab="tab-announcements">📢 Üzenőfal kiírások</button>
   <button class="tab-btn" data-tab="tab-mangas">📚 Mangák</button>
+  <button class="tab-btn" data-tab="tab-blog">✍️ Blog</button>
+  <button class="tab-btn" data-tab="tab-padli">🤖 Padli AI</button>
 </div>
 
 <div id="tab-users" class="tab-panel active">
@@ -50,12 +52,260 @@
   <div id="mangaAdminList"></div>
 </div>
 
+<div id="tab-blog" class="tab-panel">
+  <!-- ── BLOG SZERKESZTŐ ── -->
+  <div class="blog-editor-layout">
+
+    <!-- BAL: szerkesztő -->
+    <div class="blog-editor-left">
+
+      <!-- Bejegyzés lista / új gomb -->
+      <div class="blog-editor-header">
+        <h2>Blog bejegyzések</h2>
+        <button class="blog-new-btn" id="blogNewBtn">➕ Új bejegyzés</button>
+      </div>
+      <div class="blog-post-list" id="blogPostList">
+        <div class="blog-list-loading">Betöltés...</div>
+      </div>
+
+      <!-- Szerkesztő form -->
+      <div class="blog-form-wrap" id="blogFormWrap" style="display:none">
+        <div class="blog-form-title-bar">
+          <h3 id="blogFormHeading">Új bejegyzés</h3>
+          <button class="blog-form-close" id="blogFormClose">✕ Bezárás</button>
+        </div>
+
+        <div class="blog-form">
+          <div class="blog-form-row">
+            <div class="blog-form-group">
+              <label>Cím *</label>
+              <input id="bTitle" type="text" placeholder="Bejegyzés címe" />
+            </div>
+            <div class="blog-form-group">
+              <label>Slug * <small>(URL-ben jelenik meg)</small></label>
+              <input id="bSlug" type="text" placeholder="pl. demon-slayer-velemeny" />
+            </div>
+          </div>
+
+          <div class="blog-form-row">
+            <div class="blog-form-group">
+              <label>Kategória</label>
+              <select id="bCategory">
+                <option value="hir">📰 Hírek</option>
+                <option value="ajanlo">📚 Ajánló</option>
+                <option value="forditas">✍️ Fordítás</option>
+                <option value="kozosseg">💬 Közösség</option>
+              </select>
+            </div>
+            <div class="blog-form-group">
+              <label>Szerző</label>
+              <input id="bAuthor" type="text" placeholder="Padlizsán Fansub" />
+            </div>
+            <div class="blog-form-group">
+              <label>Tagek <small>(vesszővel elválasztva)</small></label>
+              <input id="bTags" type="text" placeholder="manga, ajánló, isekai" />
+            </div>
+          </div>
+
+          <div class="blog-form-group">
+            <label>Rövid leírás (excerpt)</label>
+            <textarea id="bExcerpt" rows="2" placeholder="1-2 mondat ami a listában jelenik meg..."></textarea>
+          </div>
+
+          <!-- Borítókép -->
+          <div class="blog-form-group">
+            <label>Borítókép</label>
+            <div class="blog-cover-area">
+              <div class="blog-cover-preview" id="bCoverPreview">
+                <img id="bCoverImg" src="" alt="" style="display:none" />
+                <span id="bCoverEmpty">Nincs kép kiválasztva</span>
+              </div>
+              <div class="blog-cover-actions">
+                <button class="blog-cover-btn" id="bUploadBtn">📤 Feltöltés</button>
+                <button class="blog-cover-btn" id="bPickBtn">🖼️ Galériából</button>
+                <button class="blog-cover-btn blog-cover-clear" id="bClearCover" style="display:none">✕ Törlés</button>
+              </div>
+              <input type="file" id="bCoverFile" accept="image/*" hidden />
+              <input type="hidden" id="bCoverUrl" />
+            </div>
+          </div>
+
+          <!-- Tartalom editor -->
+          <div class="blog-form-group">
+            <label>Tartalom *</label>
+            <div class="blog-editor-toolbar" id="editorToolbar">
+              <button type="button" data-cmd="bold" title="Félkövér"><b>B</b></button>
+              <button type="button" data-cmd="italic" title="Dőlt"><i>I</i></button>
+              <button type="button" data-cmd="underline" title="Aláhúzott"><u>U</u></button>
+              <span class="toolbar-sep"></span>
+              <button type="button" data-cmd="h2" title="Alcím">H2</button>
+              <button type="button" data-cmd="h3" title="Kisebb alcím">H3</button>
+              <span class="toolbar-sep"></span>
+              <button type="button" data-cmd="insertUnorderedList" title="Lista">• Lista</button>
+              <button type="button" data-cmd="insertOrderedList" title="Számozott lista">1. Lista</button>
+              <span class="toolbar-sep"></span>
+              <button type="button" data-cmd="blockquote" title="Idézet">❝ Idézet</button>
+              <button type="button" data-cmd="link" title="Link">🔗 Link</button>
+              <button type="button" data-cmd="insertImage" title="Kép beillesztés">🖼️ Kép</button>
+              <span class="toolbar-sep"></span>
+              <button type="button" data-cmd="removeFormat" title="Formázás törlése">✕ Törlés</button>
+            </div>
+            <div id="blogContentEditor" class="blog-content-editor" contenteditable="true"></div>
+          </div>
+
+          <div class="blog-form-row blog-form-actions">
+            <label class="blog-publish-toggle">
+              <input type="checkbox" id="bPublished" />
+              <span>Közzétéve (publikus)</span>
+            </label>
+            <div class="blog-form-btns">
+              <button class="blog-save-draft" id="bSaveDraft">💾 Mentés vázlatként</button>
+              <button class="blog-save-publish" id="bSavePublish">🚀 Közzététel</button>
+            </div>
+          </div>
+          <div id="blogSaveMsg" class="blog-save-msg"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- JOBB: előnézet -->
+    <div class="blog-preview-panel" id="blogPreviewPanel" style="display:none">
+      <div class="blog-preview-header">
+        <span>👁️ Előnézet</span>
+        <button class="blog-preview-close" id="blogPreviewClose">✕</button>
+      </div>
+      <div class="blog-preview-content" id="blogPreviewContent"></div>
+    </div>
+  </div>
+
+  <!-- Galériából választás modal -->
+  <div id="blogGalleryModal" class="blog-gallery-modal" style="display:none">
+    <div class="blog-gallery-backdrop" id="galleryBackdrop"></div>
+    <div class="blog-gallery-box">
+      <div class="blog-gallery-header">
+        <h3>🖼️ Képek az uploads mappából</h3>
+        <button id="galleryClose">✕</button>
+      </div>
+      <div class="blog-gallery-upload">
+        <label for="galleryUploadFile" class="gallery-upload-label">
+          📤 Új kép feltöltése ide
+        </label>
+        <input type="file" id="galleryUploadFile" accept="image/*" hidden />
+      </div>
+      <div class="blog-gallery-grid" id="blogGalleryGrid">
+        <div class="blog-list-loading">Betöltés...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="tab-padli" class="tab-panel">
+  <div class="padli-admin-layout">
+
+    <!-- Oldalsáv: szekció navigáció -->
+    <div class="padli-admin-nav">
+      <button class="padli-nav-btn active" data-section="sec-config">⚙️ Beállítások</button>
+      <button class="padli-nav-btn" data-section="sec-replies">💬 Válasz variációk</button>
+      <button class="padli-nav-btn" data-section="sec-tags">🏷️ Tag szavak</button>
+      <button class="padli-nav-btn" data-section="sec-genres">🎭 Genre szavak</button>
+      <button class="padli-nav-btn" data-section="sec-characters">👥 Karakterek</button>
+    </div>
+
+    <!-- Tartalom -->
+    <div class="padli-admin-content">
+
+      <!-- ── BEÁLLÍTÁSOK ── -->
+      <div class="padli-section active" id="sec-config">
+        <div class="padli-section-header">
+          <h2>⚙️ Bot beállítások</h2>
+          <button class="padli-reload-btn" id="padliReloadBtn">🔄 Config újratöltés</button>
+        </div>
+        <div id="padliConfigList" class="padli-config-list">
+          <div class="padli-loading">Betöltés...</div>
+        </div>
+      </div>
+
+      <!-- ── VÁLASZ VARIÁCIÓK ── -->
+      <div class="padli-section" id="sec-replies">
+        <div class="padli-section-header">
+          <h2>💬 Válasz variációk</h2>
+          <p class="padli-section-desc">Minél több variáció, annál változatosabb a bot. A bot véletlenszerűen választ egyet.</p>
+        </div>
+
+        <!-- Új válasz hozzáadása -->
+        <div class="padli-reply-add">
+          <select id="replyTypeSelect" class="padli-select">
+            <option value="noData">❓ Nincs adat</option>
+            <option value="notFound">🔍 Nem található nálunk</option>
+            <option value="found">✅ Megtalálva</option>
+            <option value="offTopic">🚫 Off-topic</option>
+            <option value="fallback">⏳ Ollama lassú</option>
+          </select>
+          <input id="replyTextInput" type="text" placeholder='Pl. "Hmm, erre nincs infóm sajnos."' class="padli-input" />
+          <button id="replyAddBtn" class="padli-btn-add">➕ Hozzáadás</button>
+        </div>
+
+        <div class="padli-reply-hint">
+          Változók: <code>{term}</code> = keresett cím, <code>{title}</code> = talált cím, <code>{chaps}</code> = fejezetszám
+        </div>
+
+        <div id="padliRepliesList" class="padli-replies-list">
+          <div class="padli-loading">Betöltés...</div>
+        </div>
+      </div>
+
+      <!-- ── TAG SZAVAK ── -->
+      <div class="padli-section" id="sec-tags">
+        <div class="padli-section-header">
+          <h2>🏷️ Tag → szavak mapping</h2>
+          <p class="padli-section-desc">Minden tag mellé megadhatod milyen magyar szavakra reagáljon a bot. Ha valaki "vámpíros mangát" kér, a "vampire" tag szavai között legyen "vampir".</p>
+        </div>
+        <div class="padli-tag-search-wrap">
+          <input id="tagSearchInput" type="text" placeholder="🔍 Tag keresése..." class="padli-input" />
+        </div>
+        <div id="padliTagsList" class="padli-tags-list">
+          <div class="padli-loading">Betöltés...</div>
+        </div>
+      </div>
+
+      <!-- ── GENRE SZAVAK ── -->
+      <div class="padli-section" id="sec-genres">
+        <div class="padli-section-header">
+          <h2>🎭 Genre → szavak mapping</h2>
+          <p class="padli-section-desc">A DB-ben lévő genre-khez rendelhetsz magyar szavakat. Ha valaki "romantikus mangát" kér, a "Romance" genre szavai között legyen "romantikus". Ha üres, a statikus config szavai érvényesek.</p>
+        </div>
+        <div class="padli-tag-search-wrap">
+          <input id="genreSearchInput" type="text" placeholder="🔍 Genre keresése..." class="padli-input" />
+        </div>
+        <div id="padliGenresList" class="padli-tags-list">
+          <div class="padli-loading">Betöltés...</div>
+        </div>
+      </div>
+
+      <!-- ── KARAKTEREK ── -->
+      <div class="padli-section" id="sec-characters">
+        <div class="padli-section-header">
+          <h2>👥 Kitalált karakterek és történetek</h2>
+          <p class="padli-section-desc">Ezeket az Ollama megkapja rendszer promptként – így tud róluk beszélni és belőlük dolgozni.</p>
+          <button class="padli-btn-add" id="charAddBtn">➕ Új karakter</button>
+        </div>
+        <div id="padliCharList" class="padli-char-list">
+          <div class="padli-loading">Betöltés...</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
 <div id="footer"></div>
 <script src="/js/footer.js"></script>
 <script type="module" src="/js/layout-loader.js"></script>
 <script src="/js/sidebar.js"></script>
 <script src="/js/auth-check.js"></script>
 <script src="/js/admin-mangak.js"></script>
+<script src="/js/admin-blog.js"></script>
+<script src="/js/admin-padli.js"></script>
 
 </body>
 </html>

@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Blog – PadlizsanFanSub | Magyar manga fordítások, hírek, ajánlók</title>
+  <meta name="description" content="A PadlizsanFanSub blogja – manga ajánlók, fordítói hírek, új fejezetek, és minden ami a magyar manga közösséget érdekli.">
+  <meta name="keywords" content="manga blog magyarul, manga ajánló, manga hírek, magyar manga fordítás, padlizsanfansub blog">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://padlizsanfansub.hu/blog.html">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Blog – PadlizsanFanSub">
+  <meta property="og:description" content="Manga ajánlók, fordítói hírek és közösségi tartalmak magyarul.">
+  <meta property="og:url" content="https://padlizsanfansub.hu/blog.html">
+  <meta property="og:image" content="https://padlizsanfansub.hu/assets/favico.png">
+  <meta property="og:locale" content="hu_HU">
+  <meta property="og:site_name" content="PadlizsanFanSub">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Blog – PadlizsanFanSub">
+  <meta name="twitter:description" content="Manga ajánlók, fordítói hírek és közösségi tartalmak magyarul.">
+
+  <!-- Strukturált adat -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Blog",
+    "name": "PadlizsanFanSub Blog",
+    "description": "Magyar manga fordítások, ajánlók és hírek",
+    "url": "https://padlizsanfansub.hu/blog.html",
+    "publisher": {
+      "@type": "Organization",
+      "name": "PadlizsanFanSub",
+      "url": "https://padlizsanfansub.hu",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://padlizsanfansub.hu/assets/favico.png"
+      }
+    },
+    "inLanguage": "hu"
+  }
+  </script>
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favico.png">
+  <link rel="stylesheet" href="/css/header.css">
+  <link rel="stylesheet" href="/css/sidebar.css">
+  <link rel="stylesheet" href="/css/footer.css">
+  <link rel="stylesheet" href="/css/blog.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+
+</head>
+<body>
+
+<nav class="blog-nav">
+  <a href="/" class="blog-nav-logo">🍆 PadlizsanFanSub</a>
+  <div class="blog-nav-right" id="blogNavRight">
+    <!-- JS tölti fel -->
+  </div>
+</nav>
+
+<main class="blog-main">
+  <div class="blog-hero">
+    <div class="blog-hero-inner">
+      <span class="blog-eyebrow">📝 PadlizsanFanSub</span>
+      <h1>Blog</h1>
+      <p>Manga ajánlók, fordítói hírek és közösségi tartalmak – mindent megtalálsz itt magyarul.</p>
+    </div>
+  </div>
+
+  <div class="blog-container">
+    <!-- Kategória szűrő -->
+    <div class="blog-filters" id="blogFilters">
+      <button class="filter-btn active" data-cat="">Minden</button>
+      <button class="filter-btn" data-cat="ajanlo">Ajánló</button>
+      <button class="filter-btn" data-cat="hir">Hírek</button>
+      <button class="filter-btn" data-cat="forditas">Fordítás</button>
+      <button class="filter-btn" data-cat="kozosseg">Közösség</button>
+    </div>
+
+    <!-- Kiemelt bejegyzés -->
+    <div id="featuredPost" class="blog-featured"></div>
+
+    <!-- Bejegyzés lista -->
+    <div id="blogGrid" class="blog-grid"></div>
+
+    <!-- Betöltés jelző -->
+    <div id="blogLoading" class="blog-loading">
+      <div class="blog-spinner"></div>
+    </div>
+
+    <!-- Üres állapot -->
+    <div id="blogEmpty" class="blog-empty hidden">
+      <p>📭 Még nincsenek bejegyzések ebben a kategóriában.</p>
+    </div>
+  </div>
+</main>
+
+<div id="footer"></div>
+<script src="/js/footer.js"></script>
+<script src="/js/blog.js"></script>
+
+</body>
+</html>
