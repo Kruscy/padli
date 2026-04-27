@@ -37,6 +37,8 @@ body {
   padding: 0 16px;
   gap: 12px;
   z-index: 100;
+  opacity: 0;
+  pointer-events: none;
   transition: opacity .25s;
 }
 
@@ -151,6 +153,8 @@ body.mode-book .book-arrow { display: flex; align-items: center; justify-content
   justify-content: space-between;
   padding: 0 16px;
   z-index: 100;
+  opacity: 0;
+  pointer-events: none;
   transition: opacity .25s;
 }
 

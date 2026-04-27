@@ -1,0 +1,109 @@
+<!-- ============================================================
+     PATREON SETTINGS SECTION - DEBUG VERZIÓ
+     Add hozzá a settings.html-hez
+     ============================================================ -->
+
+<div class="settings-section">
+  <h3>🎨 Patreon Integráció</h3>
+  
+  <!-- Nem csatlakoztatva -->
+  <div id="patreon-disconnected" class="patreon-card">
+    <p>Patreon fiókod nincs összekapcsolva.</p>
+    <button id="patreonConnectBtn" class="btn btn-primary">
+      💜 Patreon csatlakoztatás
+    </button>
+  </div>
+  
+  <!-- Csatlakoztatva -->
+  <div id="patreon-connected" class="patreon-card hidden">
+    <div class="patreon-info">
+      <div class="info-row">
+        <span class="label">Státusz:</span>
+        <span id="patreonActive" class="value">—</span>
+      </div>
+      <div class="info-row">
+        <span class="label">Tier:</span>
+        <span id="patreonTier" class="value">—</span>
+      </div>
+    </div>
+    <button id="patreonDisconnectBtn" class="btn btn-danger">
+      Leválasztás
+    </button>
+  </div>
+  
+  <!-- Debug box auto megjelenik jobb alsó sarokban -->
+</div>
+
+<!-- Script csere az eredeti helyén -->
+<script src="/js/patreon-settings-debug.js"></script>
+
+<!-- ============================================================
+     CSS (add hozzá a styles-hoz)
+     ============================================================ -->
+
+<style>
+.patreon-card {
+  background: rgba(124, 58, 237, 0.1);
+  border: 1px solid rgba(124, 58, 237, 0.3);
+  border-radius: 8px;
+  padding: 20px;
+  margin-top: 10px;
+}
+
+.patreon-card.hidden {
+  display: none;
+}
+
+.patreon-info {
+  margin-bottom: 15px;
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.info-row:last-child {
+  border-bottom: none;
+}
+
+.info-row .label {
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.info-row .value {
+  color: #fff;
+}
+
+.btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.btn-primary {
+  background: #7c3aed;
+  color: white;
+}
+
+.btn-primary:hover {
+  background: #6d28d9;
+}
+
+.btn-danger {
+  background: #ef4444;
+  color: white;
+}
+
+.btn-danger:hover {
+  background: #dc2626;
+}
+
+/* Debug box már a JS-ben van inline style-al */
+</style>

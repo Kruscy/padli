@@ -230,14 +230,14 @@
   <div class="login-right">
     <div class="login-right-header">
       <h2>📝 Legújabb a blogról</h2>
-      <p>Nem akarsz bejelentkezni? <a href="/blog.html">Csak olvasnál? →</a></p>
+      <p>Nem akarsz bejelentkezni? <a href="/blog/">Csak olvasnál? →</a></p>
     </div>
 
     <div class="login-blog-grid" id="loginBlogGrid">
       <div class="login-blog-loading">Betöltés...</div>
     </div>
 
-    <a href="/blog.html" class="login-blog-more">Összes bejegyzés →</a>
+    <a href="/blog/" class="login-blog-more">Összes bejegyzés →</a>
   </div>
 
 </div>
@@ -267,7 +267,7 @@
         : "";
       const a = document.createElement("a");
       a.className = "login-blog-card";
-      a.href = `/blog-post.html?slug=${encodeURIComponent(p.slug)}`;
+      a.href = `/blog/${p.slug}.html`;
       a.innerHTML = `
         ${p.cover_url
           ? `<img src="${p.cover_url}" class="login-blog-thumb" loading="lazy" alt="">`

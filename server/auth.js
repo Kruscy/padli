@@ -43,7 +43,8 @@ export async function login(req, res) {
   req.session.user = {
     id: user.id,
     username: user.username,
-    is_admin: user.is_admin
+    avatar: user.avatar,
+    tier: user.tier
   };
 await syncPatreonForUser(user.id);
   res.json(req.session.user);

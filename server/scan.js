@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { pool } from "./db.js";
+import { scanMetadata } from "./metadata-scan.js";
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -242,6 +243,7 @@ await pool.query(
 
 scan()
   .then(() => setUnlockTimes())
+.then(() => scanMetadata())
   .catch(err => {
     console.error("❌ Scan failed:", err);
     process.exit(1);

@@ -393,12 +393,4 @@ export async function refreshMetadataForManga(mangaId, anilistId = null) {
   return { anilist_id: media.id, title: media.title?.english || media.title?.romaji };
 }
 /* ================= RUN ================= */
-
-scanMetadata()
-  .catch(err => {
-    console.error("❌ Fatal error:", err);
-    process.exit(1);
-  })
-  .finally(() => {
-    pool.end();
-  });
+export { scanMetadata };

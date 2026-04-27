@@ -164,6 +164,7 @@ const config = {
     "slime":"That Time I Got Reincarnated as a Slime",
     "vinland":"Vinland Saga","op":"One Piece",
     "tb":"Tokyo Revengers","tbate":"The Beginning After the End",
+    "tbate":"The Beginning After the End"
   },
 
   synonyms: {

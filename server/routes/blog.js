@@ -1,6 +1,7 @@
 // server/routes/blog.js
 import express from "express";
 import { pool } from "../db.js";
+import { generateStaticPost, regenerateIndex } from "../blog-static-generator.js";
 
 const router = express.Router();
 
@@ -85,7 +86,10 @@ router.post("/", requireAdmin, async (req, res) => {
       [slug, title, excerpt||null, content||null, cover_url||null,
        category||"hir", tags||null, author||null, published||false]
     );
-    res.status(201).json(rows[0]);
+    const post = rows[0];
+    res.status(201).json(post);
+    // Statikus HTML generálás közzétételkor
+    if (post.published) generateStaticPost(post.slug).catch(console.error);
   } catch (err) {
     if (err.code === "23505") return res.status(409).json({ error: "Ez a slug már létezik" });
     console.error("Blog create error:", err);
@@ -110,7 +114,10 @@ router.put("/:slug", requireAdmin, async (req, res) => {
        req.params.slug]
     );
     if (!rows.length) return res.status(404).json({ error: "Nem található" });
-    res.json(rows[0]);
+    const updated = rows[0];
+    res.json(updated);
+    // Statikus HTML újragenerálás – közzétett vagy visszavont poszt esetén is
+    generateStaticPost(updated.slug).catch(console.error);
   } catch (err) {
     console.error("Blog update error:", err);
     res.status(500).json({ error: "Szerver hiba" });
@@ -125,9 +132,22 @@ router.delete("/:slug", requireAdmin, async (req, res) => {
     );
     if (!rowCount) return res.status(404).json({ error: "Nem található" });
     res.json({ ok: true });
+    // Törölt poszt statikus fájljának törlése + index frissítés
+    generateStaticPost(req.params.slug).catch(console.error);
   } catch (err) {
     console.error("Blog delete error:", err);
     res.status(500).json({ error: "Szerver hiba" });
+  }
+});
+
+/* ── ADMIN: ÖSSZES STATIKUS OLDAL ÚJRAGENERÁLÁSA ────────── */
+router.post("/regenerate-static", requireAdmin, async (req, res) => {
+  try {
+    const { regenerateAllPosts } = await import("../blog-static-generator.js");
+    const count = await regenerateAllPosts();
+    res.json({ ok: true, count, message: count + " statikus blog oldal újragenerálva" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

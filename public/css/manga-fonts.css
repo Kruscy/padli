@@ -1,0 +1,95 @@
+/* ============================================================
+   manga-fonts.css - Manga fontok
+   Fájlok helye: /opt/padli/public/fonts/
+   ============================================================ */
+
+@font-face {
+  font-family: 'Wild Words';
+  src: url('/fonts/WildWords.ttf') format('truetype');
+  font-weight: normal;
+ font-style: normal;
+}
+
+@font-face {
+  font-family: 'Mangaka';
+  src: url('/fonts/Mangaka.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Bushido';
+  src: url('/fonts/bushido.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Tamagoyaki';
+  src: url('/fonts/Tamagoyaki.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'ScaryZombie';
+  src: url('/fonts/ScaryZombie.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'animehun';
+  src: url('/fonts/animehun.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'DarkSilence';
+  src: url('/fonts/DarkSilence.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'DemonSker';
+  src: url('/fonts/DemonSker.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'IrohsnaRabka';
+  src: url('/fonts/IrohsnaRabka.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'NightmarePills';
+  src: url('/fonts/NightmarePills.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'RuthlessSavage';
+  src: url('/fonts/RuthlessSavage.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'The Last Shuriken';
+  src: url('/fonts/The Last Shuriken.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'WildStrokes';
+  src: url('/fonts/WildStrokes.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}

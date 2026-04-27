@@ -19,6 +19,7 @@
           if (btn.dataset.section === "sec-replies")    loadReplies();
           if (btn.dataset.section === "sec-tags")       loadTags();
           if (btn.dataset.section === "sec-genres")     loadGenres();
+          if (btn.dataset.section === "sec-aliases")    loadAliases();
           if (btn.dataset.section === "sec-characters") loadCharacters();
         }
       }
@@ -181,7 +182,7 @@
           <button class="padli-btn-del" data-id="${r.id}">🗑️</button>
         `;
 
-        // Szöveg mentés
+        // Szöveg mentés (debounced)
         const inp = row.querySelector("input");
         let saveTimer;
         inp.addEventListener("input", () => {
@@ -233,7 +234,6 @@
         body: JSON.stringify({ type, text })
       });
       document.getElementById("replyTextInput").value = "";
-      // Újratölt
       const el = document.getElementById("padliRepliesList");
       el.innerHTML = '<div class="padli-loading">Betöltés...</div>';
       await loadReplies();
@@ -276,7 +276,6 @@
       </div>
     `;
 
-    // Szavak megjelenítése
     const wordsWrap = div.querySelector(`#words-${CSS.escape(tag.tag_name)}`);
     let currentWords = [...tag.words];
 
@@ -296,7 +295,6 @@
 
     renderWords();
 
-    // Mentés
     div.querySelector(".padli-tag-save-btn").addEventListener("click", async btn => {
       const input = div.querySelector(".padli-tag-word-input");
       const newWords = input.value.split(",").map(w => w.trim().toLowerCase()).filter(Boolean);
@@ -319,7 +317,6 @@
       } catch { btn.target.textContent = "❌ Hiba"; }
     });
 
-    // Nyitás/zárás
     div.querySelector(".padli-tag-header").addEventListener("click", () => {
       div.querySelector(".padli-tag-body").classList.toggle("open");
       div.querySelector(".padli-tag-toggle").textContent =
@@ -329,7 +326,6 @@
     return div;
   }
 
-  // Tag keresés
   document.getElementById("tagSearchInput")?.addEventListener("input", e => {
     const q = e.target.value.toLowerCase().trim();
     const el = document.getElementById("padliTagsList");
@@ -429,6 +425,171 @@
     renderGenres(filtered, el);
   });
 
+  /* ── ALIAS-OK ─────────────────────────────────────────── */
+  let allAliases = [];
+
+  async function loadAliases() {
+    const el = document.getElementById("padliAliasesList");
+    if (!el) return;
+    try {
+      const res = await fetch(API + "/aliases");
+      allAliases = await res.json();
+      renderAliases(allAliases, el);
+    } catch { el.innerHTML = '<div class="padli-loading">Hiba a betöltésnél.</div>'; }
+  }
+
+  function renderAliases(aliases, el) {
+    el.innerHTML = "";
+
+    if (!aliases.length) {
+      el.innerHTML = '<div class="padli-loading" style="padding:2rem;text-align:center">Még nincs alias felvéve.</div>';
+      return;
+    }
+
+    aliases.forEach(a => el.appendChild(makeAliasRow(a)));
+  }
+
+  function makeAliasRow(a) {
+    const row = document.createElement("div");
+    row.className = "padli-alias-row" + (a.active ? "" : " padli-alias-inactive");
+    row.dataset.id = a.id;
+
+    row.innerHTML = `
+      <div class="padli-alias-cell padli-alias-short">
+        <span class="padli-alias-badge">${esc(a.alias)}</span>
+      </div>
+      <div class="padli-alias-cell padli-alias-arrow">→</div>
+      <div class="padli-alias-cell padli-alias-title-wrap">
+        <input class="padli-input padli-alias-title-input"
+          type="text" value="${esc(a.title)}" placeholder="Teljes cím" />
+      </div>
+      <div class="padli-alias-cell padli-alias-note-wrap">
+        <input class="padli-input padli-alias-note-input"
+          type="text" value="${esc(a.note || "")}" placeholder="Megjegyzés (opcionális)" />
+      </div>
+      <div class="padli-alias-cell padli-alias-actions">
+        <button class="padli-alias-save-btn padli-btn-add" title="Mentés">💾</button>
+        <button class="padli-alias-toggle-btn padli-btn-edit" title="${a.active ? "Kikapcsol" : "Bekapcsol"}">
+          ${a.active ? "😶" : "✅"}
+        </button>
+        <button class="padli-alias-del-btn padli-btn-del" title="Törlés">🗑️</button>
+      </div>
+    `;
+
+    const titleInp = row.querySelector(".padli-alias-title-input");
+    const noteInp  = row.querySelector(".padli-alias-note-input");
+
+    // Mentés
+    row.querySelector(".padli-alias-save-btn").addEventListener("click", async btn => {
+      const title = titleInp.value.trim();
+      if (!title) { alert("A cím kötelező!"); return; }
+
+      try {
+        await fetch(`${API}/aliases/${a.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title, note: noteInp.value.trim() || null })
+        });
+        btn.target.textContent = "✅";
+        setTimeout(() => { btn.target.textContent = "💾"; }, 2000);
+      } catch { btn.target.textContent = "❌"; }
+    });
+
+    // Toggle aktív
+    row.querySelector(".padli-alias-toggle-btn").addEventListener("click", async btn => {
+      const newActive = !a.active;
+      try {
+        await fetch(`${API}/aliases/${a.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ active: newActive })
+        });
+        a.active = newActive;
+        row.classList.toggle("padli-alias-inactive", !newActive);
+        btn.target.textContent = newActive ? "😶" : "✅";
+        btn.target.title = newActive ? "Kikapcsol" : "Bekapcsol";
+      } catch { alert("Hiba!"); }
+    });
+
+    // Törlés
+    row.querySelector(".padli-alias-del-btn").addEventListener("click", async () => {
+      if (!confirm(`Törlöd a "${a.alias}" → "${a.title}" aliast?`)) return;
+      try {
+        await fetch(`${API}/aliases/${a.id}`, { method: "DELETE" });
+        row.remove();
+        allAliases = allAliases.filter(x => x.id !== a.id);
+      } catch { alert("Hiba!"); }
+    });
+
+    return row;
+  }
+
+  // Alias keresés
+  document.getElementById("aliasSearchInput")?.addEventListener("input", e => {
+    const q = e.target.value.toLowerCase().trim();
+    const el = document.getElementById("padliAliasesList");
+    const filtered = q
+      ? allAliases.filter(a =>
+          a.alias.toLowerCase().includes(q) ||
+          a.title.toLowerCase().includes(q) ||
+          (a.note || "").toLowerCase().includes(q))
+      : allAliases;
+    renderAliases(filtered, el);
+  });
+
+  // Új alias hozzáadása
+  document.getElementById("aliasAddBtn")?.addEventListener("click", async () => {
+    const aliasInp = document.getElementById("newAliasShort");
+    const titleInp = document.getElementById("newAliasTitle");
+    const noteInp  = document.getElementById("newAliasNote");
+
+    const alias = aliasInp?.value.trim().toLowerCase().replace(/\s+/g, "");
+    const title = titleInp?.value.trim();
+    const note  = noteInp?.value.trim() || null;
+
+    if (!alias || !title) {
+      alert("A rövidítés és a teljes cím is kötelező!");
+      return;
+    }
+
+    try {
+      const res = await fetch(API + "/aliases", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ alias, title, note })
+      });
+      const newAlias = await res.json();
+
+      if (newAlias.error) { alert(newAlias.error); return; }
+
+      allAliases.push(newAlias);
+
+      // Hozzáadjuk a listához azonnal, újratöltés nélkül
+      const el = document.getElementById("padliAliasesList");
+      // Ha az "üres" placeholder volt ott, töröljük
+      const empty = el.querySelector(".padli-loading");
+      if (empty) empty.remove();
+      el.appendChild(makeAliasRow(newAlias));
+
+      // Mezők ürítése
+      aliasInp.value = "";
+      titleInp.value = "";
+      if (noteInp) noteInp.value = "";
+
+      // Collapse form
+      document.getElementById("aliasAddForm")?.classList.remove("open");
+
+    } catch { alert("Hiba!"); }
+  });
+
+  // Új alias form toggle
+  document.getElementById("aliasAddToggleBtn")?.addEventListener("click", () => {
+    document.getElementById("aliasAddForm")?.classList.toggle("open");
+  });
+  document.getElementById("aliasAddCancelBtn")?.addEventListener("click", () => {
+    document.getElementById("aliasAddForm")?.classList.remove("open");
+  });
+
   /* ── KARAKTEREK ───────────────────────────────────────── */
   async function loadCharacters() {
     const el = document.getElementById("padliCharList");
@@ -442,10 +603,10 @@
   function renderCharacters(chars, el) {
     el.innerHTML = "";
 
-    // Hozzáadás form
     const addForm = document.createElement("div");
     addForm.className = "padli-char-add-form";
     addForm.id = "charAddForm";
+
     addForm.innerHTML = `
       <strong style="color:#e0e0f0;font-size:.9rem">➕ Új karakter</strong>
       <input type="text" id="newCharName" placeholder="Karakter neve *" class="padli-input" />
@@ -484,7 +645,6 @@
       } catch { alert("Hiba!"); }
     });
 
-    // Karakterek renderelése
     chars.forEach(char => el.appendChild(makeCharCard(char)));
   }
 
@@ -526,13 +686,11 @@
       </div>
     `;
 
-    // Történetek megjelenítése
     const storiesEl = div.querySelector(`#storiesOf-${char.id}`);
     (char.stories || []).forEach(story => {
       storiesEl.appendChild(makeStoryItem(story));
     });
 
-    // Karakter mentés
     div.querySelector(".padli-char-save-btn").addEventListener("click", async () => {
       const desc = div.querySelector(`#charDesc-${char.id}`)?.value.trim();
       const pers = div.querySelector(`#charPers-${char.id}`)?.value.trim();
@@ -546,7 +704,6 @@
       setTimeout(() => { btn.textContent = "💾 Karakter mentése"; }, 2000);
     });
 
-    // Toggle aktív
     div.querySelector(".padli-btn-edit").addEventListener("click", async btn => {
       const newActive = !char.active;
       await fetch(`${API}/characters/${char.id}`, {
@@ -559,14 +716,12 @@
       btn.target.textContent = newActive ? "😶 Kikapcsol" : "✅ Bekapcsol";
     });
 
-    // Törlés
     div.querySelector(".padli-btn-del").addEventListener("click", async () => {
       if (!confirm(`Törlöd "${char.name}" karaktert az összes történetével?`)) return;
       await fetch(`${API}/characters/${char.id}`, { method: "DELETE" });
       div.remove();
     });
 
-    // Új történet toggle
     div.querySelector(".story-add-toggle").addEventListener("click", () => {
       const form = div.querySelector(`#storyAdd-${char.id}`);
       form.style.display = form.style.display === "none" ? "flex" : "none";
@@ -577,7 +732,6 @@
       div.querySelector(`#storyAdd-${char.id}`).style.display = "none";
     });
 
-    // Történet mentés
     div.querySelector(".story-save-btn").addEventListener("click", async () => {
       const title   = div.querySelector(`#storyTitle-${char.id}`)?.value.trim();
       const content = div.querySelector(`#storyContent-${char.id}`)?.value.trim();
@@ -595,7 +749,6 @@
         div.querySelector(`#storyContent-${char.id}`).value = "";
         div.querySelector(`#storyAdd-${char.id}`).style.display = "none";
 
-        // Számláló frissítés
         const countEl = div.querySelector(".padli-stories-label span");
         const current = parseInt(countEl.textContent.match(/\d+/)?.[0] || "0");
         countEl.textContent = `📖 Történetek (${current + 1})`;

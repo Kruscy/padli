@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#080810">
+  <title>Képszerkesztő - PadlizsanFanSub</title>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/editor.css">
+  <link rel="stylesheet" href="/css/manga-fonts.css">
+  <style>
+    /* Prevent pull-to-refresh */
+    body {
+      overscroll-behavior-y: contain;
+    }
+    
+    /* iOS safe area */
+    @supports (padding: max(0px)) {
+      body {
+        padding-left: env(safe-area-inset-left);
+        padding-right: env(safe-area-inset-right);
+      }
+      
+      #topbar {
+        padding-top: max(6px, env(safe-area-inset-top));
+      }
+      
+      #statusbar {
+        padding-bottom: max(6px, env(safe-area-inset-bottom));
+      }
+    }
+  </style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div id="topbar">
+  <!-- Mód -->
+  <span class="tb-label">Mód</span>
+  <button class="btn act" id="btn-mask" onclick="setMode('mask')" title="Maszk mód" data-shortcut="M">
+    🖌 <span class="btn-text">Maszk</span>
+  </button>
+  <button class="btn" id="btn-brush" onclick="setMode('brush')" title="Ecset mód" data-shortcut="B">
+    ✏️ <span class="btn-text">Ecset</span>
+  </button>
+  <!-- ÚJ: Radír gomb -->
+  <button class="btn" id="btn-eraser" onclick="setMode('eraser')" title="Radír mód" data-shortcut="E">
+    🧹 <span class="btn-text">Radír</span>
+  </button>
+  <button class="btn" id="btn-pipette" onclick="setMode('pipette')" title="Pipetta" data-shortcut="I">
+    💉 <span class="btn-text">Pipetta</span>
+  </button>
+  <button class="btn" id="btn-pan" onclick="setMode('pan')" title="Mozgatás" data-shortcut="H">
+    ✋ <span class="btn-text">Mozgat</span>
+  </button>
+  <button class="btn" id="btn-text" onclick="setMode('text')" title="Szövegdoboz" data-shortcut="T">
+    💬 <span class="btn-text">Szövegdoboz</span>
+  </button>
+
+  <div class="tb-sep"></div>
+
+  <!-- Ecset méret -->
+  <span class="tb-label">Méret</span>
+  <input type="range" min="2" max="100" value="22" oninput="bs=+this.value">
+
+  <!-- Ecset szín -->
+  <span class="tb-label">Szín</span>
+  <input type="color" id="brushColor" value="#ffffff">
+  <span id="pipetteInfo" style="display:none;margin-left:4px;font-size:.75rem;color:var(--accent2);"></span>
+
+  <div class="tb-sep"></div>
+
+  <!-- Zoom -->
+  <span class="tb-label">Zoom</span>
+  <button class="btn btn-ghost" onclick="zoom(-0.25)" title="Zoom out">−</button>
+  <span id="zoom-lbl" style="min-width:44px;text-align:center;font-size:.8rem;font-family:var(--mono)">100%</span>
+  <button class="btn btn-ghost" onclick="zoom(0.25)" title="Zoom in">+</button>
+  <button class="btn btn-ghost" onclick="resetZoom()" title="Illesztés">⊡</button>
+
+  <div class="tb-sep"></div>
+
+  <!-- AI funkciók -->
+  <button class="btn primary" onclick="runInpaint()" title="AI fehérítés">✨ <span class="btn-text">AI Inpaint</span></button>
+  <button class="btn btn-ghost" id="undo-btn" onclick="undoInpaint()" style="display:none" title="Visszavonás">↩</button>
+
+  <div class="tb-sep"></div>
+
+  <!-- Vissza / Mentés -->
+  <button class="btn btn-ghost" onclick="history.back()" title="Vissza">← <span class="btn-text">Vissza</span></button>
+  <button class="btn success" id="saveBtn" onclick="openSaveModal()" title="Mentés" data-shortcut="Ctrl+S">
+    💾 <span class="btn-text">Mentés javítottként</span>
+  </button>
+  
+  <!-- ÚJ: Súgó gomb -->
+  <button class="btn" onclick="toggleHelp()" title="Súgó és gyorsbillentyűk">
+    ❓ <span class="btn-text">Súgó</span>
+  </button>
+</div>
+
+<!-- MAIN AREA -->
+<div id="main-area">
+  
+  <!-- IMAGE LIST PANEL -->
+  <div id="image-list-panel">
+    <div class="panel-toggle" onclick="toggleImageListPanel()">◀</div>
+    
+    <div class="panel-header">
+      <span class="panel-title">Képek</span>
+      <div class="panel-nav-btns">
+        <button class="nav-btn" id="prevImageBtn" onclick="navigateImage(-1)" title="Előző">◀</button>
+        <button class="nav-btn" id="nextImageBtn" onclick="navigateImage(1)" title="Következő">▶</button>
+      </div>
+    </div>
+    
+    <div class="image-list-scroll" id="imageListScroll">
+      <!-- Képek dinamikusan töltődnek -->
+    </div>
+  </div>
+
+  <!-- VIEWPORT -->
+  <div id="viewport">
+    <canvas id="view-canvas"></canvas>
+    <canvas id="mask-canvas"></canvas>
+    <canvas id="overlay-canvas"></canvas>
+    
+    <div id="zoom-info">100%</div>
+    
+    <div id="progress">
+      <div class="spinner"></div>
+      <span id="prog-msg">Feldolgozás...</span>
+    </div>
+    
+    <!-- Fix request banner -->
+    <div id="fix-request-banner">
+      <div class="banner-title">⚠️ Nem javítható</div>
+      <div class="banner-text">
+        Ehhez a képhez nincs hibajegy. Jelöld meg, hogy javítható legyen.
+      </div>
+      <button class="banner-btn" onclick="reportCurrentImage()">
+        Hibajegy létrehozása
+      </button>
+    </div>
+  </div>
+
+  <!-- SIDEBAR -->
+  <div id="sidebar">
+    
+    <!-- Kép info -->
+    <div class="sb-section">
+      <div class="sb-title">Kép Info</div>
+      <div id="imgInfo" style="font-size:.8rem;line-height:1.6;color:var(--muted)">
+        Nincs kép betöltve
+      </div>
+    </div>
+
+    <!-- AI Prompt -->
+    <div class="sb-section">
+      <div class="sb-title">AI Prompt (opcionális)</div>
+      <textarea id="prompt" placeholder="Mi legyen a fehér területen? (pl: üres fal, háttér, stb.)" 
+                style="width:100%;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--font);font-size:.8rem;min-height:60px;resize:vertical"></textarea>
+    </div>
+
+    <!-- Textbox Properties -->
+    <div class="sb-section" id="tb-props" style="display:none">
+      <div class="sb-title">Szövegdoboz</div>
+      
+      <div class="prop-row">
+        <span class="prop-label">Méret:</span>
+        <input type="number" id="tb-fontsize" min="8" max="200" value="20" oninput="updateSelectedTb()">
+      </div>
+      
+      <div class="prop-row">
+        <span class="prop-label">Stílus:</span>
+        <select id="tb-fontstyle" onchange="updateSelectedTb()">
+          <option value="normal">Normal</option>
+          <option value="bold">Bold</option>
+          <option value="italic">Italic</option>
+        </select>
+      </div>
+      
+      <div class="prop-row">
+        <span class="prop-label">Font:</span>
+        <select id="tb-font" onchange="updateSelectedTb()">
+          <optgroup label="🎌 Manga fontok">
+          <option value="Wild Words">Wild Words</option>
+          <option value="Mangaka">Mangaka</option>
+          <option value="Tamagoyaki">Tamagoyaki</option>
+          <option value="bushido">Bushido</option>
+    <option value="ScaryZombie">ScaryZombie</option>
+    <option value="animehun">animehun</option>
+    <option value="DarkSilence">DarkSilence</option>
+    <option value="DemonSker">DemonSker</option>
+    <option value="IrohsnaRabka">IrohsnaRabka</option>
+    <option value="NightmarePills">NightmarePills</option>
+    <option value="RuthlessSavage">RuthlessSavage</option>
+    <option value="The Last Shuriken">The Last Shuriken</option>
+    <option value="WildStrokes">WildStrokes</option>
+          </optgroup>
+          <optgroup label="📝 Általános">
+            <option value="Arial">Arial</option>
+            <option value="Georgia">Georgia</option>
+            <option value="Impact">Impact</option>
+            <option value="Verdana">Verdana</option>
+            <option value="monospace">Monospace</option>
+          </optgroup>       
+ </select>
+      </div>
+      
+      <div class="prop-row">
+        <span class="prop-label">Szín:</span>
+        <input type="color" id="tb-color" value="#000000" oninput="updateSelectedTb()">
+      </div>
+      
+      <div class="prop-row">
+        <span class="prop-label">Körvonal:</span>
+        <input type="number" id="tb-stroke-w" min="0" max="10" value="0" oninput="updateSelectedTb()">
+        <input type="color" id="tb-stroke-c" value="#ffffff" oninput="updateSelectedTb()">
+      </div>
+      
+      <div class="prop-row">
+        <span class="prop-label">Igazítás:</span>
+        <button class="btn tb-align-btn" data-align="left" onclick="setTbAlign('left')">←</button>
+        <button class="btn tb-align-btn act" data-align="center" onclick="setTbAlign('center')">↔</button>
+        <button class="btn tb-align-btn" data-align="right" onclick="setTbAlign('right')">→</button>
+      </div>
+      
+      <div class="prop-row" style="flex-direction:column;align-items:stretch;">
+        <span class="prop-label" style="margin-bottom:6px">Szöveg:</span>
+        <textarea id="tb-text" oninput="updateTbText()" 
+                  style="width:100%;padding:8px;background:var(--card);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--font);font-size:.8rem;min-height:60px;resize:vertical"></textarea>
+      </div>
+      
+      <div class="prop-row">
+        <button class="btn primary" id="ocrBtn" onclick="runOCR()" style="flex:1">🔍 OCR</button>
+        <button class="btn primary" id="translateBtn" onclick="translateText()" style="flex:1">🌐 Fordítás</button>
+      </div>
+      <div id="ocrStatus" style="display:none;font-size:.75rem;margin-top:6px;text-align:center"></div>
+      <div id="translateStatus" style="display:none;font-size:.75rem;margin-top:6px;text-align:center"></div>
+      
+      <div class="prop-row">
+        <button class="btn danger" onclick="deleteSelectedTb()" style="width:100%">🗑 Törlés</button>
+      </div>
+      
+      <button class="btn success" onclick="burnTextBoxes()" style="width:100%;margin-top:8px">
+        🔥 Szövegek ráégetése
+      </button>
+    </div>
+
+    <!-- Textbox List -->
+    <div class="sb-section">
+      <div class="sb-title">Szövegdobozok</div>
+      <div id="text-boxes-list">
+        <div style="color:var(--muted);font-size:.75rem">Nincs szövegdoboz</div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<!-- STATUSBAR -->
+<div id="statusbar">
+  <span id="status-text" class="info">Kész</span>
+  <span style="margin-left:auto;font-size:.7rem;color:var(--muted);font-family:var(--mono)" id="shortcut-hint">
+    [M] Maszk · [B] Ecset · [E] Radír · [I] Pipetta · [H] Pan · [T] Szöveg
+  </span>
+</div>
+
+<!-- SAVE MODAL -->
+<div class="save-modal-overlay" id="saveModal">
+  <div class="save-modal">
+    <h3>💾 Mentés javítottként</h3>
+    <p>A javított kép fel lesz töltve a szerverre és hozzá lesz rendelve ehhez a hibajegyhez.</p>
+    <p style="font-size:.8rem;color:var(--muted)">
+      <strong>Figyelem:</strong> A szövegdobozok automatikusan ráégnek a képre mentéskor.
+    </p>
+    <div class="save-modal-btns">
+      <button class="btn btn-ghost" onclick="closeSaveModal()">Mégse</button>
+      <button class="btn success" onclick="saveAsFixed()">✅ Mentés</button>
+    </div>
+  </div>
+</div>
+
+<!-- SÚGÓ MODAL - ÚJ! -->
+<div class="help-modal-overlay" id="helpModal">
+  <div class="help-modal">
+    <div class="help-header">
+      <h3>❓ Editor Súgó</h3>
+      <button class="help-close" onclick="toggleHelp()">×</button>
+    </div>
+    
+    <div class="help-content">
+      <div class="help-section">
+        <h4>🎨 MÓDOK</h4>
+        <div class="help-item">
+          <kbd>M</kbd>
+          <span><strong>Maszk</strong> - Fehérítendő területek jelölése (piros színnel)</span>
+        </div>
+        <div class="help-item">
+          <kbd>B</kbd>
+          <span><strong>Ecset</strong> - Szabad rajzolás edit layer-re</span>
+        </div>
+        <div class="help-item">
+          <kbd>E</kbd>
+          <span><strong>Radír</strong> - Edit layer törlése (eredeti kép sértetlen marad)</span>
+        </div>
+        <div class="help-item">
+          <kbd>I</kbd>
+          <span><strong>Pipetta</strong> - Színválasztás a képből</span>
+        </div>
+        <div class="help-item">
+          <kbd>H</kbd>
+          <span><strong>Mozgatás</strong> - Kép pan (Hand tool)</span>
+        </div>
+        <div class="help-item">
+          <kbd>T</kbd>
+          <span><strong>Szövegdoboz</strong> - Szöveg elhelyezése a képre</span>
+        </div>
+      </div>
+      
+      <div class="help-section">
+        <h4>⌨️ MŰVELETEK</h4>
+        <div class="help-item">
+          <kbd>Ctrl</kbd><kbd>Z</kbd>
+          <span>Visszavonás (Undo)</span>
+        </div>
+        <div class="help-item">
+          <kbd>Ctrl</kbd><kbd>S</kbd>
+          <span>Mentés javítottként</span>
+        </div>
+        <div class="help-item">
+          <kbd>+</kbd> <kbd>-</kbd>
+          <span>Zoom in / Zoom out</span>
+        </div>
+        <div class="help-item">
+          <kbd>0</kbd>
+          <span>Zoom illesztés (fit to screen)</span>
+        </div>
+      </div>
+      
+      <div class="help-section">
+        <h4>📝 SZÖVEGDOBOZ</h4>
+        <div class="help-tip">
+          ⬜ <strong>Sarkok</strong> = Méretezés (húzd a sarkokat)
+        </div>
+        <div class="help-tip">
+          🖐️ <strong>Doboz közepe</strong> = Mozgatás (húzd a dobozt)
+        </div>
+        <div class="help-tip">
+          🔍 <strong>OCR</strong> = Szöveg felismerés a dobozban
+        </div>
+        <div class="help-tip">
+          🌐 <strong>Fordítás</strong> = Szöveg fordítása magyarra
+        </div>
+      </div>
+      
+      <div class="help-section">
+        <h4>💡 TIPPEK</h4>
+        <div class="help-tip">
+          • Edit layer-en történő rajzolás nem módosítja az eredeti képet
+        </div>
+        <div class="help-tip">
+          • Radír mód csak az edit layer-t törli, az eredeti kép sértetlen marad
+        </div>
+        <div class="help-tip">
+          • Szövegdobozok mentéskor automatikusan ráégszenek a képre
+        </div>
+        <div class="help-tip">
+          • AI Inpaint használatához jelöld meg a területet maszkkal
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODULÁRIS JAVASCRIPT BETÖLTÉSE - SORREND FONTOS! -->
+<script src="/js/editor/core.js"></script>
+<script src="/js/editor/image.js"></script>
+<script src="/js/editor/paint.js"></script>
+<script src="/js/editor/textbox.js"></script>
+<script src="/js/editor/mouse.js"></script>
+<script src="/js/editor/shortcuts.js"></script>
+<script src="/js/editor/image-list.js"></script>
+<script src="/js/editor/ai.js"></script>
+<script src="/js/editor/save.js"></script>
+<script src="/js/editor/ui.js"></script>
+
+</body>
+</html>

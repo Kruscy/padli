@@ -1,0 +1,454 @@
+/* css/points-widget.css - Pontrendszer stílusok */
+
+/* ── HEADER BADGE ──────────────────────────────────────── */
+.points-badge {
+  background: linear-gradient(135deg, #7c3aed, #5b21b6);
+  padding: 8px 16px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all .2s;
+  border: 1px solid rgba(124,58,237,.3);
+  font-family: 'DM Mono', monospace;
+  font-size: .88rem;
+  font-weight: 700;
+}
+
+.points-badge:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 20px rgba(124,58,237,.4);
+}
+
+/* ── MODAL OVERLAY ─────────────────────────────────────── */
+.points-modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.85);
+  z-index: 1000;
+  backdrop-filter: blur(8px);
+  align-items: center;
+  justify-content: center;
+}
+
+.points-modal-box {
+  background: #0e0e1c;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 18px;
+  width: min(95vw, 700px);
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── MODAL HEADER ──────────────────────────────────────── */
+.points-modal-header {
+  padding: 18px 24px;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.points-modal-header h2 {
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+.points-modal-close {
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 1.6rem;
+  cursor: pointer;
+  padding: 4px 8px;
+  transition: color .15s;
+}
+
+.points-modal-close:hover {
+  color: #fff;
+}
+
+/* ── TABS ──────────────────────────────────────────────── */
+.points-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 12px 16px;
+  background: #080810;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
+
+.points-tab {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,.1);
+  color: #888;
+  padding: 8px 18px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: 'Syne', sans-serif;
+  font-size: .85rem;
+  font-weight: 700;
+  transition: all .15s;
+}
+
+.points-tab.active {
+  background: rgba(124,58,237,.15);
+  border-color: rgba(124,58,237,.3);
+  color: #7c3aed;
+}
+
+.points-tab:not(.active):hover {
+  background: rgba(255,255,255,.05);
+  border-color: rgba(255,255,255,.15);
+  color: #aaa;
+}
+
+/* ── MODAL CONTENT ─────────────────────────────────────── */
+.points-modal-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+.points-tab-content {
+  display: none;
+}
+
+.points-tab-content.active {
+  display: block;
+}
+
+/* ── BALANCE CARD ──────────────────────────────────────── */
+.balance-card {
+  background: linear-gradient(135deg, #7c3aed, #5b21b6);
+  padding: 24px;
+  border-radius: 14px;
+  margin-bottom: 24px;
+  text-align: center;
+}
+
+.balance-label {
+  font-size: .78rem;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  color: rgba(255,255,255,.7);
+  margin-bottom: 8px;
+}
+
+.balance-amount {
+  font-size: 3rem;
+  font-weight: 800;
+  color: #fff;
+  font-family: 'DM Mono', monospace;
+}
+
+.balance-spent {
+  font-size: .82rem;
+  color: rgba(255,255,255,.6);
+  margin-top: 4px;
+  font-family: 'DM Mono', monospace;
+}
+
+/* ── SECTION HEADER ────────────────────────────────────── */
+.section-header {
+  font-size: .88rem;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: #666;
+  font-weight: 700;
+  margin-bottom: 14px;
+}
+
+/* ── LOG ITEM ──────────────────────────────────────────── */
+.log-item {
+  background: #13131f;
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition: border-color .15s;
+}
+
+.log-item:hover {
+  border-color: rgba(124,58,237,.3);
+}
+
+.log-item-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #7c3aed, #5b21b6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  flex-shrink: 0;
+}
+
+.log-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.log-item-title {
+  font-size: .88rem;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.log-item-meta {
+  font-size: .75rem;
+  color: #888;
+  font-family: 'DM Mono', monospace;
+}
+
+.log-item-points {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #22c55e;
+  font-family: 'DM Mono', monospace;
+  flex-shrink: 0;
+}
+
+.log-item-points.spent {
+  color: #ef4444;
+}
+
+/* ── PURCHASE CARD ─────────────────────────────────────── */
+.purchase-card {
+  background: linear-gradient(135deg, rgba(34,197,94,.15), rgba(22,163,74,.08));
+  border: 1px solid rgba(34,197,94,.3);
+  padding: 24px;
+  border-radius: 14px;
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.purchase-icon {
+  font-size: 2rem;
+  margin-bottom: 12px;
+}
+
+.purchase-title {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 8px;
+}
+
+.purchase-description {
+  color: #aaa;
+  font-size: .88rem;
+  line-height: 1.5;
+  margin-bottom: 18px;
+}
+
+.purchase-price {
+  display: inline-block;
+  background: rgba(0,0,0,.3);
+  padding: 12px 24px;
+  border-radius: 10px;
+  font-family: 'DM Mono', monospace;
+  font-size: 1rem;
+  color: #fff;
+  font-weight: 700;
+  margin-bottom: 20px;
+}
+
+.purchase-price-amount {
+  color: #22c55e;
+}
+
+.purchase-btn {
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  border: none;
+  color: #fff;
+  padding: 14px 32px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-family: 'Syne', sans-serif;
+  font-size: 1rem;
+  font-weight: 700;
+  transition: all .2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.purchase-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 20px rgba(34,197,94,.4);
+}
+
+.purchase-btn:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.purchase-feedback {
+  display: none;
+  padding: 16px;
+  border-radius: 10px;
+  font-size: .88rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.purchase-feedback.success {
+  background: rgba(34,197,94,.15);
+  border: 1px solid rgba(34,197,94,.3);
+  color: #22c55e;
+}
+
+.purchase-feedback.error {
+  background: rgba(239,68,68,.15);
+  border: 1px solid rgba(239,68,68,.3);
+  color: #ef4444;
+}
+
+/* ── GIFT CARD ─────────────────────────────────────────── */
+.gift-card {
+  background: #13131f;
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 10px;
+  padding: 16px;
+  transition: border-color .15s;
+}
+
+.gift-card:hover {
+  border-color: rgba(34,197,94,.3);
+}
+
+.gift-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.gift-card-title {
+  font-size: .88rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.gift-card-date {
+  font-size: .75rem;
+  color: #888;
+  font-family: 'DM Mono', monospace;
+}
+
+.gift-code-box {
+  background: #080810;
+  border: 1px dashed rgba(255,255,255,.15);
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-family: 'DM Mono', monospace;
+  font-size: .9rem;
+  color: #22c55e;
+  font-weight: 700;
+  margin: 10px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  word-break: break-all;
+}
+
+.copy-btn {
+  background: rgba(34,197,94,.15);
+  border: 1px solid rgba(34,197,94,.3);
+  color: #22c55e;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: .75rem;
+  font-weight: 700;
+  transition: all .15s;
+  white-space: nowrap;
+}
+
+.copy-btn:hover {
+  background: rgba(34,197,94,.25);
+}
+
+.patreon-link-btn {
+  background: linear-gradient(135deg, #f96854, #ff424d);
+  border: none;
+  color: #fff;
+  padding: 10px 18px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: .85rem;
+  font-weight: 700;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all .2s;
+  margin-top: 8px;
+}
+
+.patreon-link-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 16px rgba(249,104,84,.4);
+}
+
+.gift-card-footer {
+  font-size: .75rem;
+  color: #666;
+  margin-top: 12px;
+  font-family: 'DM Mono', monospace;
+}
+
+/* ── EMPTY STATE ───────────────────────────────────────── */
+.empty-state {
+  text-align: center;
+  color: #666;
+  padding: 40px 20px;
+  font-size: .88rem;
+}
+
+.empty-state-icon {
+  font-size: 2rem;
+  margin-bottom: 10px;
+}
+
+/* ── RESPONSIVE ────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .points-badge {
+    font-size: .8rem;
+    padding: 6px 12px;
+  }
+
+  .points-modal-box {
+    width: 100%;
+    height: 100%;
+    max-height: 100vh;
+    border-radius: 0;
+  }
+
+  .balance-amount {
+    font-size: 2.5rem;
+  }
+
+  .log-item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .log-item-points {
+    align-self: flex-end;
+  }
+}

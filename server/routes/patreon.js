@@ -46,7 +46,7 @@ router.get("/connect", (req, res) => {
   const params = new URLSearchParams({
     response_type: "code",
     client_id: process.env.PATREON_CLIENT_ID,
-    redirect_uri: process.env.PATREON_REDIRECT_URI,
+    redirect_uri: `${process.env.BASE_URL}/api/patreon/callback`,
     scope: "identity identity.memberships"
   });
 
@@ -60,16 +60,27 @@ router.get("/connect", (req, res) => {
 =============================== */
 router.get("/callback", async (req, res) => {
   if (!req.session.user) {
+    console.error("❌ No session in callback");
     return res.redirect("/login.html");
   }
-
-  const { code } = req.query;
-  if (!code) {
-    return res.redirect("/settings.html?patreon=error");
+ 
+  const { code, error } = req.query;
+  const userId = req.session.user.id;
+  
+  if (error) {
+    console.error("❌ Patreon OAuth error:", error);
+    return res.redirect(`/settings.html?patreon=error&reason=${encodeURIComponent(error)}`);
   }
-
+  
+  if (!code) {
+    console.error("❌ No code parameter");
+    return res.redirect("/settings.html?patreon=error&reason=no_code");
+  }
+ 
   try {
-    /* === TOKEN === */
+    console.log("🔵 Patreon callback started for user:", userId);
+ 
+    /* TOKEN EXCHANGE */
     const tokenRes = await fetch("https://www.patreon.com/api/oauth2/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -78,81 +89,97 @@ router.get("/callback", async (req, res) => {
         code,
         client_id: process.env.PATREON_CLIENT_ID,
         client_secret: process.env.PATREON_CLIENT_SECRET,
-        redirect_uri: process.env.PATREON_REDIRECT_URI
+        redirect_uri: `${process.env.BASE_URL}/api/patreon/callback`
       })
     });
-
+ 
+    if (!tokenRes.ok) {
+      const errorText = await tokenRes.text();
+      console.error("❌ Token exchange failed:", errorText);
+      return res.redirect("/settings.html?patreon=error&reason=token_exchange");
+    }
+ 
     const tokenData = await tokenRes.json();
     const accessToken = tokenData.access_token;
-
-    /* === USER === */
+ 
+    console.log("✅ Access token received");
+ 
+    /* USER IDENTITY */
     const meRes = await fetch(
       "https://www.patreon.com/api/oauth2/v2/identity",
       {
         headers: { Authorization: `Bearer ${accessToken}` }
       }
     );
-
+ 
     const me = await meRes.json();
     const patreonUserId = me.data.id;
-
-    /* === MEMBERSHIP === */
+    
+    console.log("✅ Patreon user ID:", patreonUserId);
+ 
+    /* MEMBERSHIP DATA */
     const memberRes = await fetch(
       "https://www.patreon.com/api/oauth2/v2/identity?include=memberships.currently_entitled_tiers&fields[member]=patron_status",
       {
-        headers: {
-          Authorization: `Bearer ${accessToken}`
-        }
+        headers: { Authorization: `Bearer ${accessToken}` }
       }
     );
-
+ 
     const memberData = await memberRes.json();
-
+ 
     const membership = memberData.included?.find(
       (i) => i.type === "member"
     );
-
+ 
     let active = false;
     let tier = null;
-
+ 
     const TIER_MAP = {
       "26103300": "Booster",
       "26103332": "Támogató",
       "26843691": "Szuper Támogató"
     };
-
+ 
     if (membership) {
-      active =
-        membership.attributes?.patron_status === "active_patron";
-
-      const tierId =
-        membership.relationships?.currently_entitled_tiers?.data?.[0]?.id;
-
-      if (active) {
+      active = membership.attributes?.patron_status === "active_patron";
+      const tierId = membership.relationships?.currently_entitled_tiers?.data?.[0]?.id;
+ 
+      if (active && tierId) {
         tier = TIER_MAP[tierId] || null;
       }
     }
-
-    /* === DB === */
-    await pool.query(
-      `
-      INSERT INTO patreon_status (user_id, patreon_user_id, active, tier)
-      VALUES ($1, $2, $3, $4)
-      ON CONFLICT (user_id)
-      DO UPDATE SET
-        patreon_user_id = EXCLUDED.patreon_user_id,
-        active = EXCLUDED.active,
-        tier = EXCLUDED.tier,
-        last_sync = now()
-      `,
-      [req.session.user.id, patreonUserId, active, tier]
+ 
+    console.log("✅ Membership data:", { active, tier });
+ 
+    /* DATABASE UPDATE */
+    console.log("🔵 Database update starting...");
+    console.log("   patreonUserId:", patreonUserId);
+    console.log("   userId:", userId);
+    console.log("   active:", active);
+    console.log("   tier:", tier);
+ 
+    const result = await pool.query(
+      `INSERT INTO patreon_status (patreon_user_id, user_id, active, tier, last_sync)
+       VALUES ($1, $2, $3, $4, NOW())
+       ON CONFLICT (patreon_user_id)
+       DO UPDATE SET
+         user_id = EXCLUDED.user_id,
+         active = EXCLUDED.active,
+         tier = EXCLUDED.tier,
+         last_sync = NOW()
+       RETURNING *`,
+      [patreonUserId, userId, active, tier]
     );
-
+ 
+    console.log("✅ Database updated:", result.rows[0]);
+    console.log("✅ PATREON CALLBACK SUCCESS");
+ 
     res.redirect("/settings.html?patreon=connected");
-
+ 
   } catch (err) {
-    console.error("PATREON CALLBACK ERROR:", err);
-    res.redirect("/settings.html?patreon=error");
+    console.error("❌ PATREON CALLBACK ERROR:", err);
+    console.error("   Stack:", err.stack);
+    res.redirect(`/settings.html?patreon=error&reason=${encodeURIComponent(err.message)}`);
   }
 });
 

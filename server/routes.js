@@ -23,6 +23,11 @@ import chatRoutes from "./routes/chat.js";
 import supportersRouter from "./routes/supporters.js";
 import blogRoutes from "./routes/blog.js";
 import padliAdminRoutes from "./routes/padli-admin.js";
+import bugReportsRoutes from "./routes/bug-reports.js";
+import inpaintRoutes from "./routes/inpaint.js";
+import translateRoutes from "./routes/translate.js";
+import ocrRoutes from "./routes/ocr.js";
+import pointsRoutes from "./routes/points.js";
 
 const router = express.Router();
 
@@ -258,6 +263,7 @@ router.post("/auth/login", async (req, res) => {
     req.session.user = {
       id: user.id,
       username: user.username,
+      avatar: user.avatar,
       role: user.role
     };
 
@@ -393,5 +399,10 @@ router.use("/chat", chatRoutes);
 router.use("/supporters", supportersRouter);
 router.use("/blog", blogRoutes);
 router.use("/admin/padli", padliAdminRoutes);
+router.use("/bug-reports", bugReportsRoutes);
+router.use("/inpaint", inpaintRoutes);
+router.use("/translate", translateRoutes);
+router.use("/ocr", ocrRoutes);
+router.use("/points", pointsRoutes);
 
 export default router;

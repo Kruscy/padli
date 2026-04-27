@@ -80,7 +80,6 @@ router.delete("/replies/:id", async (req, res) => {
 
 /* ── TAG SZAVAK ─────────────────────────────────────────── */
 
-// Összes tag lekérése a DB-ből (tag táblából) + hozzájuk rendelt szavak
 router.get("/tag-words", async (req, res) => {
   try {
     const { rows: dbTags } = await pool.query(
@@ -144,12 +143,77 @@ router.put("/genre-words/:genreName", async (req, res) => {
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
+
+/* ── ALIAS-OK ───────────────────────────────────────────── */
+// Tábla létrehozása (egyszer kell futtatni):
+// CREATE TABLE IF NOT EXISTS padli_aliases (
+//   id        SERIAL PRIMARY KEY,
+//   alias     TEXT NOT NULL UNIQUE,   -- pl. "tbate", "jjk"
+//   title     TEXT NOT NULL,          -- pl. "The Beginning After the End"
+//   note      TEXT,                   -- opcionális megjegyzés
+//   active    BOOLEAN NOT NULL DEFAULT true,
+//   created_at TIMESTAMPTZ DEFAULT NOW(),
+//   updated_at TIMESTAMPTZ DEFAULT NOW()
+// );
+
+router.get("/aliases", async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM padli_aliases ORDER BY alias`
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post("/aliases", async (req, res) => {
+  try {
+    const { alias, title, note } = req.body;
+    if (!alias || !title)
+      return res.status(400).json({ error: "alias és title kötelező" });
+
+    const cleanAlias = alias.trim().toLowerCase().replace(/\s+/g, "");
+    const { rows } = await pool.query(
+      `INSERT INTO padli_aliases (alias, title, note)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (alias) DO UPDATE SET title=$2, note=$3, updated_at=NOW()
+       RETURNING *`,
+      [cleanAlias, title.trim(), note?.trim() || null]
+    );
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.put("/aliases/:id", async (req, res) => {
+  try {
+    const { alias, title, note, active } = req.body;
+    const { rows } = await pool.query(
+      `UPDATE padli_aliases SET
+        alias=COALESCE($1, alias),
+        title=COALESCE($2, title),
+        note=COALESCE($3, note),
+        active=COALESCE($4, active),
+        updated_at=NOW()
+       WHERE id=$5 RETURNING *`,
+      [alias?.trim().toLowerCase() || null, title?.trim() || null, note?.trim() ?? null, active ?? null, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: "Nem található" });
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.delete("/aliases/:id", async (req, res) => {
+  try {
+    await pool.query(`DELETE FROM padli_aliases WHERE id=$1`, [req.params.id]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 /* ── KARAKTEREK ─────────────────────────────────────────── */
 
 router.get("/characters", async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT c.*, 
+      `SELECT c.*,
         COALESCE(json_agg(s ORDER BY s.id) FILTER (WHERE s.id IS NOT NULL), '[]') AS stories
        FROM padli_characters c
        LEFT JOIN padli_stories s ON s.character_id = c.id
@@ -230,7 +294,6 @@ router.delete("/stories/:id", async (req, res) => {
 /* ── PADLI AI ÚJRAINDÍTÁS (config reload) ───────────────── */
 router.post("/reload", async (req, res) => {
   try {
-    // Jelzés a padli-ai.js-nek hogy töltse újra a DB-ből a configot
     process.emit("padli-config-reload");
     res.json({ ok: true, message: "Config újratöltve" });
   } catch (err) { res.status(500).json({ error: err.message }); }

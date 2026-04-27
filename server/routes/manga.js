@@ -192,6 +192,7 @@ if (chRes.rows.length) {
     `
     SELECT
       l.path AS library_path,
+      l.name AS library_name,
       m.folder AS manga_folder
     FROM chapter c
     JOIN manga m ON m.id = c.manga_id
@@ -206,7 +207,7 @@ if (chRes.rows.length) {
     return res.status(404).json({ error: "Chapter not found" });
   }
 
-  const { library_path, manga_folder } = result.rows[0];
+  const { library_path, library_name, manga_folder } = result.rows[0];
   const dir = path.join(library_path, manga_folder, chapter);
 
   try {
@@ -224,7 +225,7 @@ if (chRes.rows.length) {
       })
       .map(p => p.f);
 
-    res.json(pages);
+    res.json({ pages, library: library_name });
   } catch (e) {
     console.error(e);
     res.status(404).json({ error: "Pages not found" });
@@ -233,8 +234,8 @@ if (chRes.rows.length) {
 
 /* ================= IMAGE ================= */
 
-router.get("/image/:slug/:chapter/:file", async (req, res) => {
-  const { slug, chapter, file } = req.params;
+router.get("/image/:library/:slug/:chapter/:file", async (req, res) => {
+  const { library, slug, chapter, file } = req.params;
 
   const result = await pool.query(
     `
@@ -244,10 +245,10 @@ router.get("/image/:slug/:chapter/:file", async (req, res) => {
     FROM chapter c
     JOIN manga m ON m.id = c.manga_id
     JOIN library l ON l.id = m.library_id
-    WHERE m.slug = $1 AND c.folder = $2
+    WHERE l.name = $1 AND m.slug = $2 AND c.folder = $3
     LIMIT 1
     `,
-    [slug, chapter]
+    [library, slug, chapter]
   );
 
   if (!result.rows.length) return res.status(404).end();

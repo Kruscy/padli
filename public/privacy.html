@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Adatvédelmi Nyilatkozat – PadlizsanFanSub</title>
+  <title>Adatvédelmi Nyilatkozat - PadlizsanFanSub</title>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/favico.png">
   <link rel="stylesheet" href="/css/footer.css">
   <style>
@@ -68,6 +68,39 @@
       padding: 16px 20px;
       margin: 16px 0;
     }
+    /* ÚJ: Support box */
+    .support-box {
+      background: linear-gradient(135deg, #1e1e30 0%, #2a1e3e 100%);
+      border: 1px solid #3a2a4e;
+      border-radius: 12px;
+      padding: 20px 24px;
+      margin: 24px 0;
+    }
+    .support-box h3 {
+      color: #a855f7;
+      font-size: 1.05rem;
+      margin: 0 0 12px 0;
+    }
+    .support-box p {
+      margin: 8px 0;
+    }
+    .support-box strong {
+      color: #e0e0e0;
+    }
+.payment-logos img {
+  max-width: 450px; /* 🔧 Csökkentett méret */
+  width: 100%;
+  height: auto;
+  display: block;
+  margin-top: 8px;
+}
+
+/* Mobile responsive */
+@media (max-width: 600px) {
+  .payment-logos img {
+    max-width: 100%;
+  }
+}
   </style>
 </head>
 <body>
@@ -77,7 +110,7 @@
   <p class="subtitle">Utoljára frissítve: 2026. április &nbsp;|&nbsp; PadlizsanFanSub</p>
 
   <div class="highlight-box">
-    <p>A PadlizsanFanSub elkötelezett felhasználói személyes adatainak védelme iránt. Ez a nyilatkozat tájékoztatást nyújt arról, milyen adatokat gyűjtünk, hogyan használjuk fel, és milyen jogok illetik meg Önt az Európai Unió Általános Adatvédelmi Rendeletének (GDPR – 2016/679/EU) megfelelően.</p>
+    <p>A PadlizsanFanSub elkötelezett felhasználói személyes adatainak védelme iránt. Ez a nyilatkozat tájékoztatást nyújt arról, milyen adatokat gyűjtünk, hogyan használjuk fel, és milyen jogok illetik meg Önt az Európai Unió Általános Adatvédelmi Rendeletének (GDPR - 2016/679/EU) megfelelően.</p>
   </div>
 
   <h2>1. Adatkezelő</h2>
@@ -90,9 +123,9 @@
   <h2>2. Gyűjtött adatok</h2>
   <p>Regisztráció során az alábbi adatokat kezeljük:</p>
   <ul>
-    <li><strong>Felhasználónév</strong> – azonosításhoz</li>
-    <li><strong>Email cím</strong> – fiókhoz, értesítésekhez</li>
-    <li><strong>Jelszó</strong> – titkosítva tárolva (bcrypt hash)</li>
+    <li><strong>Felhasználónév</strong> - azonosításhoz</li>
+    <li><strong>Email cím</strong> - fiókhoz, értesítésekhez</li>
+    <li><strong>Jelszó</strong> - titkosítva tárolva (bcrypt hash)</li>
     <li><strong>Regisztráció dátuma</strong></li>
     <li><strong>Utolsó belépés ideje</strong></li>
   </ul>
@@ -122,11 +155,11 @@
   <h2>7. Az érintett jogai</h2>
   <p>A GDPR értelmében Ön jogosult:</p>
   <ul>
-    <li><strong>Hozzáférési jog</strong> – tájékoztatást kérhet a kezelt adatairól</li>
-    <li><strong>Helyesbítési jog</strong> – kérheti adatai javítását</li>
-    <li><strong>Törlési jog</strong> – kérheti adatai törlését ("elfeledtetéshez való jog")</li>
-    <li><strong>Adathordozhatóság</strong> – kérheti adatait géppel olvasható formátumban</li>
-    <li><strong>Tiltakozási jog</strong> – tiltakozhat az adatkezelés ellen</li>
+    <li><strong>Hozzáférési jog</strong> - tájékoztatást kérhet a kezelt adatairól</li>
+    <li><strong>Helyesbítési jog</strong> - kérheti adatai javítását</li>
+    <li><strong>Törlési jog</strong> - kérheti adatai törlését ("elfeledtetéshez való jog")</li>
+    <li><strong>Adathordozhatóság</strong> - kérheti adatait géppel olvasható formátumban</li>
+    <li><strong>Tiltakozási jog</strong> - tiltakozhat az adatkezelés ellen</li>
   </ul>
   <p>Jogai gyakorlásához írjon a <a href="mailto:csimotaclan@gmail.com">csimotaclan@gmail.com</a> email címre.</p>
 
@@ -135,6 +168,8 @@
 
   <h2>9. Változtatások</h2>
   <p>Fenntartjuk a jogot a nyilatkozat módosítására. Lényeges változás esetén a regisztrált felhasználókat emailben értesítjük.</p>
+
+  <!-- ÚJ SZEKCIÓ: TÁMOGATÁS -->
 
   <a href="javascript:history.back()" class="back-btn">← Vissza</a>
 </div>

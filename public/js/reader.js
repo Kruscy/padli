@@ -1,5 +1,5 @@
 /* ============================================================
-   reader.js – PadlizsanFanSub olvasó
+   reader.js - PadlizsanFanSub olvasó
    ============================================================ */
 
 const params   = new URLSearchParams(location.search);
@@ -39,6 +39,7 @@ let lastSavedPage = 0;
 let lastSent      = 0;
 let saveTimeout   = null;
 let allFiles      = []; // betöltött fájlnévlista
+let currentLibrary = ""; // library neve az image URL-hez
 let chapters      = [];
 
 function getCurrentPage() {
@@ -156,7 +157,10 @@ async function loadPages() {
     return false;
   }
 
-  allFiles = await res.json();
+  const data = await res.json();
+  allFiles = data.pages;
+  currentLibrary = data.library;
+
   if (!allFiles.length) return true;
 
   if (readMode === "book") {
@@ -181,7 +185,7 @@ function buildScrollPages() {
     wrap.dataset.index = i;
 
     const img = document.createElement("img");
-    img.dataset.src = `/api/image/${slug}/${chapter}/${encodeURIComponent(f)}`;
+    img.dataset.src = `/api/image/${currentLibrary}/${slug}/${chapter}/${encodeURIComponent(f)}`;
     img.dataset.index = i;
     img.style.display = "none";
 
@@ -210,7 +214,7 @@ function buildBookPages() {
     div.dataset.index = i;
 
     const img = document.createElement("img");
-    img.dataset.src = `/api/image/${slug}/${chapter}/${encodeURIComponent(f)}`;
+    img.dataset.src = `/api/image/${currentLibrary}/${slug}/${chapter}/${encodeURIComponent(f)}`;
     img.alt = "";
 
     div.appendChild(img);
@@ -335,11 +339,15 @@ document.addEventListener("keydown", e => {
   if (e.key === "ArrowLeft"  || e.key === "a" || e.key === "A") bookPrev();
 });
 
-// Swipe és kattintás mobilon
+// Touch kezelő
 let touchStartX = 0;
 let touchStartY = 0;
 let isSwiping   = false;
+let touchScrollStartY = 0;
+let touchScrollOverflow = 0;
+const OVERFLOW_THRESHOLD = 80;
 
+// Könyv mód swipe
 pagesEl.addEventListener("touchstart", e => {
   touchStartX = e.touches[0].clientX;
   touchStartY = e.touches[0].clientY;
@@ -349,22 +357,82 @@ pagesEl.addEventListener("touchstart", e => {
 pagesEl.addEventListener("touchmove", e => {
   const dx = Math.abs(e.touches[0].clientX - touchStartX);
   const dy = Math.abs(e.touches[0].clientY - touchStartY);
-  if (dx > 10) isSwiping = true;
+  if (dx > 10 && dx > dy) isSwiping = true;
 }, { passive: true });
 
 pagesEl.addEventListener("touchend", e => {
   if (readMode !== "book") return;
   const dx = e.changedTouches[0].clientX - touchStartX;
-
   if (isSwiping) {
     if (dx < -40) bookNext();
     if (dx >  40) bookPrev();
-  } else {
-    // Kattintás: jobb fél → next, bal fél → prev
-    const x = e.changedTouches[0].clientX;
-    if (x > window.innerWidth / 2) bookNext();
-    else bookPrev();
   }
+});
+
+// Scroll mód: túlhúzás fejezet váltás
+function showChapterHint(dir, progress) {
+  let hint = document.getElementById("chapterHint");
+  if (!hint) {
+    hint = document.createElement("div");
+    hint.id = "chapterHint";
+    hint.style.cssText = "position:fixed;left:50%;transform:translateX(-50%);z-index:200;" +
+      "background:rgba(124,92,255,.92);color:#fff;padding:10px 24px;border-radius:999px;" +
+      "font-size:.88rem;font-weight:600;pointer-events:none;transition:opacity .2s;opacity:0;";
+    document.body.appendChild(hint);
+  }
+  hint.textContent = dir === "next" ? "Következő fejezet →" : "← Előző fejezet";
+  hint.style.bottom = dir === "next" ? "90px" : "auto";
+  hint.style.top    = dir === "prev" ? "70px"  : "auto";
+  hint.style.opacity = Math.min((progress || 0) * 1.5, 1).toString();
+}
+
+function hideChapterHint() {
+  const h = document.getElementById("chapterHint");
+  if (h) h.style.opacity = "0";
+}
+
+window.addEventListener("touchstart", e => {
+  touchScrollStartY = e.touches[0].clientY;
+  touchScrollOverflow = 0;
+}, { passive: true });
+
+window.addEventListener("touchmove", e => {
+  if (readMode !== "scroll") return;
+  const dy = touchScrollStartY - e.touches[0].clientY;
+  const st = window.scrollY;
+  const sm = document.body.scrollHeight - window.innerHeight;
+  if (st >= sm - 5 && dy > 0) {
+    touchScrollOverflow = dy;
+    showChapterHint("next", touchScrollOverflow / OVERFLOW_THRESHOLD);
+  } else if (st <= 5 && dy < 0) {
+    touchScrollOverflow = Math.abs(dy);
+    showChapterHint("prev", touchScrollOverflow / OVERFLOW_THRESHOLD);
+  }
+}, { passive: true });
+
+window.addEventListener("touchend", async () => {
+  if (readMode !== "scroll") { hideChapterHint(); return; }
+  const st = window.scrollY;
+  const sm = document.body.scrollHeight - window.innerHeight;
+  if (touchScrollOverflow >= OVERFLOW_THRESHOLD) {
+    if (st >= sm - 5) {
+      hideChapterHint();
+      const index = chapters.findIndex(c => c.folder === chapter);
+      if (index >= 0 && index < chapters.length - 1) {
+        const next = chapters[index + 1].folder;
+        const checkRes = await fetch(`/api/pages/${slug}/${next}`);
+        if (checkRes.status === 403) { await showLockPage(slug); return; }
+        await saveProgress(getCurrentPage());
+        goToChapter(next);
+      }
+    } else if (st <= 5) {
+      hideChapterHint();
+      const index = chapters.findIndex(c => c.folder === chapter);
+      if (index > 0) goToChapter(chapters[index - 1].folder);
+    }
+  }
+  touchScrollOverflow = 0;
+  hideChapterHint();
 });
 
 /* ── NAV ─────────────────────────────────────────────────── */
@@ -430,21 +498,17 @@ function toggleFullscreen() {
   const btn = document.getElementById("btnFullscreen");
   if (btn) btn.textContent = isFullscreen ? "⤡" : "⤢";
 
-  // Valódi fullscreen API
   if (isFullscreen) {
-    document.documentElement.requestFullscreen?.();
+    document.documentElement.requestFullscreen?.().catch(() => {});
+    hideUI();
   } else {
-    document.exitFullscreen?.();
+    if (document.fullscreenElement) document.exitFullscreen?.();
+    showUI();
   }
 }
 
 document.addEventListener("fullscreenchange", () => {
-  if (!document.fullscreenElement) {
-    isFullscreen = false;
-    document.body.classList.remove("fullscreen");
-    const btn = document.getElementById("btnFullscreen");
-    if (btn) btn.textContent = "⤢";
-  }
+  // Böngésző kilépett valódi fullscreenből (pl. ESC) - CSS fullscreen marad
 });
 
 document.addEventListener("keydown", e => {
@@ -465,21 +529,72 @@ function cycleMode() {
   }
 }
 
-/* ── UI TOGGLE (kattintásra elrejt/mutat) ────────────────── */
+/* ── UI TOGGLE ───────────────────────────────────────────── */
 const topbar    = document.querySelector(".topbar");
 const bottombar = document.querySelector(".bottombar");
-let uiVisible   = true;
+let uiVisible   = false;
+let uiHideTimer = null;
+
+function showUI() {
+  uiVisible = true;
+  topbar.style.opacity          = "1";
+  bottombar.style.opacity       = "1";
+  topbar.style.pointerEvents    = "auto";
+  bottombar.style.pointerEvents = "auto";
+  clearTimeout(uiHideTimer);
+  // Fullscreen módban 4mp után elrejtés, normál módban is
+  uiHideTimer = setTimeout(hideUI, 4000);
+}
+
+function hideUI() {
+  uiVisible = false;
+  topbar.style.opacity          = "";
+  bottombar.style.opacity       = "";
+  topbar.style.pointerEvents    = "";
+  bottombar.style.pointerEvents = "";
+}
+
+// Kattintás: szimpla = UI, dupla = fullscreen
+let lastClickTime = 0;
+let clickTimer    = null;
 
 document.addEventListener("click", e => {
   if (e.target.closest("button") || e.target.closest("a")) return;
-  if (readMode === "book" && isMobile) return; // mobilon könyv módban kattintás lapoz
 
-  uiVisible = !uiVisible;
-  topbar.style.opacity    = uiVisible ? "1" : "0";
-  bottombar.style.opacity = uiVisible ? "1" : "0";
-  topbar.style.pointerEvents    = uiVisible ? "auto" : "none";
-  bottombar.style.pointerEvents = uiVisible ? "auto" : "none";
+  const xRatio = e.clientX / window.innerWidth;
+  const now    = Date.now();
+  const dbl    = now - lastClickTime < 300;
+  lastClickTime = now;
+
+  if (readMode === "book" && isMobile) {
+    if (xRatio < 0.25) { bookPrev(); return; }
+    if (xRatio > 0.75) { bookNext(); return; }
+  }
+
+  // Középső zóna: szimpla/dupla detektálás
+  if (xRatio > 0.2 && xRatio < 0.8) {
+    clearTimeout(clickTimer);
+    if (dbl) {
+      // Dupla kattintás → fullscreen
+      toggleFullscreen();
+    } else {
+      // Szimpla kattintás → UI (késleltetett hogy ne fusson dupla esetén)
+      clickTimer = setTimeout(() => {
+        if (uiVisible) hideUI(); else showUI();
+      }, 280);
+    }
+  }
 });
+
+/* ── HIBABEJELENTŐ ───────────────────────────────────────── */
+function bugReportClick() {
+  if (typeof openBugModal !== "function") return;
+  // data-src tartalmazza a teljes URL-t providerrel együtt
+  const imageUrls = [...document.querySelectorAll("#pages img")].map(img =>
+    img.dataset.src || (img.src ? new URL(img.src).pathname : null)
+  );
+  openBugModal(getCurrentPage(), allFiles, slug, chapter, imageUrls);
+}
 
 /* ── INIT ────────────────────────────────────────────────── */
 (async () => {
@@ -487,6 +602,7 @@ document.addEventListener("click", e => {
   const ok = await loadPages();
   if (ok) await loadNav();
 
-  // Mód beállítása induláskor
   setMode(readMode);
+
+  // Fullscreen mindig kikapcsolt állapotban indul
 })();

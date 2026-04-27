@@ -2,7 +2,7 @@
 <html lang="hu">
 <head>
   <meta charset="UTF-8">
-  <title>PadlizsanFanSub Lezárt szavazások</title>
+  <title>PadlizsanFanSub Új szavazás</title>
   <link rel="stylesheet" href="/css/main.css">
   <link rel="stylesheet" href="/css/search.css">
   <link rel="stylesheet" href="/css/header.css">
@@ -36,7 +36,18 @@
       <option value="120">4 hónap</option>
     </select>
 
-    <h3>Opciók</h3>
+    <div class="options-header-wrapper">
+      <h3>Opciók</h3>
+      <div class="wishlist-auto-fill-btns">
+        <button type="button" id="fillUnclaimedBtn" class="wishlist-fill-btn">
+          🎲 Random kívánságok
+        </button>
+        <button type="button" id="fillMyPlannedBtn" class="wishlist-fill-btn secondary">
+          📋 Saját terveim
+        </button>
+      </div>
+    </div>
+
     <div id="optionsContainer"></div>
 
     <button type="button" id="addOptionBtn" class="add-btn">

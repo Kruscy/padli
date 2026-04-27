@@ -23,6 +23,7 @@ let dbTagWords = {};      // padli_tag_words – tag_name -> words[]
 let dbGenreWords = {};      // padli_genre_words -  genre_name -> words[] (opcionális)
 let dbCharacters = [];    // padli_characters + stories
 let configLoadedAt = 0;
+let dbAliases = {};   // padli_aliases tábla - alias -> title
 const CONFIG_TTL = 5 * 60 * 1000; // 5 perc
 
 async function loadDbConfig() {
@@ -61,6 +62,13 @@ async function loadDbConfig() {
       "WHERE c.active = true GROUP BY c.id ORDER BY c.id"
     );
     dbCharacters = charRows;
+    // Alias-ok betöltése DB-ből
+    const { rows: aliasRows } = await dbPool.query(
+      "SELECT alias, title FROM padli_aliases WHERE active = true ORDER BY alias"
+    );
+    dbAliases = {};
+    aliasRows.forEach(r => { dbAliases[r.alias] = r.title; });
+    plog("DB_CONFIG", "alias-ok betoltve: " + aliasRows.length);
 // Genre-k betöltése a config genre táblából (ha van padli_genre_words tábla)
     // Ha nincs DB genre → marad a statikus config.genres
     try {
@@ -262,11 +270,23 @@ function getTopicMemory(userKey) {
 function resolveAlias(term) {
   if (!term) return term;
   const lower = normalizeQuery(term) || term.toLowerCase().trim();
+ 
+  // 1. DB alias-ok (prioritás - admin felületen szerkeszthetők)
+  if (dbAliases[lower]) return dbAliases[lower];
+ 
+  // Részleges egyezés: "jjk manga" → "Jujutsu Kaisen manga"
+  for (const [alias, resolved] of Object.entries(dbAliases)) {
+    if (lower.startsWith(alias + " ") || lower.endsWith(" " + alias)) {
+      return resolved;
+    }
+  }
+  // 2. Statikus config alias-ok (fallback, ha DB üres)
   if (config.aliases[lower]) return config.aliases[lower];
   for (const [alias, resolved] of Object.entries(config.aliases)) {
     if (lower === alias || lower.startsWith(alias + " ") || lower.endsWith(" " + alias))
       return resolved;
   }
+ 
   return term;
 }
 
@@ -783,19 +803,53 @@ const HU_STOP = new Set([
   "dolgozol","tudnod","kellene","kell","mondj","valami","ajanl","javasolj",
   "olvassak","nezzek","ehhez","olyan","hasonlo","barmelyik","linket","adsz",
   "tagek","genre","mufaj","ismersz","linken","erem","gondolok","csak",
+  // Érzelem / állapot szavak
+  "boldog","szomoru","merges","ideges","faradt","orulsz","orulok",
+  "szereted","szeretsz","tetszik","tetszett","jol","rosszul","unatkozol",
+  "unatkozom","nevetsz","nevetek","baj","bajod","bajom",
+  // Időhatározók
+  "mostmar","mostantol","azota","regota","ujra","megint","ismet","vegre",
+  // Rövid kérdőszavak amik véletlenül mangacímet találnak
+  "mit","miket","miben","mihez","mivel","mire","min",
+  "kit","kinek","kivel","kihez","kire","kin","kik",
+  "ugye","ugyan","persze","nyilvan","igen","nos","hat",
+  // Köszönések / általános megszólítások
+  "szia","hello","hali","szep","jo","te","ti","mi","ok",
+  // Technológia szavak amik nem mangacímek
+  "internet","explorer","browser","bongeszo","hasznalsz","hasznal",
+  // Társalgás szavak
+  "tarsalogni","beszelgetni","csevegni","ebedrol","ebed","vacsorarol",
+  "vacsorarol","reggeli","etelrol","itelrol",
+  // Egyéb logból szedett false positive-ok
+  "csinaltal","csinaltal","fuleket","csinaltal","kaptuk","kaptam","kaptad",
 ]);
 
 function extractSearchTerm(question) {
   const cleaned = question.replace(/\bpadli\b[,]?\s*/gi, "").replace(/[?!]/g, "").trim();
+
+  // Explicit típusmegjelölés: "manga: One Piece"
   const explicit = cleaned.match(/(?:anime|manga|manhwa|karakter|film|ova|ona)[:\s]+(.+?)$/i);
   if (explicit) return explicit[1].trim().replace(/\s*(manga|anime|film)\s*$/i, "").trim();
+
+  // "hány részes/fejezetes a X" – teljes cím kell az "a/az" után
+  const hanyMatch = cleaned.match(/(?:hany|hány)\s+(?:reszes|fejezetes|epizodos|resz|fejezet|epizod)[^\wáéíóöőúüűÁÉÍÓÖŐÚÜŰ]+(?:a|az)\s+(.+)$/i);
+  if (hanyMatch) return hanyMatch[1].trim();
+
+  // "miről szól / ismered / mesélj X"
   const aboutMatch = cleaned.match(/(?:mesélj|mi az?|mi a|ismered|miről szól)[^\wáéíóöőúüűÁÉÍÓÖŐÚÜŰ]+([A-ZÁÉÍÓÖŐÚÜŰ][^\s!,]{1,}(?:\s[^\s!,]{1,}){0,5})/);
   if (aboutMatch) return aboutMatch[1].replace(/\s*(manga|anime)\s*$/i, "").trim();
+
+  // Többszavas nagybetűs cím
+  const MULTI_EXCLUDE = new Set(["Padli","Szia","Igen","Nem","Van","Hany","Hol","Te","Ti",
+    "Ez","Az","Internet","Ugye","Persze","Most","Boldog","Baj","Ebed","Vacsora",
+    "Szomoru","Faradt","Merges","Tarsalogni","Csinaltal"]);
   const multi = cleaned.match(/([A-ZÁÉÍÓÖŐÚÜŰ][a-záéíóöőúüűA-ZÁÉÍÓÖŐÚÜŰ0-9\-]{1,}(?:\s(?:of|the|to|a|an|no|wa|ga|de|or|and|on|in|SSS|[A-ZÁÉÍÓÖŐÚÜŰ][a-záéíóöőúüűA-ZÁÉÍÓÖŐÚÜŰ0-9\-]{1,})){1,6})/);
-  if (multi && !["Padli","Szia","Igen","Nem","Van","Hany","Hol"].includes(multi[1].split(" ")[0]))
+  if (multi && !MULTI_EXCLUDE.has(multi[1].split(" ")[0]))
     return multi[1].replace(/\s*(manga|anime)\s*$/i, "").trim();
+
+  // Token alapú fallback – min 3 karakter, stop szavak kiszűrve
   const tokens = cleaned.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-    .split(/\s+/).filter(w => w.length >= 2 && !HU_STOP.has(w));
+    .split(/\s+/).filter(w => w.length >= 3 && !HU_STOP.has(w));
   if (tokens.length > 0) return tokens.slice(0, 4).join(" ");
   return null;
 }
@@ -866,9 +920,14 @@ async function generateReply(question, conversationHistory, userKey) {
   trackAnalytics("intent", intent || "search");
 
   if (intent === "adult") {
-    plog("ADULT", "visszautasitva");
-    padliLog({ event: "adult_rejected", query: question });
-    return getReply("adult") || config.fixedReplies.adult;
+    plog("ADULT", "ollamanak atadva lazan");
+    padliLog({ event: "adult_soft", query: question });
+    return await askOllama([
+      { role: "system", content: getSystemPrompt() },
+      { role: "user", content: "Reagalj erre termeszetesen es lazan, 1-2 mondatban magyarul: " +
+        question.replace(/padli[,]?\s*/gi,"").trim() +
+        "\n[Ha valami felnottos vagy pikans temajú kerdes, reagalj humorosan, NE mondd hogy nem tudsz segiteni. Ha lehet, tereld manga/anime temara.]" }
+    ]);
   }
 
   if (intent === "patreon") {
@@ -1019,13 +1078,35 @@ async function generateReply(question, conversationHistory, userKey) {
 
   if (!searchTerm) {
     plog("NO_TERM", "nincs keresesi kifejezes");
-    const hist = buildHistory(conversationHistory, null).slice(-3);
+
+    const qNormLower = normalizeQuery(question) || "";
+
+    // Ha Padliról magáról kérdeznek (érzések, frissítés, hogy van stb.)
+    const isPadliSelfQ = [
+      "boldog","szomoru","faradt","ideges","merges","hogy vagy","mi ujsag",
+      "kaptál","frissitett","frissítés","orulsz","örülsz","mit tudsz",
+      "mit csinalsz","te vagy","ki vagy","magadrol","ujitottak","fejlesztett",
+      "unatkozol","nevetsz","szeretsz","tetszik","baj vagy","internet explorer",
+      "hasznalsz","ugye","igaze","biztos"
+    ].some(w => qNormLower.includes(normalizeQuery(w) || w));
+
+    if (isPadliSelfQ) {
+      plog("PADLI_SELF", "magáról kérdeznek");
+      return await askOllama([
+        { role: "system", content: getSystemPrompt() },
+        { role: "user", content: "Válaszolj magyarul, lazán és személyesen erre: " +
+          question.replace(/padli[,]?\s*/gi,"").trim() +
+          "\n[Ez rólad szól. Te Padli vagy, a PadlizsanFanSub manga/anime bot. Reagálj természetesen, 1-2 mondatban. NE emlegesd Gokut, Petőfit vagy más karaktert hacsak nem kérdeznek róluk konkrétan.]" }
+      ]);
+    }
+
+    // Általános off-topic / csevegés – history NÉLKÜL küldünk, hogy ne szivárogjon be
+    // előző karakter/manga kontextus
     return await askOllama([
       { role: "system", content: getSystemPrompt() },
-      ...hist,
-      { role: "user", content: "Reagálj természetesen és barátságosan erre az üzenetre, NE idézd vissza szó szerint: " +
-        content.replace(/padli[,]?\s*/gi,"").trim().slice(0,80) +
-        "\n[NE ismételd vissza amit a user írt. Ha hülyéskedik, hülyéskedj vissza. Ha kérdez valamit, kérdezz rá értelmesen.]" }
+      { role: "user", content: "Reagálj természetesen és barátságosan erre az üzenetre, 1-2 mondatban magyarul: " +
+        question.replace(/padli[,]?\s*/gi,"").trim().slice(0, 80) +
+        "\n[NE idézd vissza amit a user írt. NE emlegesd Gokut, Petőfit vagy más karaktert. Ha hülyéskedik, hülyéskedj vissza. Ha off-topic, lazán tereld manga/anime felé.]" }
     ]);
   }
 // ── KARAKTER KÉRDÉS DETEKTÁLÁS ──────────────────────────
@@ -1097,12 +1178,9 @@ async function generateReply(question, conversationHistory, userKey) {
   if (!contextStr) {
     trackAnalytics("miss", searchTerm);
     padliLog({ event: "no_data", searchTerm });
-    // Ha nincs adat: kérjen pontosabb infót, ne mondja hogy "nem tudom"
-    // NE küldje el a searchTermet az Ollama-nak – az ismétléshez vezet
-    contextStr = "\n[A keresők nem találtak eredményt. " +
-      "NE találj ki adatokat és NE ismételd vissza amit a user írt. " +
-      "Kérdezz rá lazán hogy pontosítsa – pl. más cím, műfaj. Max 1 mondat. " +
-      "Ha visszautasítasz: " + (getReply("noData") || "Nem vagyok benne biztos.") + "]";
+    contextStr = "\n[A keresők nem találtak eredményt erre: \"" + searchTerm + "\". " +
+      "NE találj ki adatokat. NE ismételd vissza amit a user írt. " +
+      "Kérdezz rá lazán hogy pontosítsa – más cím vagy műfaj. Csak 1 mondat.]";
   }
 
   const history = buildHistory(conversationHistory, searchTerm);

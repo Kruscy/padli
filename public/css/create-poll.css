@@ -40,11 +40,10 @@
 .option-box {
   background: #1e293b;
   padding: 15px;
-  border-radius: 1.2ram;
-  margin-bottom: 1.2ram;
+  border-radius: 12px;
+  margin-bottom: 12px;
   position: relative;
-  position: relative;
-  overflow: hidden; /* fontos */
+  overflow: hidden;
 }
 
 .option-box input {
@@ -88,4 +87,74 @@
   border-radius: 12px;
   font-weight: 600;
   cursor: pointer;
+  color: #fff;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   WISHLIST AUTO-FILL GOMBOK
+   ═══════════════════════════════════════════════════════════ */
+
+.options-header-wrapper {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  margin-top: 20px;
+}
+
+.options-header-wrapper h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #fff;
+}
+
+.wishlist-auto-fill-btns {
+  display: flex;
+  gap: 8px;
+}
+
+.wishlist-fill-btn {
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: all 0.3s;
+  white-space: nowrap;
+  font-family: "Poppins", sans-serif;
+}
+
+.wishlist-fill-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.wishlist-fill-btn.secondary {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+.wishlist-fill-btn.secondary:hover {
+  box-shadow: 0 4px 12px rgba(245, 87, 108, 0.4);
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .options-header-wrapper {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .wishlist-auto-fill-btns {
+    width: 100%;
+  }
+
+  .wishlist-fill-btn {
+    flex: 1;
+    font-size: 0.85rem;
+    padding: 8px 12px;
+  }
 }

@@ -34,6 +34,9 @@
     <!-- Olvasási mód váltó -->
     <button class="btn-icon btn-mode" data-mode="scroll" title="Folyamatos görgetés" onclick="cycleMode()">📜</button>
     <button class="btn-icon btn-mode" data-mode="book"   title="Könyv mód (bal/jobb oldal)" style="display:none">📖</button>
+
+    <!-- Hibabejelentő -->
+    <button class="btn-icon" id="btnBugReport" title="Hibabejelentés" onclick="bugReportClick()">🐛</button>
   </div>
 
   <button id="nextBtn">Következő →</button>
@@ -45,6 +48,7 @@
   document.getElementById("bookNext")?.addEventListener("click", () => bookNext());
 </script>
 
+<script src="/js/bug-report.js"></script>
 <script src="/js/reader.js"></script>
 <script type="module" src="/js/layout-loader.js"></script>
 </body>

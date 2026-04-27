@@ -15,8 +15,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 /* ===== BODY PARSER ===== */
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: false }));
 /* ===== settings ===== */
 /* ===== SESSION (AUTH) ===== */
 app.use(
@@ -34,6 +34,7 @@ app.use(
 );
 
 /* ===== STATIC FRONTEND ===== */
+app.use('/downloads', express.static(path.join(__dirname, '../public/downloads')));
 app.use(express.static(path.join(__dirname, "../public")));
 app.use(activityTracker);
 
@@ -43,6 +44,19 @@ app.use("/api/user", userRoutes);
 app.use("/uploads", express.static("uploads"));
 
 /* ===== SPA FALLBACK ===== */
+// Blog statikus oldalak – NE irányítsa át az index.html-re
+app.get("/blog", (req, res) => {
+  res.redirect(301, "/blog/");
+});
+app.get("/blog/", (req, res) => {
+  res.sendFile(path.join(__dirname, "../public/blog/index.html"));
+});
+app.get("/blog/:slug", (req, res) => {
+  const file = path.join(__dirname, "../public/blog", req.params.slug + ".html");
+  res.sendFile(file, err => {
+    if (err) res.status(404).sendFile(path.join(__dirname, "../public/index.html"));
+  });
+});
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "../public/index.html"));
 });

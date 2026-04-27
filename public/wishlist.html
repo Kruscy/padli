@@ -15,6 +15,55 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
 
+<style>
+/* ================= FÜLEK ================= */
+.tabs-container {
+  max-width: 800px;
+  margin: 30px auto 20px;
+  display: flex;
+  gap: 10px;
+  border-bottom: 2px solid #2f3651;
+}
+
+.tab-button {
+  background: transparent;
+  border: none;
+  color: #9ca3af;
+  font-size: 16px;
+  font-weight: 600;
+  padding: 12px 24px;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+}
+
+.tab-button:hover {
+  color: #e5e7eb;
+}
+
+.tab-button.active {
+  color: #8b5cf6;
+}
+
+.tab-button.active::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: #8b5cf6;
+}
+
+.tab-content {
+  display: none;
+}
+
+.tab-content.active {
+  display: block;
+}
+</style>
+
 </head>
 <body>
 <div id="header-root"></div>
@@ -24,12 +73,30 @@
 
   <h1 class="page-title" style="text-align:center">Kívánságlista</h1>
 
-<div class="search-wrapper" style="margin:20px auto; max-width:500px;">
-  <input id="searchInput" placeholder="Keresés AniList-ről..." autocomplete="off">
-  <div id="searchResults" class="search-results"></div>
-</div>
+  <div class="search-wrapper" style="margin:20px auto; max-width:500px;">
+    <input id="searchInput" placeholder="Keresés AniList-ről..." autocomplete="off">
+    <div id="searchResults" class="search-results"></div>
+  </div>
 
-  <div id="wishlistList" class="wishlist-list"></div>
+  <!-- FÜLEK -->
+  <div class="tabs-container">
+    <button class="tab-button active" data-tab="all">Minden</button>
+    <button class="tab-button" data-tab="claimed">Dolgoznak rajta</button>
+    <button class="tab-button" data-tab="planned">Tervben van</button>
+  </div>
+
+  <!-- FÜL TARTALMAK -->
+  <div id="tab-all" class="tab-content active">
+    <div id="wishlistAll" class="wishlist-list"></div>
+  </div>
+
+  <div id="tab-claimed" class="tab-content">
+    <div id="wishlistClaimed" class="wishlist-list"></div>
+  </div>
+
+  <div id="tab-planned" class="tab-content">
+    <div id="wishlistPlanned" class="wishlist-list"></div>
+  </div>
 
 </div>
  

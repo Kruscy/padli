@@ -74,6 +74,22 @@
   }
 
   /* ── ÚJ BEJEGYZÉS ─────────────────────────────────────── */
+  // Statikus oldalak újragenerálása
+  document.getElementById("blogRegenBtn")?.addEventListener("click", async () => {
+    const btn = document.getElementById("blogRegenBtn");
+    btn.textContent = "⏳ Generálás...";
+    btn.disabled = true;
+    try {
+      const res = await fetch("/api/blog/regenerate-static", { method: "POST" });
+      const data = await res.json();
+      btn.textContent = "✅ " + (data.count || 0) + " oldal kész";
+      setTimeout(() => { btn.textContent = "🔄 Statikus oldalak"; btn.disabled = false; }, 3000);
+    } catch {
+      btn.textContent = "❌ Hiba";
+      setTimeout(() => { btn.textContent = "🔄 Statikus oldalak"; btn.disabled = false; }, 2000);
+    }
+  });
+
   document.getElementById("blogNewBtn")?.addEventListener("click", () => {
     editingSlug = null;
     formHeading.textContent = "Új bejegyzés";
@@ -373,7 +389,7 @@
 
   function renderGallery(images) {
     if (!images.length) {
-      galleryGrid.innerHTML = '<div class="blog-list-loading">Nincs kép a mappában.</div>';
+      galleryGrid.innerHTML = '<div class="blog-list-loading">Nincs kép az uploads/blog mappában.</div>';
       return;
     }
     galleryGrid.innerHTML = "";

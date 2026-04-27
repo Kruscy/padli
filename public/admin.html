@@ -62,7 +62,10 @@
       <!-- Bejegyzés lista / új gomb -->
       <div class="blog-editor-header">
         <h2>Blog bejegyzések</h2>
-        <button class="blog-new-btn" id="blogNewBtn">➕ Új bejegyzés</button>
+        <div style="display:flex;gap:8px">
+          <button class="blog-new-btn" id="blogNewBtn">➕ Új bejegyzés</button>
+          <button class="blog-new-btn" id="blogRegenBtn" style="background:#2a2a4e;color:#a78bfa" title="Minden közzétett bejegyzésből újragenerálja a statikus HTML fájlokat">🔄 Statikus oldalak</button>
+        </div>
       </div>
       <div class="blog-post-list" id="blogPostList">
         <div class="blog-list-loading">Betöltés...</div>
@@ -208,6 +211,7 @@
       <button class="padli-nav-btn" data-section="sec-replies">💬 Válasz variációk</button>
       <button class="padli-nav-btn" data-section="sec-tags">🏷️ Tag szavak</button>
       <button class="padli-nav-btn" data-section="sec-genres">🎭 Genre szavak</button>
+      <button class="padli-nav-btn" data-section="sec-aliases">🔤 Rövidítések</button>
       <button class="padli-nav-btn" data-section="sec-characters">👥 Karakterek</button>
     </div>
 
@@ -272,12 +276,69 @@
       <div class="padli-section" id="sec-genres">
         <div class="padli-section-header">
           <h2>🎭 Genre → szavak mapping</h2>
-          <p class="padli-section-desc">A DB-ben lévő genre-khez rendelhetsz magyar szavakat. Ha valaki "romantikus mangát" kér, a "Romance" genre szavai között legyen "romantikus". Ha üres, a statikus config szavai érvényesek.</p>
+          <p class="padli-section-desc">Ha a DB genre tábla üres, a statikus config.genres az alapértelmezett. Ha itt megadsz szavakat, azok felülírják a statikus listát az adott genre-re.</p>
         </div>
         <div class="padli-tag-search-wrap">
           <input id="genreSearchInput" type="text" placeholder="🔍 Genre keresése..." class="padli-input" />
         </div>
         <div id="padliGenresList" class="padli-tags-list">
+          <div class="padli-loading">Betöltés...</div>
+        </div>
+      </div>
+
+      <!-- ── RÖVIDÍTÉSEK (ALIASES) ── -->
+      <div class="padli-section" id="sec-aliases">
+        <div class="padli-section-header">
+          <h2>🔤 Manga rövidítések</h2>
+          <p class="padli-section-desc">
+            Ha valaki "jjk"-t ír, a bot "Jujutsu Kaisen"-ként keresi. A rövidítés mindig kisbetűs, szóköz nélkül kerül mentésre.
+          </p>
+          <button class="padli-btn-add" id="aliasAddToggleBtn">➕ Új rövidítés</button>
+        </div>
+
+        <!-- Új alias form (collapse) -->
+        <div class="padli-char-add-form" id="aliasAddForm">
+          <strong style="font-size:.9rem">➕ Új rövidítés hozzáadása</strong>
+          <div class="padli-alias-add-row">
+            <div class="padli-alias-add-field">
+              <label>Rövidítés *</label>
+              <input type="text" id="newAliasShort" class="padli-input"
+                placeholder='pl. "tbate", "jjk", "op"' autocomplete="off" />
+              <span class="padli-alias-add-hint">Kisbetű, szóköz nélkül</span>
+            </div>
+            <div class="padli-alias-arrow-static">→</div>
+            <div class="padli-alias-add-field padli-alias-add-title">
+              <label>Teljes cím *</label>
+              <input type="text" id="newAliasTitle" class="padli-input"
+                placeholder='pl. "The Beginning After the End"' autocomplete="off" />
+            </div>
+            <div class="padli-alias-add-field padli-alias-add-note">
+              <label>Megjegyzés</label>
+              <input type="text" id="newAliasNote" class="padli-input"
+                placeholder='pl. "manhwa sorozat"' autocomplete="off" />
+            </div>
+          </div>
+          <div class="padli-char-add-row">
+            <button class="padli-btn-add" id="aliasAddBtn">💾 Mentés</button>
+            <button class="padli-btn-del" id="aliasAddCancelBtn">Mégse</button>
+          </div>
+        </div>
+
+        <!-- Keresés -->
+        <div class="padli-tag-search-wrap" style="margin-top:.5rem">
+          <input id="aliasSearchInput" type="text" placeholder="🔍 Rövidítés vagy cím keresése..." class="padli-input" />
+        </div>
+
+        <!-- Fejléc sor -->
+        <div class="padli-alias-header-row">
+          <span class="padli-alias-col-short">Rövidítés</span>
+          <span class="padli-alias-col-arrow"></span>
+          <span class="padli-alias-col-title">Teljes cím</span>
+          <span class="padli-alias-col-note">Megjegyzés</span>
+          <span class="padli-alias-col-actions">Műveletek</span>
+        </div>
+
+        <div id="padliAliasesList" class="padli-aliases-list">
           <div class="padli-loading">Betöltés...</div>
         </div>
       </div>
