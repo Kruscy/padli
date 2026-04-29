@@ -27,70 +27,54 @@ function parseImageUrl(imageUrl) {
 router.get("/", requireLogin, async (req, res) => {
   try {
     const { manga_slug, chapter, closed } = req.query;
-
+    
     let query = `
-      SELECT
+      SELECT 
         br.*,
-        COUNT(*) OVER (PARTITION BY br.manga_slug, br.chapter, br.image_index) as report_count,
-        bf.id as fix_id,
-        bf.fixed_image_url,
-        bf.fixed_by_name,
-        bf.fixed_at,
-        bf.likes,
-        bf.dislikes,
-        bf.is_applied
+        u.username,
+        m.title as manga_title,
+        cb.username as closed_by_name,
+        m.uploaders as translator,
+        (SELECT COUNT(*) FROM bug_report_comments WHERE bug_report_id = br.id) as comment_count
       FROM bug_reports br
-      LEFT JOIN bug_fixes bf
-        ON bf.manga_slug = br.manga_slug
-        AND bf.chapter = br.chapter
-        AND bf.image_index = br.image_index
+      LEFT JOIN users u ON u.id = br.user_id
+      LEFT JOIN users cb ON cb.id = br.closed_by
+      LEFT JOIN manga m ON m.slug = br.manga_slug
       WHERE 1=1
     `;
+    
     const params = [];
+    let paramCount = 0;
 
     if (manga_slug) {
+      paramCount++;
+      query += ` AND br.manga_slug = $${paramCount}`;
       params.push(manga_slug);
-      query += ` AND br.manga_slug = $${params.length}`;
-    }
-    if (chapter) {
-      params.push(chapter);
-      query += ` AND br.chapter = $${params.length}`;
-    }
-    if (closed !== undefined) {
-      params.push(closed === "true");
-      query += ` AND br.is_closed = $${params.length}`;
     }
 
-    query += ` ORDER BY br.manga_slug, br.chapter, br.image_index, br.created_at DESC`;
+    if (chapter) {
+      paramCount++;
+      query += ` AND br.chapter = $${paramCount}`;
+      params.push(chapter);
+    }
+
+    if (closed !== undefined) {
+      paramCount++;
+      const isClosed = closed === 'true' || closed === true;
+      query += ` AND br.is_closed = $${paramCount}`;
+      params.push(isClosed);
+    }
+
+    query += ` ORDER BY br.created_at DESC`;
 
     const { rows } = await pool.query(query, params);
     res.json(rows);
+
   } catch (err) {
-    console.error("Bug reports list error:", err);
-    res.status(500).json({ error: err.message });
+    console.error("GET BUG REPORTS ERROR:", err);
+    res.status(500).json({ error: "Server error" });
   }
 });
-
-/* ── GET /api/bug-reports/summary – összefoglaló ────────── */
-// Mangánként csoportosítva a nyitott hibajegyek száma
-router.get("/summary", requireLogin, async (req, res) => {
-  try {
-    const { rows } = await pool.query(`
-      SELECT
-        manga_slug,
-        COUNT(*) FILTER (WHERE NOT is_closed) as open_count,
-        COUNT(*) FILTER (WHERE is_closed) as closed_count,
-        COUNT(DISTINCT chapter) as chapter_count,
-        COUNT(DISTINCT image_index) as image_count,
-        MAX(created_at) as last_report
-      FROM bug_reports
-      GROUP BY manga_slug
-      ORDER BY open_count DESC, last_report DESC
-    `);
-    res.json(rows);
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
 /* ── GET /api/bug-reports/image – egy képhez tartozó jegyek */
 router.get("/image", requireLogin, async (req, res) => {
   try {
@@ -515,4 +499,293 @@ async function requireAdmin(req, res, next) {
   } catch { return res.status(500).json({ error: "Auth hiba" }); }
 }
 
+router.get("/:id/comments", requireLogin, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const { rows } = await pool.query(`
+      SELECT 
+        c.id,
+        c.comment,
+        c.created_at,
+        u.id as user_id,
+        u.username,
+        u.role
+      FROM bug_report_comments c
+      JOIN users u ON u.id = c.user_id
+      WHERE c.bug_report_id = $1
+      ORDER BY c.created_at ASC
+    `, [id]);
+
+    res.json(rows);
+
+  } catch (err) {
+    console.error("GET COMMENTS ERROR:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+/* ──────────────────────────────────────────────────────────
+   POST /api/bug-reports/:id/comments - Komment hozzáadása
+   ────────────────────────────────────────────────────────── */
+router.post("/:id/comments", requireLogin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { comment } = req.body;
+    const userId = req.session.user.id;
+
+    if (!comment || !comment.trim()) {
+      return res.status(400).json({ error: "Comment cannot be empty" });
+    }
+
+    // Komment létrehozása
+    const { rows } = await pool.query(`
+      INSERT INTO bug_report_comments (bug_report_id, user_id, comment)
+      VALUES ($1, $2, $3)
+      RETURNING *
+    `, [id, userId, comment.trim()]);
+
+    // Bug report tulajdonosának lekérése
+    const bugReport = await pool.query(`
+      SELECT user_id, manga_slug, chapter, image_index
+      FROM bug_reports
+      WHERE id = $1
+    `, [id]);
+
+    if (bugReport.rows.length > 0) {
+      const reportUserId = bugReport.rows[0].user_id;
+      const { manga_slug, chapter, image_index } = bugReport.rows[0];
+
+      // Értesítés a report tulajdonosának (ha nem ő kommentelt)
+      if (reportUserId !== userId) {
+        await pool.query(`
+          INSERT INTO notifications (user_id, type, message, link)
+          VALUES ($1, $2, $3, $4)
+        `, [
+          reportUserId,
+          'bug_comment',
+          `Új válasz érkezett a hibajegyedhez (${manga_slug} Ch${chapter} #${image_index})`,
+          `/bug-reports.html?id=${id}`
+        ]);
+      }
+
+      // Admin komment esetén: értesítés adminoknak is (opcio)
+      if (req.session.user.role === 'admin') {
+        // Minden kommentelő értesítése (kivéve aki most kommentelt)
+        await pool.query(`
+          INSERT INTO notifications (user_id, type, message, link)
+          SELECT DISTINCT c.user_id, $1, $2, $3
+          FROM bug_report_comments c
+          WHERE c.bug_report_id = $4
+            AND c.user_id != $5
+            AND c.user_id != $6
+        `, [
+          'bug_comment',
+          `Admin válaszolt a hibajegyedben (${manga_slug} Ch${chapter} #${image_index})`,
+          `/bug-reports.html?id=${id}`,
+          id,
+          userId,
+          reportUserId
+        ]);
+      }
+    }
+
+    // User adatok lekérése a válaszhoz
+    const user = await pool.query(`
+      SELECT id, username, role FROM users WHERE id = $1
+    `, [userId]);
+
+    res.json({
+      ...rows[0],
+      username: user.rows[0].username,
+      role: user.rows[0].role
+    });
+
+  } catch (err) {
+    console.error("POST COMMENT ERROR:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+/* ──────────────────────────────────────────────────────────
+   POST /api/bug-reports/:id/close-with-reason - Lezárás indokkal
+   ────────────────────────────────────────────────────────── */
+router.post("/:id/close-with-reason", requireLogin, async (req, res) => {
+  try {
+    if (req.session.user.role !== "admin") {
+      return res.status(403).json({ error: "Admin only" });
+    }
+
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    if (!reason || !reason.trim()) {
+      return res.status(400).json({ error: "Reason required" });
+    }
+
+    // Lezárás indokkal (nem javítva)
+    await pool.query(`
+      UPDATE bug_reports
+      SET 
+        is_closed = true,
+        closed_without_fix = true,
+        close_reason = $1,
+        closed_at = NOW(),
+        closed_by = $2
+      WHERE id = $3
+    `, [reason.trim(), req.session.user.id, id]);
+
+    // Bug report adatok lekérése értesítéshez
+    const bugData = await pool.query(`
+      SELECT user_id, manga_slug, chapter, image_index
+      FROM bug_reports
+      WHERE id = $1
+    `, [id]);
+
+    if (bugData.rows.length > 0) {
+      const { user_id, manga_slug, chapter, image_index } = bugData.rows[0];
+
+      // Értesítés a bejelentőnek
+      await pool.query(`
+        INSERT INTO notifications (user_id, type, message, link)
+        VALUES ($1, $2, $3, $4)
+      `, [
+        user_id,
+        'bug_closed',
+        `A hibajegyed lezárásra került: ${manga_slug} Ch${chapter} #${image_index}`,
+        `/bug-reports.html?id=${id}`
+      ]);
+    }
+
+    res.json({ success: true });
+
+  } catch (err) {
+    console.error("CLOSE WITH REASON ERROR:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+/* ──────────────────────────────────────────────────────────
+   DELETE /api/bug-reports/:id/comments/:commentId - Komment törlése
+   ────────────────────────────────────────────────────────── */
+router.delete("/:id/comments/:commentId", requireLogin, async (req, res) => {
+  try {
+    const { commentId } = req.params;
+    const userId = req.session.user.id;
+    const isAdmin = req.session.user.role === "admin";
+
+    // Csak saját komment vagy admin törölheti
+    const result = await pool.query(`
+      DELETE FROM bug_report_comments
+      WHERE id = $1 
+        AND (user_id = $2 OR $3 = true)
+      RETURNING id
+    `, [commentId, userId, isAdmin]);
+
+    if (result.rows.length === 0) {
+      return res.status(403).json({ error: "Unauthorized" });
+    }
+
+    res.json({ success: true });
+
+  } catch (err) {
+    console.error("DELETE COMMENT ERROR:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+/* ──────────────────────────────────────────────────────────
+   GET /api/notifications - Értesítések lekérése
+   ────────────────────────────────────────────────────────── */
+router.get("/notifications", requireLogin, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+
+    const { rows } = await pool.query(`
+      SELECT *
+      FROM notifications
+      WHERE user_id = $1
+      ORDER BY created_at DESC
+      LIMIT 50
+    `, [userId]);
+
+    res.json(rows);
+
+  } catch (err) {
+    console.error("GET NOTIFICATIONS ERROR:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+/* ──────────────────────────────────────────────────────────
+   GET /api/notifications/unread-count - Olvasatlan értesítések száma
+   ────────────────────────────────────────────────────────── */
+router.get("/notifications/unread-count", requireLogin, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+
+    const { rows } = await pool.query(`
+      SELECT COUNT(*) as count
+      FROM notifications
+      WHERE user_id = $1 AND is_read = false
+    `, [userId]);
+
+    res.json({ count: parseInt(rows[0].count) });
+
+  } catch (err) {
+    console.error("GET UNREAD COUNT ERROR:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+/* ──────────────────────────────────────────────────────────
+   POST /api/notifications/:id/mark-read - Értesítés olvasottnak jelölése
+   ────────────────────────────────────────────────────────── */
+router.post("/notifications/:id/mark-read", requireLogin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.session.user.id;
+
+    await pool.query(`
+      UPDATE notifications
+      SET is_read = true
+      WHERE id = $1 AND user_id = $2
+    `, [id, userId]);
+
+    res.json({ success: true });
+
+  } catch (err) {
+    console.error("MARK READ ERROR:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+/* ──────────────────────────────────────────────────────────
+   POST /api/notifications/mark-all-read - Összes olvasottnak
+   ────────────────────────────────────────────────────────── */
+router.post("/notifications/mark-all-read", requireLogin, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+
+    await pool.query(`
+      UPDATE notifications
+      SET is_read = true
+      WHERE user_id = $1 AND is_read = false
+    `, [userId]);
+
+    res.json({ success: true });
+
+  } catch (err) {
+    console.error("MARK ALL READ ERROR:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+/* ──────────────────────────────────────────────────────────
+   EXPORTS
+   ────────────────────────────────────────────────────────── */
+
+
+
 export default router;
+

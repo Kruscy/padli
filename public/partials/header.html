@@ -35,6 +35,27 @@
   <img src="/assets/discord.svg" alt="Discord">
 </a>
 
+ <!-- ✅ ÚJ: Értesítési badge -->
+  <div id="notificationBadge" class="notification-badge-wrapper">
+    <button class="icon-btn notification-btn" title="Értesítések">
+      🔔
+      <span id="notificationCount" class="notification-count hidden">0</span>
+    </button>
+    
+    <!-- Dropdown -->
+    <div id="notificationDropdown" class="notification-dropdown hidden">
+      <div class="notification-header">
+        <span class="notification-title">Értesítések</span>
+        <button id="markAllReadBtn" class="mark-all-read-btn">Mind olvasva</button>
+      </div>
+      
+      <div id="notificationList" class="notification-list">
+        <div class="notification-loading">Betöltés...</div>
+      </div>
+    </div>
+  </div>
+
+
 <div class="settings-wrapper">
   <button id="settingsBtn" class="icon-btn settings-btn" title="Settings">
 <img id="headerAvatar" src="/uploads/default.png" class="header-avatar"> 

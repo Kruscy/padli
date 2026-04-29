@@ -1,0 +1,188 @@
+/* ═══════════════════════════════════════════════════════════
+   NOTIFICATION BADGE - Header CSS kiegészítés
+   Add hozzá a header.css végéhez!
+   ═══════════════════════════════════════════════════════════ */
+
+/* Notification badge wrapper */
+.notification-badge-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.notification-btn {
+  position: relative;
+  font-size: 1.3rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px 12px;
+  transition: all 0.2s;
+}
+
+.notification-btn:hover {
+  transform: scale(1.1);
+}
+
+/* Notification count badge */
+.notification-count {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: #ef4444;
+  color: white;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  border: 2px solid var(--bg);
+  animation: pulse 2s infinite;
+}
+
+.notification-count.hidden {
+  display: none;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+/* Notification dropdown */
+.notification-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 360px;
+  max-height: 500px;
+  background: #0f172a;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+}
+
+.notification-dropdown.hidden {
+  display: none;
+}
+
+/* Notification header */
+.notification-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+
+.notification-title {
+  font-weight: 700;
+  color: #fff;
+  font-size: 1rem;
+}
+
+.mark-all-read-btn {
+  background: none;
+  border: none;
+  color: #7c3aed;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  transition: color 0.2s;
+}
+
+.mark-all-read-btn:hover {
+  color: #a78bfa;
+}
+
+/* Notification list */
+.notification-list {
+  flex: 1;
+  overflow-y: auto;
+  max-height: 400px;
+}
+
+.notification-loading,
+.notification-empty {
+  padding: 24px;
+  text-align: center;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+/* Individual notification */
+.notification-item {
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  cursor: pointer;
+  transition: background 0.15s;
+  display: flex;
+  gap: 10px;
+}
+
+.notification-item:hover {
+  background: rgba(124, 58, 237, 0.08);
+}
+
+.notification-item.unread {
+  background: rgba(124, 58, 237, 0.1);
+}
+
+.notification-dot {
+  width: 8px;
+  height: 8px;
+  background: #7c3aed;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 6px;
+}
+
+.notification-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.notification-message {
+  font-size: 0.9rem;
+  color: #e0e0f0;
+  margin-bottom: 4px;
+  line-height: 1.4;
+}
+
+.notification-time {
+  font-size: 0.75rem;
+  color: #666;
+}
+
+/* Scrollbar */
+.notification-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.notification-list::-webkit-scrollbar-track {
+  background: #1e293b;
+}
+
+.notification-list::-webkit-scrollbar-thumb {
+  background: #475569;
+  border-radius: 3px;
+}
+
+.notification-list::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .notification-dropdown {
+    width: calc(100vw - 20px);
+    right: -10px;
+  }
+}

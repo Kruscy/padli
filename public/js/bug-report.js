@@ -1,338 +1,523 @@
-/* bug-report.js - Hibajegy beküldő modal a readerben */
+/* ═══════════════════════════════════════════════════════════
+   BUG-REPORTS.JS - JAVÍTOTT LOGIKA
+   1. Javított = fix_id van, de még nyitott
+   2. Leírás = első komment
+   ═══════════════════════════════════════════════════════════ */
 
-/* ── ÁLLAPOT ─────────────────────────────────────────────── */
-let bugModalOpen    = false;
-let bugCurrentIndex = 0;
-let bugAllFiles     = [];
-let bugImageUrls    = [];   // teljes /api/image/PROVIDER/... URL-ek
-let bugSlug         = "";
-let bugChapter      = "";
-let bugProvider     = "";   // ÚJ: Provider tracking
+let allBugReports = [];
+let currentUser = null;
+let activeTab = 'open'; // open, fixed, closed
+let expandedManga = {};
+let expandedReports = {};
 
-/* ── MODAL LÉTREHOZÁSA ───────────────────────────────────── */
-function createBugModal() {
-  if (document.getElementById("bugModal")) return;
+/* ──────────────────────────────────────────────────────────
+   INIT
+   ────────────────────────────────────────────────────────── */
+(async function init() {
+  try {
+    const res = await fetch('/api/auth/me');
+    if (res.ok) {
+      currentUser = await res.json();
+    }
+  } catch (err) {
+    console.error('Auth check error:', err);
+  }
 
-  const modal = document.createElement("div");
-  modal.id = "bugModal";
-  modal.style.cssText = `
-    display:none; position:fixed; inset:0; z-index:500;
-    background:rgba(0,0,0,.92); overflow:hidden;
-    flex-direction:column; align-items:center; justify-content:center;
-  `;
+  // Fül gombok
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      activeTab = btn.dataset.tab;
+      renderBugReports();
+    });
+  });
 
-  modal.innerHTML = `
-    <div id="bugModalBox" style="
-      width:min(96vw, 700px); max-height:96vh; background:#0f0f1a;
-      border:1px solid rgba(255,255,255,.1); border-radius:18px;
-      display:flex; flex-direction:column; overflow:hidden;
-    ">
-      <!-- Fejléc -->
-      <div style="
-        display:flex; align-items:center; justify-content:space-between;
-        padding:14px 20px; border-bottom:1px solid rgba(255,255,255,.08);
-        flex-shrink:0;
-      ">
-        <div style="display:flex; align-items:center; gap:10px;">
-          <span style="font-size:1.2rem">🐛</span>
-          <span style="font-weight:700; color:#f0f0fa; font-size:1rem">Hibabejelentés</span>
-        </div>
-        <button id="bugCloseBtn" style="
-          background:none; border:none; color:#888; font-size:1.4rem;
-          cursor:pointer; padding:4px 8px; border-radius:6px;
-          transition:color .15s;
-        ">✕</button>
-      </div>
+  await loadBugReports();
+})();
 
-      <!-- Kép választó -->
-      <div style="padding:16px 20px 0; flex-shrink:0;">
-        <div style="
-          font-size:.78rem; color:#666; text-transform:uppercase;
-          letter-spacing:.08em; font-weight:700; margin-bottom:8px;
-        ">Melyik kép a hibás?</div>
-
-        <!-- Navigáció -->
-        <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
-          <button id="bugPrevImg" style="
-            background:#1e1e30; border:1px solid rgba(255,255,255,.1);
-            color:#fff; padding:6px 14px; border-radius:8px; cursor:pointer;
-            font-size:.9rem; transition:background .15s;
-          ">← Előző</button>
-          <span id="bugPageInfo" style="
-            flex:1; text-align:center; font-size:.85rem; color:#888;
-          ">1 / 1</span>
-          <button id="bugNextImg" style="
-            background:#1e1e30; border:1px solid rgba(255,255,255,.1);
-            color:#fff; padding:6px 14px; border-radius:8px; cursor:pointer;
-            font-size:.9rem; transition:background .15s;
-          ">Következő →</button>
-        </div>
-
-        <!-- Kép előnézet (zoom-olható) -->
-        <div id="bugImgWrap" style="
-          width:100%; height:38vh; min-height:180px;
-          overflow:hidden; border-radius:10px;
-          background:#080810; position:relative; cursor:zoom-in;
-          border:2px solid rgba(124,92,255,.3);
-          display:flex; align-items:center; justify-content:center;
-        ">
-          <img id="bugPreviewImg" src="" alt="" style="
-            max-width:100%; max-height:100%; display:block;
-            object-fit:contain; transform-origin:center center;
-            transition:transform .2s; user-select:none;
-          ">
-          <!-- Zoom vezérlő -->
-          <div style="
-            position:absolute; bottom:8px; right:8px; display:flex; gap:6px;
-          ">
-            <button id="bugZoomIn" style="
-              background:rgba(0,0,0,.7); border:1px solid rgba(255,255,255,.2);
-              color:#fff; width:32px; height:32px; border-radius:8px;
-              cursor:pointer; font-size:1.1rem; display:flex;
-              align-items:center; justify-content:center;
-            ">+</button>
-            <button id="bugZoomOut" style="
-              background:rgba(0,0,0,.7); border:1px solid rgba(255,255,255,.2);
-              color:#fff; width:32px; height:32px; border-radius:8px;
-              cursor:pointer; font-size:1.1rem; display:flex;
-              align-items:center; justify-content:center;
-            ">-</button>
-            <button id="bugZoomReset" style="
-              background:rgba(0,0,0,.7); border:1px solid rgba(255,255,255,.2);
-              color:#888; width:32px; height:32px; border-radius:8px;
-              cursor:pointer; font-size:.7rem; display:flex;
-              align-items:center; justify-content:center;
-            ">1:1</button>
-          </div>
-        </div>
-
-        <!-- Kép azonosító -->
-        <div id="bugImgName" style="
-          font-size:.73rem; color:#444; margin-top:6px;
-          overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
-        "></div>
-      </div>
-
-      <!-- Leírás -->
-      <div style="padding:14px 20px 0; flex-shrink:0;">
-        <div style="
-          font-size:.78rem; color:#666; text-transform:uppercase;
-          letter-spacing:.08em; font-weight:700; margin-bottom:8px;
-        ">Mi a hiba? <span style="color:#7c3aed">*</span></div>
-        <textarea id="bugDescription" rows="3" placeholder="Pl. fordítási hiba, rossz szöveg, pixeles kép, hiányzó buborék..." style="
-          width:100%; box-sizing:border-box;
-          background:#080810; border:1px solid rgba(255,255,255,.12);
-          color:#e0e0f0; border-radius:10px; padding:10px 14px;
-          font-family:system-ui, sans-serif; font-size:.88rem;
-          resize:vertical; outline:none; min-height:70px;
-          transition:border-color .18s;
-        "></textarea>
-      </div>
-
-      <!-- Küldés -->
-      <div style="padding:14px 20px 18px; display:flex; justify-content:flex-end; gap:10px; flex-shrink:0;">
-        <button id="bugCancelBtn" style="
-          background:none; border:1px solid rgba(255,255,255,.12);
-          color:#888; padding:9px 20px; border-radius:9px;
-          cursor:pointer; font-size:.88rem; font-weight:600;
-          transition:all .15s;
-        ">Mégse</button>
-        <button id="bugSubmitBtn" style="
-          background:linear-gradient(135deg,#7c3aed,#5b21b6);
-          border:none; color:#fff; padding:9px 22px; border-radius:9px;
-          cursor:pointer; font-size:.88rem; font-weight:700;
-          transition:opacity .15s;
-        ">🐛 Beküldés</button>
-      </div>
-
-      <!-- Visszajelzés -->
-      <div id="bugFeedback" style="
-        display:none; padding:12px 20px; text-align:center;
-        font-size:.88rem; font-weight:600;
-      "></div>
-    </div>
-  `;
-
-  document.body.appendChild(modal);
-  initBugModalEvents(modal);
-}
-
-/* ── ZOOM ────────────────────────────────────────────────── */
-let bugZoomLevel = 1;
-
-function setBugZoom(level) {
-  bugZoomLevel = Math.max(1, Math.min(4, level));
-  const img  = document.getElementById("bugPreviewImg");
-  const wrap = document.getElementById("bugImgWrap");
-  if (img && wrap) {
-    img.style.transform  = bugZoomLevel > 1 ? `scale(${bugZoomLevel})` : "none";
-    img.style.maxWidth   = bugZoomLevel > 1 ? "none" : "100%";
-    img.style.maxHeight  = bugZoomLevel > 1 ? "none" : "100%";
-    wrap.style.overflow  = bugZoomLevel > 1 ? "auto" : "hidden";
-    wrap.style.cursor    = bugZoomLevel > 1 ? "grab" : "zoom-in";
-    wrap.style.alignItems   = bugZoomLevel > 1 ? "flex-start" : "center";
-    wrap.style.justifyContent = bugZoomLevel > 1 ? "flex-start" : "center";
+/* ──────────────────────────────────────────────────────────
+   BUG REPORTS BETÖLTÉSE
+   ────────────────────────────────────────────────────────── */
+async function loadBugReports() {
+  try {
+    const res = await fetch('/api/bug-reports');
+    allBugReports = await res.json();
+    
+    updateBadges();
+    renderBugReports();
+    
+  } catch (err) {
+    console.error('Load bug reports error:', err);
   }
 }
 
-/* ── KÉPVÁLTÁS ───────────────────────────────────────────── */
-function bugUpdatePreview() {
-  const img    = document.getElementById("bugPreviewImg");
-  const info   = document.getElementById("bugPageInfo");
-  const nameEl = document.getElementById("bugImgName");
-  if (!img || !bugAllFiles.length) return;
-
-  const f = bugAllFiles[bugCurrentIndex];
+/* ──────────────────────────────────────────────────────────
+   BADGE SZÁMOK FRISSÍTÉSE (ÚJ LOGIKA)
+   ────────────────────────────────────────────────────────── */
+function updateBadges() {
+  // JAVÍTANI VALÓ: Nyitott, nincs javítás
+  const open = allBugReports.filter(r => !r.is_closed && !r.fix_id).length;
   
-  // ÚJ: Provider-t is használjuk az URL-ben
-  if (bugImageUrls && bugImageUrls[bugCurrentIndex]) {
-    img.src = bugImageUrls[bugCurrentIndex];
-  } else if (bugProvider) {
-    img.src = `/api/image/${bugProvider}/${bugSlug}/${bugChapter}/${encodeURIComponent(f)}`;
-  } else {
-    img.src = `/api/image/${bugSlug}/${bugChapter}/${encodeURIComponent(f)}`;
+  // JAVÍTOTT: Nyitott, van javítás (még nem lett lezárva!)
+  const fixed = allBugReports.filter(r => !r.is_closed && r.fix_id).length;
+  
+  // LEZÁRT: Mindegy mi az oka, lezárva van
+  const closed = allBugReports.filter(r => r.is_closed).length;
+  
+  const openBadge = document.getElementById('badge-open');
+  const fixedBadge = document.getElementById('badge-fixed');
+  const closedBadge = document.getElementById('badge-closed');
+  
+  if (openBadge) openBadge.textContent = open;
+  if (fixedBadge) fixedBadge.textContent = fixed;
+  if (closedBadge) closedBadge.textContent = closed;
+}
+
+/* ──────────────────────────────────────────────────────────
+   SZŰRÉS AKTÍV FÜL SZERINT (ÚJ LOGIKA)
+   ────────────────────────────────────────────────────────── */
+function filterByTab(reports) {
+  if (activeTab === 'open') {
+    // Javítani való: nyitott, nincs javítás
+    return reports.filter(r => !r.is_closed && !r.fix_id);
+  } else if (activeTab === 'fixed') {
+    // Javított: nyitott, VAN javítás (ellenőrzésre vár!)
+    return reports.filter(r => !r.is_closed && r.fix_id);
+  } else if (activeTab === 'closed') {
+    // Lezárt: mindegy mi, lezárva van
+    return reports.filter(r => r.is_closed);
   }
+  return reports;
+}
+
+/* ──────────────────────────────────────────────────────────
+   CSOPORTOSÍTÁS MANGA → CHAPTER SZERINT
+   ────────────────────────────────────────────────────────── */
+function groupReports(reports) {
+  const grouped = {};
   
-  info.textContent = `${bugCurrentIndex + 1} / ${bugAllFiles.length}`;
-  nameEl.textContent = decodeURIComponent(f);
-  setBugZoom(1);
+  reports.forEach(report => {
+    const manga = report.manga_slug;
+    const chapter = report.chapter;
+    
+    if (!grouped[manga]) {
+      grouped[manga] = {
+        title: report.manga_title || manga,
+        translator: report.translator,
+        chapters: {}
+      };
+    }
+    
+    if (!grouped[manga].chapters[chapter]) {
+      grouped[manga].chapters[chapter] = [];
+    }
+    
+    grouped[manga].chapters[chapter].push(report);
+  });
+  
+  return grouped;
 }
 
-/* ── MODAL MEGNYITÁSA ────────────────────────────────────── */
-// ÚJ: provider paraméter hozzáadva
-function openBugModal(currentPage, allFiles, slug, chapter, imageUrls, provider) {
-  createBugModal();
-  bugAllFiles   = allFiles || [];
-  bugImageUrls  = imageUrls || [];
-  bugSlug       = slug || "";
-  bugChapter    = chapter || "";
-  bugProvider   = provider || ""; // ÚJ
-  bugCurrentIndex = Math.max(0, (currentPage || 1) - 1);
-
-  // Reset
-  bugZoomLevel = 1;
-  const desc = document.getElementById("bugDescription");
-  if (desc) desc.value = "";
-  const fb = document.getElementById("bugFeedback");
-  if (fb) { fb.style.display = "none"; fb.textContent = ""; }
-
-  bugUpdatePreview();
-
-  const modal = document.getElementById("bugModal");
-  modal.style.display = "flex";
-  bugModalOpen = true;
-}
-
-/* ── MODAL BEZÁRÁSA ──────────────────────────────────────── */
-function closeBugModal() {
-  const modal = document.getElementById("bugModal");
-  if (modal) modal.style.display = "none";
-  bugModalOpen = false;
-}
-
-/* ── ESEMÉNYKEZELŐK ──────────────────────────────────────── */
-function initBugModalEvents(modal) {
-  // Bezárás
-  document.getElementById("bugCloseBtn")?.addEventListener("click", closeBugModal);
-  document.getElementById("bugCancelBtn")?.addEventListener("click", closeBugModal);
-
-  // Háttérre kattintás bezár
-  modal.addEventListener("click", e => {
-    if (e.target === modal) closeBugModal();
-  });
-
-  // Kép navigáció
-  document.getElementById("bugPrevImg")?.addEventListener("click", () => {
-    if (bugCurrentIndex > 0) { bugCurrentIndex--; bugUpdatePreview(); }
-  });
-
-  document.getElementById("bugNextImg")?.addEventListener("click", () => {
-    if (bugCurrentIndex < bugAllFiles.length - 1) { bugCurrentIndex++; bugUpdatePreview(); }
-  });
-
-  // Zoom
-  document.getElementById("bugZoomIn")?.addEventListener("click",    () => setBugZoom(bugZoomLevel + 0.5));
-  document.getElementById("bugZoomOut")?.addEventListener("click",   () => setBugZoom(bugZoomLevel - 0.5));
-  document.getElementById("bugZoomReset")?.addEventListener("click", () => setBugZoom(1));
-
-  // Kép dupla kattintás = zoom in/out
-  document.getElementById("bugPreviewImg")?.addEventListener("dblclick", () => {
-    setBugZoom(bugZoomLevel > 1 ? 1 : 2);
-  });
-
-  // Textarea focus - border highlight
-  const ta = document.getElementById("bugDescription");
-  ta?.addEventListener("focus", () => { ta.style.borderColor = "rgba(124,92,255,.6)"; });
-  ta?.addEventListener("blur",  () => { ta.style.borderColor = "rgba(255,255,255,.12)"; });
-
-  // Beküldés
-  document.getElementById("bugSubmitBtn")?.addEventListener("click", submitBugReport);
-}
-
-/* ── BEKÜLDÉS ────────────────────────────────────────────── */
-async function submitBugReport() {
-  const desc    = document.getElementById("bugDescription")?.value?.trim();
-  const submitBtn = document.getElementById("bugSubmitBtn");
-  const fb      = document.getElementById("bugFeedback");
-
-  if (!desc) {
-    document.getElementById("bugDescription").style.borderColor = "#ef4444";
-    setTimeout(() => {
-      document.getElementById("bugDescription").style.borderColor = "rgba(255,255,255,.12)";
-    }, 2000);
+/* ──────────────────────────────────────────────────────────
+   BUG REPORTS RENDERELÉSE
+   ────────────────────────────────────────────────────────── */
+function renderBugReports() {
+  const container = document.getElementById('bugReportsContainer');
+  
+  const filtered = filterByTab(allBugReports);
+  
+  if (filtered.length === 0) {
+    container.innerHTML = `
+      <div class="empty">
+        <div class="empty-icon">📭</div>
+        <p>Nincs hibajegy ebben a kategóriában</p>
+      </div>
+    `;
     return;
   }
+  
+  const grouped = groupReports(filtered);
+  
+  let html = '';
+  
+  Object.entries(grouped).forEach(([slug, data]) => {
+    html += renderMangaGroup(slug, data);
+  });
+  
+  container.innerHTML = html;
+}
 
-  const f = bugAllFiles[bugCurrentIndex];
-  if (!f) return;
+/* ──────────────────────────────────────────────────────────
+   MANGA CSOPORT RENDERELÉSE
+   ────────────────────────────────────────────────────────── */
+function renderMangaGroup(slug, data) {
+  const isExpanded = expandedManga[slug];
+  const title = data.title;
+  const translator = data.translator || '';
+  
+  const chapterCount = Object.keys(data.chapters).length;
+  const imageCount = Object.values(data.chapters).flat().length;
+  
+  return `
+    <div class="report-group">
+      <div class="group-header" onclick="toggleManga('${slug}')">
+        <div class="group-title">
+          <span class="expand-icon">${isExpanded ? '▼' : '▶'}</span>
+          <span class="manga-title">${escapeHtml(title)}</span>
+          ${translator ? `<span class="translator-badge">👤 ${escapeHtml(translator)}</span>` : ''}
+        </div>
+        <div class="group-meta">
+          <span>${chapterCount} chapter • ${imageCount} kép</span>
+        </div>
+      </div>
+      
+      ${isExpanded ? renderChapters(slug, data.chapters) : ''}
+    </div>
+  `;
+}
 
-  // ÚJ: Provider support az URL-ben
-  let imageUrl;
-  if (bugImageUrls && bugImageUrls[bugCurrentIndex]) {
-    imageUrl = bugImageUrls[bugCurrentIndex];
-  } else if (bugProvider) {
-    imageUrl = `/api/image/${bugProvider}/${bugSlug}/${bugChapter}/${encodeURIComponent(f)}`;
-  } else {
-    imageUrl = `/api/image/${bugSlug}/${bugChapter}/${encodeURIComponent(f)}`;
-  }
-
-  submitBtn.textContent = "⏳ Küldés...";
-  submitBtn.disabled = true;
-
-  try {
-    const res = await fetch("/api/bug-reports", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ 
-        image_url: imageUrl, 
-        description: desc 
-      })
+/* ──────────────────────────────────────────────────────────
+   CHAPTER-EK RENDERELÉSE
+   ────────────────────────────────────────────────────────── */
+function renderChapters(slug, chapters) {
+  let html = '<div class="chapters-container">';
+  
+  Object.entries(chapters)
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .forEach(([chapter, reports]) => {
+      html += `
+        <div class="chapter-block">
+          <div class="chapter-title">${chapter} (${reports.length} kép)</div>
+          ${reports.map(report => renderImageReport(report)).join('')}
+        </div>
+      `;
     });
+  
+  html += '</div>';
+  return html;
+}
 
-    const data = await res.json();
-
-    if (res.ok) {
-      fb.style.display = "block";
-      fb.style.color   = "#22c55e";
-      fb.textContent   = "✅ Hibajegy sikeresen beküldve! Köszönjük!";
-      submitBtn.style.display = "none";
-      setTimeout(closeBugModal, 2000);
+/* ──────────────────────────────────────────────────────────
+   KÉP REPORT RENDERELÉSE
+   ────────────────────────────────────────────────────────── */
+function renderImageReport(report) {
+  const isAdmin = currentUser?.role === 'admin';
+  const isExpanded = expandedReports[report.id];
+  
+  let statusBadge = '';
+  if (!report.is_closed) {
+    if (report.fix_id) {
+      statusBadge = `<span class="status fixed">✅ Javítva</span>`;
     } else {
-      fb.style.display = "block";
-      fb.style.color   = "#ef4444";
-      fb.textContent   = "❌ " + (data.error || "Hiba történt");
-      submitBtn.textContent = "🐛 Beküldés";
-      submitBtn.disabled = false;
+      statusBadge = `<span class="status open">⚠️ Nyitott</span>`;
     }
-  } catch {
-    fb.style.display = "block";
-    fb.style.color   = "#ef4444";
-    fb.textContent   = "❌ Szerverrel nem sikerült kapcsolatba lépni";
-    submitBtn.textContent = "🐛 Beküldés";
-    submitBtn.disabled = false;
+  } else {
+    if (report.closed_without_fix) {
+      statusBadge = `<span class="status closed">❌ Elutasítva</span>`;
+    } else {
+      statusBadge = `<span class="status closed-fixed">🔒 Lezárva (javítva)</span>`;
+    }
+  }
+  
+  const commentCount = report.comment_count || 0;
+  
+  return `
+    <div class="report-card ${isExpanded ? 'expanded' : ''}">
+      <div class="report-header" onclick="toggleReport(${report.id})">
+        <div class="report-info">
+          <span class="image-num">Kép #${report.image_index}</span>
+          ${statusBadge}
+          ${commentCount > 0 ? `<span class="comment-count">💬 ${commentCount}</span>` : ''}
+        </div>
+        <div class="report-meta">
+          <span>👤 ${escapeHtml(report.username)}</span>
+          <span>📅 ${formatDate(report.created_at)}</span>
+        </div>
+      </div>
+      
+      ${isExpanded ? renderReportDetails(report, isAdmin) : ''}
+    </div>
+  `;
+}
+
+/* ──────────────────────────────────────────────────────────
+   REPORT RÉSZLETEK - LEÍRÁS MINT ELSŐ KOMMENT
+   ────────────────────────────────────────────────────────── */
+function renderReportDetails(report, isAdmin) {
+  return `
+    <div class="report-details">
+      <div class="details-grid">
+        
+        <!-- BAL: Kép -->
+        <div class="left-col">
+          <div class="image-box">
+            <img src="${report.image_url}" alt="Bug preview" loading="lazy">
+          </div>
+          
+          ${report.close_reason ? `
+            <div class="close-reason-box">
+              <strong>Lezárás oka:</strong>
+              <p>${escapeHtml(report.close_reason)}</p>
+            </div>
+          ` : ''}
+          
+          ${report.is_closed ? `
+            <div class="closed-info">
+              🔒 Lezárta: ${escapeHtml(report.closed_by_name || 'Ismeretlen')}
+            </div>
+          ` : ''}
+        </div>
+        
+        <!-- JOBB: Kommentek (leírás ELSŐ komment) -->
+        <div class="right-col">
+          <h4>💬 Kommentek</h4>
+          <div id="comments-${report.id}" class="comments-box">
+            <div class="loading">Betöltés...</div>
+          </div>
+          
+          ${!report.is_closed ? `
+            <div class="new-comment">
+              <textarea 
+                id="newComment-${report.id}" 
+                placeholder="Írj kommentet..."
+                rows="2"
+              ></textarea>
+              <button onclick="postComment(${report.id})" class="send-btn">
+                Küldés
+              </button>
+            </div>
+          ` : ''}
+        </div>
+        
+      </div>
+      
+      <!-- Admin gombok -->
+      ${isAdmin && !report.is_closed ? `
+        <div class="admin-bar">
+          <button onclick="openFixEditor(${report.id})" class="btn-fix">
+            ✏️ Javítom
+          </button>
+          <button onclick="openCloseReasonModal(${report.id})" class="btn-close">
+            ❌ Lezárás
+          </button>
+          <button onclick="deleteBugReport(${report.id})" class="btn-delete">
+            🗑️ Törlés
+          </button>
+        </div>
+      ` : ''}
+      
+      ${isAdmin && report.is_closed ? `
+        <div class="admin-bar">
+          <button onclick="reopenBugReport(${report.id})" class="btn-reopen">
+            🔓 Újranyitás
+          </button>
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
+/* ──────────────────────────────────────────────────────────
+   TOGGLE FUNKCIÓK
+   ────────────────────────────────────────────────────────── */
+function toggleManga(slug) {
+  expandedManga[slug] = !expandedManga[slug];
+  renderBugReports();
+}
+
+function toggleReport(id) {
+  expandedReports[id] = !expandedReports[id];
+  if (expandedReports[id]) {
+    setTimeout(() => loadComments(id), 100);
+  }
+  renderBugReports();
+}
+
+/* ──────────────────────────────────────────────────────────
+   KOMMENTEK BETÖLTÉSE - LEÍRÁS ELSŐ
+   ────────────────────────────────────────────────────────── */
+async function loadComments(reportId) {
+  const container = document.getElementById(`comments-${reportId}`);
+  if (!container) return;
+  
+  try {
+    const res = await fetch(`/api/bug-reports/${reportId}/comments`);
+    const comments = await res.json();
+    
+    // Leírás megkeresése
+    const report = allBugReports.find(r => r.id === reportId);
+    const description = report?.description || '';
+    const reporterName = report?.username || 'Ismeretlen';
+    const reportDate = report?.created_at || new Date();
+    
+    let html = '';
+    
+    // ELSŐ komment: Leírás (bejelentő neve)
+    if (description) {
+      html += `
+        <div class="comment original-report">
+          <div class="comment-head">
+            <span class="author">👤 ${escapeHtml(reporterName)}</span>
+            <span class="date">${formatDate(reportDate)}</span>
+          </div>
+          <div class="description-label">Leírás:</div>
+          <div class="comment-text">${escapeHtml(description)}</div>
+        </div>
+      `;
+    }
+    
+    // Többi komment
+    if (comments.length > 0) {
+      html += comments.map(c => `
+        <div class="comment ${c.role === 'admin' ? 'admin' : ''}">
+          <div class="comment-head">
+            <span class="author">${c.role === 'admin' ? '👑' : '👤'} ${escapeHtml(c.username)}</span>
+            <span class="date">${formatDate(c.created_at)}</span>
+          </div>
+          <div class="comment-text">${escapeHtml(c.comment)}</div>
+        </div>
+      `).join('');
+    }
+    
+    if (!description && comments.length === 0) {
+      html = '<div class="no-comments">Nincs komment</div>';
+    }
+    
+    container.innerHTML = html;
+    
+  } catch (err) {
+    console.error('Load comments error:', err);
+    container.innerHTML = '<div class="error">Hiba</div>';
   }
 }
 
-/* ── EXPORTÁLÁS (reader.js hívja) ────────────────────────── */
-window.openBugModal  = openBugModal;
-window.closeBugModal = closeBugModal;
+/* ──────────────────────────────────────────────────────────
+   KOMMENT KÜLDÉSE
+   ────────────────────────────────────────────────────────── */
+async function postComment(reportId) {
+  const textarea = document.getElementById(`newComment-${reportId}`);
+  const comment = textarea.value.trim();
+  
+  if (!comment) {
+    textarea.style.borderColor = '#ef4444';
+    setTimeout(() => textarea.style.borderColor = '', 2000);
+    return;
+  }
+  
+  try {
+    const res = await fetch(`/api/bug-reports/${reportId}/comments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ comment })
+    });
+    
+    if (!res.ok) {
+      alert('Hiba');
+      return;
+    }
+    
+    textarea.value = '';
+    await loadComments(reportId);
+    
+  } catch (err) {
+    console.error('Post comment error:', err);
+    alert('Hiba');
+  }
+}
+
+/* ──────────────────────────────────────────────────────────
+   ADMIN MŰVELETEK
+   ────────────────────────────────────────────────────────── */
+function openFixEditor(reportId) {
+  const report = allBugReports.find(r => r.id === reportId);
+  if (!report) return;
+  
+  const url = `/editor.html?provider=${encodeURIComponent(report.provider || '')}&slug=${encodeURIComponent(report.manga_slug)}&chapter=${encodeURIComponent(report.chapter)}&image_index=${report.image_index}&image_url=${encodeURIComponent(report.image_url)}`;
+  window.location.href = url;
+}
+
+function openCloseReasonModal(reportId) {
+  const reason = prompt('Lezárás oka:');
+  if (!reason || !reason.trim()) return;
+  closeWithReason(reportId, reason.trim());
+}
+
+async function closeWithReason(reportId, reason) {
+  try {
+    const res = await fetch(`/api/bug-reports/${reportId}/close-with-reason`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason })
+    });
+    
+    if (!res.ok) {
+      alert('Hiba');
+      return;
+    }
+    
+    alert('✅ Lezárva!');
+    await loadBugReports();
+    
+  } catch (err) {
+    console.error('Close error:', err);
+    alert('Hiba');
+  }
+}
+
+async function deleteBugReport(reportId) {
+  if (!confirm('Biztosan törölni?')) return;
+  
+  try {
+    const res = await fetch(`/api/bug-reports/${reportId}`, { method: 'DELETE' });
+    if (!res.ok) {
+      alert('Hiba');
+      return;
+    }
+    
+    alert('✅ Törölve!');
+    await loadBugReports();
+    
+  } catch (err) {
+    console.error('Delete error:', err);
+    alert('Hiba');
+  }
+}
+
+async function reopenBugReport(reportId) {
+  try {
+    const res = await fetch(`/api/bug-reports/${reportId}/reopen`, { method: 'POST' });
+    if (!res.ok) {
+      alert('Hiba');
+      return;
+    }
+    
+    alert('✅ Újranyitva!');
+    await loadBugReports();
+    
+  } catch (err) {
+    console.error('Reopen error:', err);
+    alert('Hiba');
+  }
+}
+
+/* ──────────────────────────────────────────────────────────
+   HELPER FUNKCIÓK
+   ────────────────────────────────────────────────────────── */
+function escapeHtml(text) {
+  if (!text) return '';
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function formatDate(dateStr) {
+  const date = new Date(dateStr);
+  return date.toLocaleDateString('hu-HU', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
