@@ -242,6 +242,57 @@ if (disconnectBtn) {
 }
 
 /* ══════════════════════════════════════════════════════════
+   SYNC BUTTON
+   ══════════════════════════════════════════════════════════ */
+
+const syncBtn = document.getElementById("patreonSyncBtn");
+const syncStatus = document.getElementById("patreonSyncStatus");
+
+if (syncBtn) {
+  syncBtn.addEventListener("click", async () => {
+    syncBtn.disabled = true;
+    syncBtn.textContent = "⏳ Frissítés...";
+    if (syncStatus) syncStatus.textContent = "";
+
+    try {
+      const res = await fetch("/api/patreon/sync", {
+        method: "POST",
+        credentials: "include"
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        const activeEl = document.getElementById("patreonActive");
+        const tierEl = document.getElementById("patreonTier");
+        if (activeEl) activeEl.textContent = data.active ? "Aktív ✅" : "Inaktív ❌";
+        if (tierEl) tierEl.textContent = data.tier || "—";
+        if (syncStatus) {
+          syncStatus.style.color = "#4ade80";
+          syncStatus.textContent = "✅ Frissítve";
+        }
+        logSuccess("Patreon sync sikeres", data);
+      } else {
+        if (syncStatus) {
+          syncStatus.style.color = "#f87171";
+          syncStatus.textContent = "❌ " + (data.error || "Hiba történt");
+        }
+        logError("Patreon sync hiba", data);
+      }
+    } catch (err) {
+      if (syncStatus) {
+        syncStatus.style.color = "#f87171";
+        syncStatus.textContent = "❌ Hálózati hiba, próbáld újra.";
+      }
+      logError("Patreon sync catch", err);
+    } finally {
+      syncBtn.disabled = false;
+      syncBtn.textContent = "🔄 Jogosultság frissítése";
+    }
+  });
+}
+
+/* ══════════════════════════════════════════════════════════
    URL PARAMÉTEREK (success/error)
    ══════════════════════════════════════════════════════════ */
 

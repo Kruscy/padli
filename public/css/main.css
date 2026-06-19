@@ -1,8 +1,13 @@
+html {
+      overflow-x: hidden;
+    }
+
 body {
       margin: 0;
       background: #0e1117;
       color: #fff;
       font-family: system-ui, sans-serif;
+      overflow-x: hidden;
     }
 
     header {
@@ -440,11 +445,19 @@ body {
 /* ===== MOBILE ===== */
 
 @media (max-width: 700px) {
-  .hero-card-image { width: 130px; }
-  .hero-card-icon  { width: 56px; font-size: 28px; }
-  .hero-card-body  { padding: 18px 16px; gap: 8px; }
-  .hero-card-body h2 { font-size: 16px; }
-  .hero-card-text  { font-size: 13px; max-height: 80px; }
+  .hero { padding: 0 12px; margin: 16px auto 32px; }
+  .hero-card-image { width: 110px; }
+  .hero-card-icon  { width: 52px; font-size: 26px; }
+  .hero-card-body  { padding: 16px 14px; gap: 8px; }
+  .hero-card-body h2 { font-size: 15px; }
+  .hero-card-text  { font-size: 12px; max-height: 72px; }
   .hero-arrow.left  { left: -2px; }
   .hero-arrow.right { right: -2px; }
+}
+
+@media (max-width: 420px) {
+  .hero-card-image { display: none; }
+  .hero-card-icon  { width: 44px; font-size: 22px; }
+  .hero-card-body  { padding: 16px; }
+  .hero-card-body h2 { font-size: 14px; }
 }

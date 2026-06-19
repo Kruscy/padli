@@ -2,6 +2,7 @@
 <html lang="hu">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Minden Sorozat</title>
 <link rel="stylesheet" href="/css/sidebar.css">
 <link rel="stylesheet" href="/css/search.css">
@@ -20,9 +21,12 @@
 <div id="sidebar-root"></div>
 <div class="filter-panel" id="filterPanel"></div>
 <div class="filter-summary" id="filterSummary"></div>
-<span id="filterCount" class="filter-count" style="padding:0 1.5rem 0.5rem; display:block; max-width:1200px; margin:0 auto; font-size:0.8rem;"></span>
+<span id="filterCount" class="filter-count"></span>
 
 <main class="content">
+<div class="grid-toolbar">
+  <button id="sortChaptersBtn" class="sort-btn" onclick="cycleSortChapters()">📚 Részek</button>
+</div>
 <div id="grid"></div>
 <div class="filter-no-results" id="filterNoResults">Nincs találat a kiválasztott szűrőkre.</div>
 </main>

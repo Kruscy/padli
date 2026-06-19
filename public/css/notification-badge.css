@@ -186,3 +186,73 @@
     right: -10px;
   }
 }
+/* ── NOTIFICATION ITEM – törlés gomb + layout ────────────── */
+
+.notification-item {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid rgba(255,255,255,.05);
+}
+
+.notification-item-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  cursor: pointer;
+  flex: 1;
+  transition: background .15s;
+  position: relative;
+}
+
+.notification-item-main:hover {
+  background: rgba(255,255,255,.04);
+}
+
+.notification-type-icon {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.notification-delete-btn {
+  background: none;
+  border: none;
+  color: #444;
+  font-size: .85rem;
+  cursor: pointer;
+  padding: 0 12px;
+  flex-shrink: 0;
+  transition: color .15s, background .15s;
+  border-left: 1px solid rgba(255,255,255,.05);
+}
+
+.notification-delete-btn:hover {
+  color: #ef4444;
+  background: rgba(239,68,68,.08);
+}
+
+/* ── FEJLÉC GOMBOK ───────────────────────────────────────── */
+
+.notification-header-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.delete-all-notif-btn {
+  background: none;
+  border: 1px solid rgba(239,68,68,.3);
+  color: #ef4444;
+  font-size: .72rem;
+  padding: 3px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all .15s;
+}
+
+.delete-all-notif-btn:hover {
+  background: rgba(239,68,68,.1);
+  border-color: #ef4444;
+}

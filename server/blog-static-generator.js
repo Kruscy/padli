@@ -5,6 +5,7 @@
 import fs from "fs";
 import path from "path";
 import { pool } from "./db.js";
+import sharp from "sharp";
 
 const PUBLIC_DIR  = path.join(process.cwd(), "public");
 const BLOG_DIR    = path.join(PUBLIC_DIR, "blog");
@@ -189,7 +190,7 @@ export function generatePostHtml(post) {
 }
 
 /* ── BLOG INDEX HTML GENERÁLÁS ──────────────────────────── */
-export function generateIndexHtml(posts) {
+export async function generateIndexHtml(posts) {
   const postsSchema = posts.slice(0, 10).map(p => ({
     "@type": "BlogPosting",
     "headline": p.title,
@@ -217,8 +218,19 @@ export function generateIndexHtml(posts) {
   const featured = posts[0];
   const rest     = posts.slice(1);
 
+  let featuredClass = "blog-featured-card featured-portrait";
+  if (featured?.cover_url && featured.cover_url.startsWith("/")) {
+    try {
+      const imgPath = path.join(PUBLIC_DIR, featured.cover_url);
+      const meta = await sharp(imgPath).metadata();
+      if (meta.width && meta.height && meta.width > meta.height) {
+        featuredClass = "blog-featured-card featured-landscape";
+      }
+    } catch (e) {}
+  }
+
   const featuredHtml = featured ? `
-    <a href="/blog/${esc(featured.slug)}.html" class="blog-featured-card">
+    <a href="/blog/${esc(featured.slug)}.html" class="${featuredClass}">
       ${featured.cover_url
         ? `<img src="${esc(featured.cover_url)}" alt="${esc(featured.title)}" class="blog-featured-img">`
         : `<div class="blog-featured-img-placeholder">📝</div>`}
@@ -364,7 +376,7 @@ export async function regenerateIndex() {
       "SELECT id, slug, title, excerpt, cover_url, category, tags, author, created_at, updated_at " +
       "FROM blog_posts WHERE published = true ORDER BY created_at DESC LIMIT 50"
     );
-    const html = generateIndexHtml(rows);
+    const html = await generateIndexHtml(rows);
     const filePath = path.join(BLOG_DIR, "index.html");
     fs.writeFileSync(filePath, html, "utf8");
     console.log("[BLOG-GEN] Index generalva: " + rows.length + " poszt");

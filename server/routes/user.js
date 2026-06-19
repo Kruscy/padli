@@ -2,40 +2,54 @@ import express from "express";
 import multer from "multer";
 import { pool } from "../db.js";
 import path from "path";
+import sharp from "sharp";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { requireLogin } from "../middleware/auth.js";
 
 const router = express.Router();
-console.log("USER ROUTE LOADED");
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, "uploads/");
-  },
-  filename: (req, file, cb) => {
-    const ext = file.mimetype.split("/")[1].toLowerCase();
-      cb(null, Date.now() + "-" + Math.random().toString(36).slice(2) + "." + ext);
 
-console.log("UPLOAD FILE:", file.originalname);
-  }
+const r2 = new S3Client({
+  region: "auto",
+  endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+  credentials: {
+    accessKeyId: process.env.R2_ACCESS_KEY_ID,
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+  },
 });
 
 const upload = multer({
-  storage,
-  limits: { fileSize: 2 * 1024 * 1024 } // 2MB
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (/^image\/(png|jpeg|jpg|webp|gif)$/.test(file.mimetype)) cb(null, true);
+    else cb(new Error("Csak képfájl tölthető fel"));
+  },
 });
 
 router.post("/avatar", upload.single("avatar"), async (req, res) => {
   if (!req.session.user) return res.sendStatus(401);
+  if (!req.file) return res.status(400).json({ error: "Nincs fájl" });
 
   const userId = req.session.user.id;
 
-  const filePath = `/uploads/${req.file.filename}`;
+  const webp = await sharp(req.file.buffer)
+    .resize(256, 256, { fit: "cover" })
+    .webp({ quality: 85 })
+    .toBuffer();
 
-  await pool.query(
-    `UPDATE users SET avatar = $1 WHERE id = $2`,
-    [filePath, userId]
-  );
+  const key = `avatars/${userId}.webp`;
+  await r2.send(new PutObjectCommand({
+    Bucket: process.env.R2_BUCKET_NAME,
+    Key: key,
+    Body: webp,
+    ContentType: "image/webp",
+    CacheControl: "public, max-age=86400",
+  }));
 
-  res.json({ success: true, avatar: filePath });
+  const avatarUrl = `${process.env.R2_PUBLIC_URL}/${key}`;
+  await pool.query(`UPDATE users SET avatar = $1 WHERE id = $2`, [avatarUrl, userId]);
+
+  res.json({ success: true, avatar: avatarUrl });
 });
 router.get("/me", async (req, res) => {
   try {
@@ -58,7 +72,8 @@ router.get("/me", async (req, res) => {
       id: userId,
       username: user.username,
       avatar: user.avatar || "/uploads/default.png",
-      tier: user.tier || null
+      tier: user.tier || null,
+      role: req.session.user.role || "user",
     });
 
   } catch (err) {

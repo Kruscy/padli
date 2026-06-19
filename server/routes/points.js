@@ -179,6 +179,31 @@ router.post("/purchase-gift", requireLogin, async (req, res) => {
 
     await client.query('COMMIT');
 
+    // Ellenőrzés: ha ≤1 elérhető gift maradt → értesítés az összes adminnak
+    try {
+      const { rows: remRows } = await pool.query(
+        `SELECT COUNT(*) AS cnt FROM patreon_gifts WHERE status = 'available'`
+      );
+      const remaining = parseInt(remRows[0].cnt);
+      if (remaining <= 1) {
+        const { rows: admins } = await pool.query(
+          `SELECT id FROM users WHERE role = 'admin'`
+        );
+        const msg = remaining === 0
+          ? '⚠️ Elfogytak a Patreon Gift kódok! Azonnal fel kell tölteni.'
+          : '⚠️ Csak 1 Patreon Gift kód maradt! Hamarosan fel kell tölteni.';
+        for (const admin of admins) {
+          await pool.query(
+            `INSERT INTO notifications (user_id, type, message, link)
+             VALUES ($1, 'gift_low', $2, '/admin.html')`,
+            [admin.id, msg]
+          );
+        }
+      }
+    } catch (notifErr) {
+      console.warn('[gift] értesítés hiba:', notifErr.message);
+    }
+
     res.json({
       success: true,
       gift: {

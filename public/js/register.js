@@ -45,6 +45,21 @@ form.addEventListener("submit", async (e) => {
       return;
     }
 
+    // Email verifikáció szükséges
+    if (data.needsVerification) {
+      form.style.display = "none";
+      errorEl.style.color = "#22c55e";
+      errorEl.innerHTML = `
+        <div style="text-align:center;padding:24px 0">
+          <div style="font-size:3rem;margin-bottom:12px">✉️</div>
+          <h3 style="color:#a78bfa;margin:0 0 10px">Erősítsd meg az email címed!</h3>
+          <p style="color:#bbb;line-height:1.7">Küldtünk egy megerősítő emailt a <strong style="color:#fff">${email}</strong> címre.</p>
+          <p style="color:#bbb;font-size:0.88rem">Kattints a levélben lévő linkre, majd bejelentkezhetsz.</p>
+          <p style="color:#888;font-size:0.82rem;margin-top:16px">Nem kaptad meg? Ellenőrizd a spam mappát, vagy <a href="/login.html" style="color:#a78bfa">bejelentkezés oldalon</a> kérhetsz újat.</p>
+        </div>`;
+      return;
+    }
+
     location.href = "/";
   } catch (err) {
     errorEl.textContent = "Szerver hiba";

@@ -5,6 +5,7 @@ let mangaGenres = {};
 let mangaTags = {};
 let selectedGenres = new Set();
 let selectedTags = new Set();
+let sortChaptersState = 0; // 0=default, 1=desc (legtöbb), 2=asc (legkevesebb)
 
 async function init() {
   await loadMangas();
@@ -36,6 +37,7 @@ async function loadMangas() {
       const card = document.createElement("div");
       card.className = "card";
       card.dataset.slug = m.slug;
+      card.dataset.chapterCount = m.chapter_count || 0;
 
       const coverLink = document.createElement("a");
       coverLink.className = "cover";
@@ -48,6 +50,13 @@ async function loadMangas() {
         coverLink.appendChild(img);
       } else {
         coverLink.textContent = "No Cover";
+      }
+
+      if (m.chapter_count != null) {
+        const chBadge = document.createElement("div");
+        chBadge.className = "chapter-count-badge";
+        chBadge.textContent = m.chapter_count + " rész";
+        coverLink.appendChild(chBadge);
       }
 
       if (progressMap[m.slug]) {
@@ -160,6 +169,34 @@ function clearFilters() {
   applyFilter();
 }
 
+function cycleSortChapters() {
+  sortChaptersState = (sortChaptersState + 1) % 3;
+  const btn = document.getElementById("sortChaptersBtn");
+  if (sortChaptersState === 0) {
+    btn.textContent = "📚 Részek";
+    btn.classList.remove("active", "asc");
+    // ABC sorrend visszaállítás
+    const grid = document.getElementById("grid");
+    const cards = [...grid.querySelectorAll(".card")];
+    cards.sort((a, b) => {
+      const ta = a.querySelector(".title")?.textContent || "";
+      const tb = b.querySelector(".title")?.textContent || "";
+      return ta.localeCompare(tb, "hu");
+    });
+    cards.forEach(c => grid.appendChild(c));
+    applyFilter();
+    return;
+  } else if (sortChaptersState === 1) {
+    btn.textContent = "📚 Részek ↓";
+    btn.classList.add("active");
+    btn.classList.remove("asc");
+  } else {
+    btn.textContent = "📚 Részek ↑";
+    btn.classList.add("active", "asc");
+  }
+  applyFilter();
+}
+
 function updateFilterUI() {
   document.querySelectorAll(".filter-genre-btn").forEach(btn => {
     btn.classList.toggle("selected", selectedGenres.has(btn.dataset.genre));
@@ -190,9 +227,11 @@ function updateFilterUI() {
 }
 
 function applyFilter() {
-  const cards = document.querySelectorAll(".card");
+  const grid = document.getElementById("grid");
+  const cards = [...document.querySelectorAll(".card")];
   let visible = 0;
 
+  // Szűrés
   cards.forEach(card => {
     const slug = card.dataset.slug;
     if (!slug) return;
@@ -210,6 +249,17 @@ function applyFilter() {
     card.style.display = show ? "" : "none";
     if (show) visible++;
   });
+
+  // Rendezés fejezetek szerint
+  if (sortChaptersState !== 0) {
+    const visibleCards = cards.filter(c => c.style.display !== "none");
+    visibleCards.sort((a, b) => {
+      const ca = parseInt(a.dataset.chapterCount) || 0;
+      const cb = parseInt(b.dataset.chapterCount) || 0;
+      return sortChaptersState === 1 ? cb - ca : ca - cb;
+    });
+    visibleCards.forEach(c => grid.appendChild(c));
+  }
 
   const noResults = document.getElementById("filterNoResults");
   if (noResults) {

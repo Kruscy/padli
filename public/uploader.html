@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Feltöltő – PadlizsanFanSub</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favico.png">
+<link rel="stylesheet" href="/css/sidebar.css">
+<link rel="stylesheet" href="/css/header.css">
+<link rel="stylesheet" href="/css/notification-badge.css">
+<link rel="stylesheet" href="/css/uploader.css">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div id="header-root"></div>
+<div id="sidebar-root"></div>
+
+<main class="uploader-main">
+  <h1>📤 Feltöltő</h1>
+  <p class="subtitle">Mangát tölthetsz fel a saját mappádba. Mappákat és fájlokat húzz ide, vagy tallózz.</p>
+
+  <!-- Drag & Drop zóna -->
+  <div class="drop-zone" id="dropZone">
+    <div class="drop-zone-icon">📂</div>
+    <p><strong>Húzz ide fájlokat vagy mappákat</strong></p>
+    <p>vagy válassz az alábbi gombokkal</p>
+    <div class="btn-row">
+      <label class="btn btn-primary" style="cursor:pointer">
+        📄 Fájlok kiválasztása
+        <input type="file" id="fileInput" multiple style="display:none">
+      </label>
+      <label class="btn btn-secondary" style="cursor:pointer">
+        📁 Mappa kiválasztása
+        <input type="file" id="folderInput" webkitdirectory multiple style="display:none">
+      </label>
+    </div>
+  </div>
+
+  <!-- Feltöltési sor -->
+  <div id="queueSection" class="queue-section hidden">
+    <h2>⬆️ Feltöltési sor <span id="queueCount" style="color:#666;font-weight:400"></span> fájl</h2>
+
+    <div class="upload-stats">
+      <div class="stat-chip">Összesen: <strong id="statTotal">0</strong></div>
+      <div class="stat-chip">Kész: <strong id="statDone" style="color:#22c55e">0</strong></div>
+      <div class="stat-chip">Hiba: <strong id="statError" style="color:#f87171">0</strong></div>
+    </div>
+
+    <div id="overallProgressWrap" class="overall-progress-wrap hidden">
+      <div class="overall-progress-bar-bg">
+        <div class="overall-progress-bar-fill" id="overallProgressFill"></div>
+      </div>
+      <div class="overall-progress-label" id="overallProgressLabel">0%</div>
+    </div>
+    <div id="uploadDoneMsg" class="upload-done-msg hidden">✅ Minden fájl sikeresen feltöltve!</div>
+
+    <div class="btn-row" style="justify-content:flex-start; margin-bottom:12px">
+      <button class="btn btn-primary" id="uploadBtn">⬆️ Feltöltés indítása</button>
+      <button class="btn btn-secondary" id="clearBtn">🗑️ Befejezettek törlése</button>
+    </div>
+
+    <div class="queue-list" id="queueList"></div>
+  </div>
+
+  <!-- Fájlböngésző -->
+  <div class="browser-section">
+    <h2>📁 A te mappád</h2>
+    <div class="browser-search-wrap">
+      <input type="text" id="browserSearch" class="browser-search" placeholder="🔍 Keresés a mappában..." autocomplete="off">
+    </div>
+    <div class="breadcrumb" id="breadcrumb"></div>
+    <div class="file-list" id="browserList">
+      <div class="empty-dir">Betöltés...</div>
+    </div>
+  </div>
+</main>
+
+<script type="module" src="/js/layout-loader.js"></script>
+<script src="/js/uploader.js"></script>
+</body>
+</html>

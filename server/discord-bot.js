@@ -8,7 +8,7 @@ const TOKEN = process.env.DISCORD_BOT_TOKEN;
 
 // WebSocket szerver a klienseknek
 
-const wss = new WebSocketServer({ port: 3001 });
+const wss = new WebSocketServer({ port: parseInt(process.env.WS_PORT || "3001") });
 const clients = new Set();
 
 wss.on("connection", ws => {
@@ -56,7 +56,7 @@ bot.on("messageCreate", async msg => {
     content: msg.content,
     timestamp: msg.createdTimestamp
   });
-  // Padli AI – figyel a Discord üzenetekre is
+  // Padli AI - figyel a Discord üzenetekre is
   handleChatMessageForAI(
     { content: msg.content, author: msg.author.username, source: "discord", authorId: msg.author.id },
     broadcast
@@ -65,6 +65,10 @@ bot.on("messageCreate", async msg => {
 bot.login(TOKEN);
 
 // Web → Discord (exportáljuk hogy a route használhassa)
+export async function sendNewChaptersEmbed(newChapters) {
+  // Ezt most a scan.js saját bottal hívja, nem szükséges innen
+}
+
 export async function sendToDiscord(username, content) {
   const channel = await bot.channels.fetch(CHANNEL_ID);
   if (!channel) return;

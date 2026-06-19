@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PadliCrome - Olvasó</title>
+  <link rel="icon" type="image/png" href="/assets/favico.png">
+  <link rel="stylesheet" href="/css/reader.css">
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <a id="backBtn" href="/padlicrome.html">⬅ Vissza</a>
+  <div id="mangaTitle">Fordított fejezet</div>
+  <div id="chapterNum"></div>
+</div>
+
+<!-- KÖNYV MÓD NYILAK -->
+<button class="book-arrow left"  id="bookPrev" aria-label="Előző oldal">‹</button>
+<button class="book-arrow right" id="bookNext" aria-label="Következő oldal">›</button>
+
+<!-- OLDALAK -->
+<div id="pages"></div>
+
+<!-- BOTTOMBAR -->
+<div class="bottombar">
+  <button id="prevBtn">← Előző</button>
+
+  <div class="bottombar-center">
+    <button class="btn-icon" id="btnFullscreen" title="Teljes képernyő" onclick="toggleFullscreen()">⤢</button>
+    <button class="btn-icon btn-mode" data-mode="scroll" title="Folyamatos görgetés" onclick="cycleMode()">📜</button>
+    <button class="btn-icon btn-mode" data-mode="book" title="Könyv mód" style="display:none">📖</button>
+  </div>
+
+  <button id="nextBtn">Következő →</button>
+</div>
+
+<script src="/js/padlicrome-reader-init.js"></script>
+
+</body>
+</html>

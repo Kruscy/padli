@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PadliCrome - Manga Fordító | PadlizsanFanSub</title>
+  <link rel="icon" type="image/png" href="/assets/favico.png">
+  <link rel="stylesheet" href="/css/header.css">
+  <link rel="stylesheet" href="/css/main.css">
+  <link rel="stylesheet" href="/css/sidebar.css">
+  <link rel="stylesheet" href="/css/footer.css">
+  <link rel="stylesheet" href="/css/padlicrome.css">
+</head>
+<body>
+
+<div id="header-root"></div>
+<div id="sidebar-root"></div>
+
+<main>
+<div class="pc-wrap">
+
+  <!-- FEJLÉC -->
+  <div class="pc-header">
+    <div>
+      <div class="pc-title">🔮 Padli<span>Crome</span> Fordító</div>
+      <div style="font-size:.82rem;color:var(--pc-muted);margin-top:4px">Manga és manhua képek automatikus fordítása</div>
+    </div>
+    <div class="pc-user-info">
+      <span id="pcSubscriberBadge" class="pc-subscriber-badge" style="display:none">⭐ Előfizető</span>
+      <a href="/shop.html" class="pc-points-badge" style="text-decoration:none">🏆 <span id="pcPoints">...</span> pont</a>
+      <a href="/shop.html" class="pc-btn pc-btn-secondary pc-btn-sm" style="text-decoration:none">🛒 Pontok</a>
+      <button class="pc-btn pc-btn-secondary pc-btn-sm" onclick="newProject()">🆕 Új projekt</button>
+    </div>
+  </div>
+
+  <div id="pcStatus" class="pc-status" style="display:none;margin-bottom:16px"></div>
+
+  <div class="pc-grid">
+
+    <!-- BAL PANEL: feltöltés + összefűzés -->
+    <div style="display:flex;flex-direction:column;gap:16px">
+
+      <!-- PROJEKT INDÍTÁS -->
+      <div class="pc-panel">
+        <div class="pc-panel-header">
+          <span class="pc-panel-title">🔗 Chapter URL</span>
+          <span class="pc-count"><strong id="pcImageCount">0</strong> / 30 kép</span>
+        </div>
+        <div class="pc-panel-body">
+          <div style="font-size:.82rem;color:var(--pc-muted);margin-bottom:10px;line-height:1.6">
+            Illeszd be a manga/manhwa fejezet oldalának linkjét. A szerver automatikusan kiszedi és letölti a képeket.
+          </div>
+          <input type="url" id="pcChapterUrl" class="pc-url-input"
+            style="min-height:auto;padding:10px 14px;resize:none"
+            placeholder="https://arenascan.com/manga/chapter-123/ vagy https://mangadex.org/chapter/...">
+          <div class="pc-url-hint" style="margin-top:6px">
+            MangaDex, ArenaScan, RavenScans és sok más oldal támogatott
+          </div>
+          <button class="pc-btn pc-btn-primary pc-btn-full" id="pcStartBtn" style="margin-top:12px">
+            🚀 Projekt indítása
+          </button>
+          <div id="pcDownloadProgress" style="display:none;margin-top:10px">
+            <div class="pc-progress-bar">
+              <div class="pc-progress-fill" id="pcDlProgressFill" style="width:0%;transition:width .5s"></div>
+            </div>
+            <div style="font-size:.78rem;color:var(--pc-muted);margin-top:4px;text-align:center" id="pcDlProgressLabel">Letöltés...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- FÁJL FELTÖLTÉS -->
+      <div class="pc-panel">
+        <div class="pc-panel-header">
+          <span class="pc-panel-title">📁 Fájl feltöltés</span>
+          <span class="pc-count">Max 30 · <strong id="pcImageCount">0</strong> kép</span>
+        </div>
+        <div class="pc-panel-body">
+          <div class="pc-dropzone" id="pcDropzone">
+            <div class="pc-dropzone-icon">🖼️</div>
+            <div>Húzd ide a képeket, vagy kattints</div>
+            <div style="font-size:.75rem;margin-top:4px;color:var(--pc-muted)">JPG, PNG, WEBP - max 5MB/kép</div>
+          </div>
+          <input type="file" id="pcFileInput" multiple accept="image/*" style="display:none">
+        </div>
+      </div>
+
+      <!-- ÖSSZEFŰZÉS (előfizető) -->
+      <div class="pc-panel" id="pcMergePanel">
+        <div class="pc-panel-header">
+          <span class="pc-panel-title">🔗 Összefűzés</span>
+          <span id="pcMergeBadge" class="pc-subscriber-badge" style="display:none">⭐ Előfizető</span>
+        </div>
+        <div class="pc-panel-body">
+          <div class="pc-merge-hint">
+            Több képet egyetlen hosszú képpé fűzhetsz össze fordítás előtt.
+            A fordító így 1 pontból több oldalt dolgoz fel.
+          </div>
+          <button class="pc-btn pc-btn-secondary pc-btn-full" id="pcMergeBtn" onclick="openMergeModal()" disabled>
+            🔗 Kijelöltek összefűzése
+          </button>
+          <div id="pcMergeSubMsg" style="font-size:.78rem;color:var(--pc-muted);margin-top:8px;text-align:center;display:none">
+            🔒 Ez a funkció csak előfizetőknek érhető el
+          </div>
+        </div>
+      </div>
+
+      <!-- LETÖLTÉS -->
+      <div class="pc-panel">
+        <div class="pc-panel-header">
+          <span class="pc-panel-title">⬇️ Letöltés</span>
+        </div>
+        <div class="pc-panel-body">
+          <div id="pcDownloadList"></div>
+          <a href="/padlicrome-reader.html" class="pc-btn pc-btn-primary pc-btn-full" id="pcReaderBtn" style="margin-top:12px;text-decoration:none">
+            📖 Elolvasom
+          </a>
+          <button class="pc-btn pc-btn-secondary pc-btn-full" id="pcZipBtn" style="margin-top:8px" onclick="downloadAllZip()">
+            📦 Összes ZIP-ben
+          </button>
+          <div id="pcBugFixPanel" style="display:none;margin-top:12px;padding:12px;background:#1e1230;border:1px solid #7c3aed;border-radius:10px">
+            <div style="font-size:.82rem;color:#c4b5fd;margin-bottom:8px;font-weight:600">🔮 Bugfix képek</div>
+            <div id="pcBugFixList" style="display:flex;flex-direction:column;gap:8px"></div>
+            <button class="pc-btn pc-btn-primary pc-btn-full" id="pcSubmitAllBtn" onclick="submitAllBugFixes()" style="margin-top:10px">
+              💾 Összes lefordított mentése
+            </button>
+            <div id="pcBugFixGlobalStatus" style="margin-top:6px;font-size:.82rem;color:#888"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- JOBB PANEL: galéria + fordítás -->
+    <div style="display:flex;flex-direction:column;gap:16px">
+
+      <!-- GALÉRIA -->
+      <div class="pc-panel">
+        <div class="pc-panel-header">
+          <span class="pc-panel-title">🖼️ Képek</span>
+          <div class="pc-gallery-actions">
+            <button class="pc-btn pc-btn-sm pc-btn-secondary" onclick="toggleAll(true)" title="Mindet aktív">👁️ Mind</button>
+            <button class="pc-btn pc-btn-sm pc-btn-secondary" onclick="toggleAll(false)" title="Mindet inaktív">🚫 Mind</button>
+          </div>
+        </div>
+        <div class="pc-panel-body">
+          <div style="font-size:.78rem;color:var(--pc-muted);margin-bottom:10px">
+            Aktív: <strong id="pcActiveCount">0</strong> kép · Kattints a képre az aktív/inaktív váltáshoz
+          </div>
+          <div class="pc-gallery" id="pcGallery">
+            <div class="pc-empty" style="grid-column:1/-1">
+              <div class="pc-empty-icon">🖼️</div>
+              <p>Tölts fel képeket a kezdéshez!</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- FORDÍTÁS VEZÉRLŐ -->
+      <div class="pc-panel">
+        <div class="pc-panel-header">
+          <span class="pc-panel-title">🔮 Fordítás</span>
+        </div>
+        <div class="pc-panel-body">
+          <div id="pcProgressWrap" class="pc-progress-wrap" style="display:none">
+            <div class="pc-progress-label">
+              <span>Haladás</span>
+              <span id="pcProgressLabel">0 / 0</span>
+            </div>
+            <div class="pc-progress-bar">
+              <div class="pc-progress-fill" id="pcProgressFill" style="width:0%"></div>
+            </div>
+          </div>
+
+          <div class="pc-translate-bar">
+            <div class="pc-translate-info" id="pcTranslateInfo">
+              Nincsenek aktív képek
+            </div>
+            <button class="pc-btn pc-btn-primary" id="pcTranslateBtn" onclick="startTranslation()" disabled>
+              ▶ Fordítás indítása
+            </button>
+            <button class="pc-btn pc-btn-danger" id="pcStopBtn" onclick="requestStop()" style="display:none">
+              ⏹️ Stop
+            </button>
+            <button class="pc-btn pc-btn-danger" id="pcForceStopBtn" onclick="requestForceStop()" style="display:none" disabled>
+              🛑 Force Stop
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+</main>
+
+<!-- MODALS -->
+
+<!-- Új projekt megerősítés -->
+<div class="pc-modal-overlay" id="pcNewProjectModal" style="display:none">
+  <div class="pc-modal">
+    <h3>🆕 Új projekt</h3>
+    <p>Az új projekt indításával a jelenlegi projekt és az összes feltöltött kép törlődik. Biztosan folytatod?</p>
+    <div class="pc-modal-actions">
+      <button class="pc-btn pc-btn-secondary" onclick="document.getElementById('pcNewProjectModal').style.display='none'">Mégse</button>
+      <button class="pc-btn pc-btn-danger" id="pcNewProjectConfirm">🗑️ Törlés és új projekt</button>
+    </div>
+  </div>
+</div>
+
+<!-- Pont figyelmeztetés -->
+<div class="pc-modal-overlay" id="pcPointsModal" style="display:none">
+  <div class="pc-modal">
+    <h3>⚠️ Nem elég a pont</h3>
+    <p id="pcPointsModalInfo"></p>
+    <div class="pc-modal-actions">
+      <button class="pc-btn pc-btn-secondary" id="pcPointsModalCancel">Mégse</button>
+      <button class="pc-btn pc-btn-primary" id="pcPointsModalOk">▶ Csináld amíg el nem fogy</button>
+    </div>
+  </div>
+</div>
+
+<!-- Túl sok kép -->
+<div class="pc-modal-overlay" id="pcTooManyModal" style="display:none">
+  <div class="pc-modal">
+    <h3>📋 Túl sok kép</h3>
+    <div id="pcTooManyInfo"></div>
+    <div class="pc-too-many-list" style="margin:16px 0;display:flex;flex-direction:column;gap:8px">
+      <button class="pc-btn pc-btn-secondary" id="pcTooManyFirst">✂️ Csak az első 30-at töltsd le</button>
+      <button class="pc-btn pc-btn-secondary" id="pcTooManyDownload">📄 URL lista letöltése (.txt)</button>
+      <a href="https://padlizsanfansub.hu/downloads/Padli-Keposszefu.exe" class="pc-btn pc-btn-secondary" id="pcTooManyExe" target="_blank">⬇️ Padli Képösszefűző letöltése</a>
+      <div id="pcTooManySubOffer" style="display:none">
+        <hr style="border-color:var(--pc-border);margin:4px 0">
+        <div style="font-size:.8rem;color:var(--pc-muted);margin-bottom:8px">⭐ Előfizetőként összefűzheted a képeket 30-ba:</div>
+        <button class="pc-btn pc-btn-primary" id="pcTooManyMerge">🔗 Összefűzés és feltöltés</button>
+      </div>
+    </div>
+    <div class="pc-modal-actions">
+      <button class="pc-btn pc-btn-secondary" id="pcTooManyClose">Bezárás</button>
+    </div>
+  </div>
+</div>
+
+<!-- Összefűzés modal -->
+<div class="pc-modal-overlay" id="pcMergeModal" style="display:none">
+  <div class="pc-modal" style="max-width:600px">
+    <h3>🔗 Képek összefűzése</h3>
+    <p>Válaszd ki melyik képeket fűzzük össze. A kijelölt képek inaktívvá válnak, helyettük az összefűzött kép kerül a listába.</p>
+    <div id="pcMergeList" style="max-height:300px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;margin:12px 0"></div>
+    <div class="pc-modal-actions">
+      <button class="pc-btn pc-btn-secondary" id="pcMergeCancel">Mégse</button>
+      <button class="pc-btn pc-btn-primary" id="pcMergeConfirm">🔗 Összefűzés</button>
+    </div>
+  </div>
+</div>
+
+<!-- Kép megtekintés modal -->
+<div class="pc-modal-overlay" id="pcViewModal" style="display:none" onclick="this.style.display='none'">
+  <div style="max-width:92vw;max-height:92vh;overflow:auto;display:flex;flex-direction:column;gap:10px" onclick="event.stopPropagation()">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <span id="pcViewTitle" style="color:#fff;font-weight:700;font-size:.95rem"></span>
+      <button class="pc-btn pc-btn-secondary pc-btn-sm" onclick="document.getElementById('pcViewModal').style.display='none'">✕ Bezárás</button>
+    </div>
+    <img id="pcViewImg" style="max-width:100%;display:block;border-radius:8px;max-height:80vh;object-fit:contain" alt="">
+  </div>
+</div>
+
+<div id="footer"></div>
+<script src="/js/footer.js"></script>
+<script type="module" src="/js/layout-loader.js"></script>
+<script src="/js/sidebar.js"></script>
+<script src="/js/auth-check.js"></script>
+
+<script type="module" src="/js/padlicrome-main-init.js"></script>
+
+
+</body>
+</html>

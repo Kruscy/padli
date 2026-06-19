@@ -11,6 +11,15 @@
   font-family: "Poppins", system-ui, sans-serif;
 }
 
+@media (max-width: 768px) {
+  .settings-layout {
+    grid-template-columns: 1fr;
+    margin: 16px auto;
+    padding: 0 14px;
+    gap: 16px;
+  }
+}
+
 /* ===== LEFT NAV ===== */
 
 .settings-nav {

@@ -9,6 +9,7 @@ const BUG_CHAPTER   = urlParams.get("chapter");
 const BUG_INDEX     = urlParams.get("image_index");
 const BUG_URL       = urlParams.get("image_url");
 const BUG_PROVIDER  = urlParams.get("provider");
+const BUG_FIX_ID    = urlParams.get("fix_id"); // ha beállított, korrekció módban fut
 
 // Képlista navigáció
 let allImages = [];        // Fejezet összes képe
@@ -42,7 +43,7 @@ window.addEventListener("DOMContentLoaded", () => {
   resizeCanvases();
   setMode("mask");
   if (BUG_URL) loadImageFromUrl(BUG_URL);
-  if (!BUG_SLUG) document.getElementById("saveBtn").style.display = "none";
+  if (!BUG_SLUG && !BUG_FIX_ID) document.getElementById("saveBtn").style.display = "none";
 });
 
 /* ── BETÖLTÉS ─── */
@@ -946,6 +947,7 @@ function undoInpaint() {
 function openSaveModal() {
   if (!origCanvas) { setStatus("Nincs kép.", "err"); return; }
   document.getElementById("saveModalInfo").textContent =
+    BUG_FIX_ID ? `Korrekció mentése (fix #${BUG_FIX_ID})` :
     BUG_SLUG ? `${BUG_SLUG} / ${BUG_CHAPTER} / kép #${BUG_INDEX}` : "Letöltés az Export gombokkal.";
   document.getElementById("saveModal").classList.add("open");
 }
@@ -953,19 +955,27 @@ function openSaveModal() {
 function closeSaveModal() { document.getElementById("saveModal").classList.remove("open"); }
 
 async function saveAsFixed() {
-  if (!origCanvas||!BUG_SLUG) return;
+  if (!origCanvas || (!BUG_SLUG && !BUG_FIX_ID)) return;
   closeSaveModal(); showProgress(true,"Feltöltés...");
   try {
     if (textBoxes.length) burnTextBoxes();
     const blob = await new Promise(r=>origCanvas.toBlob(r,"image/jpeg",0.95));
     const fd = new FormData();
-    fd.append("image",blob,`${BUG_INDEX}.jpg`);
-    fd.append("manga_slug",BUG_SLUG); fd.append("chapter",BUG_CHAPTER);
-    fd.append("image_index",BUG_INDEX); fd.append("provider", BUG_PROVIDER || "unknown");
-    const res = await fetch("/api/bug-reports/fix/upload",{method:"POST",body:fd});
-    if (!res.ok) throw new Error(await res.text());
-    showProgress(false); setStatus("✅ Elmentve!", "ok");
-    setTimeout(()=>{location.href="/bug-reports.html";}, 1500);
+    fd.append("image", blob, `${BUG_INDEX || "fix"}.jpg`);
+
+    if (BUG_FIX_ID) {
+      const res = await fetch(`/api/bug-reports/fix/${BUG_FIX_ID}/correct`, { method: "POST", body: fd });
+      if (!res.ok) throw new Error(await res.text());
+      showProgress(false); setStatus("✅ Korrigálva!", "ok");
+      setTimeout(() => window.close(), 1500);
+    } else {
+      fd.append("manga_slug", BUG_SLUG); fd.append("chapter", BUG_CHAPTER);
+      fd.append("image_index", BUG_INDEX); fd.append("provider", BUG_PROVIDER || "unknown");
+      const res = await fetch("/api/bug-reports/fix/upload", { method: "POST", body: fd });
+      if (!res.ok) throw new Error(await res.text());
+      showProgress(false); setStatus("✅ Elmentve!", "ok");
+      setTimeout(() => { location.href="/bug-reports.html"; }, 1500);
+    }
   } catch(e) { showProgress(false); setStatus("❌ "+e.message,"err"); }
 }
 

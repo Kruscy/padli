@@ -1,0 +1,188 @@
+/* ═══════════════════════════════════════════════════════════
+   CAROUSEL COMPONENT CSS - BUGFIX
+   ═══════════════════════════════════════════════════════════ */
+
+.carousel-wrapper {
+  position: relative;
+  margin-bottom: 40px;
+}
+
+/* ✅ Scroll container - user-select none */
+.carousel-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(124, 58, 237, 0.3) transparent;
+  padding-bottom: 8px;
+}
+
+.carousel-scroll:active {
+  cursor: grabbing;
+}
+
+.carousel-scroll::-webkit-scrollbar {
+  height: 6px;
+}
+
+.carousel-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.carousel-scroll::-webkit-scrollbar-thumb {
+  background: rgba(124, 58, 237, 0.3);
+  border-radius: 3px;
+}
+
+.carousel-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(124, 58, 237, 0.5);
+}
+
+.carousel-grid {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(180px, 200px);
+  gap: 16px;
+}
+
+.carousel-grid.expanded {
+  grid-auto-flow: row;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  max-width: 100%;
+}
+
+.carousel-wrapper.expanded .carousel-scroll {
+  overflow-x: visible;
+}
+
+.carousel-grid .card {
+  width: 100%;
+  min-width: 180px;
+}
+
+/* ✅ Cover link - user-select none, no drag */
+.carousel-grid .cover {
+  position: relative;
+  display: block;
+  aspect-ratio: 2/3;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #1a1a2e;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+/* ✅ Kép - pointer-events auto DE user-select none */
+.carousel-grid .cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  pointer-events: auto;
+}
+
+.carousel-grid .cover:hover img {
+  transform: scale(1.05);
+}
+
+.carousel-grid .title {
+  display: block;
+  margin-top: 8px;
+  font-size: 0.9rem;
+  color: #e0e0f0;
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.carousel-grid .title:hover {
+  color: #7c3aed;
+}
+
+.carousel-more-btn {
+  display: block;
+  margin: 16px auto 0;
+  background: linear-gradient(135deg, #7c3aed, #5b21b6);
+  border: none;
+  padding: 10px 24px;
+  border-radius: 8px;
+  color: white;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+}
+
+.carousel-more-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.4);
+}
+
+/* ✅ Badge - bal alsó sarok, kisebb */
+.continue-badge {
+  position: absolute;
+  bottom: 6px;
+  left: 6px;
+  background: rgba(124, 58, 237, 0.85);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-align: center;
+  z-index: 10;
+  pointer-events: none;
+  user-select: none;
+}
+
+.new-chapter-badge {
+  position: absolute;
+  bottom: 6px;
+  left: 6px;
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-align: center;
+  z-index: 10;
+  pointer-events: none;
+  user-select: none;
+}
+
+@media (max-width: 768px) {
+  .carousel-grid {
+    grid-auto-columns: minmax(140px, 160px);
+    gap: 12px;
+  }
+  
+  .carousel-grid.expanded {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  }
+  
+  .carousel-grid .card {
+    min-width: 140px;
+  }
+  
+  .continue-badge,
+  .new-chapter-badge {
+    font-size: 0.65rem;
+    padding: 3px 6px;
+  }
+}

@@ -1,11 +1,18 @@
-const form = document.getElementById("loginForm");
+const form    = document.getElementById("loginForm");
 const errorEl = document.getElementById("error");
+
+// ?verified=1 visszajelzés a verify oldalról
+if (new URLSearchParams(location.search).get("verified") === "1") {
+  errorEl.style.color = "#22c55e";
+  errorEl.textContent = "✅ Email sikeresen megerősítve! Bejelentkezhetsz.";
+}
 
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
   errorEl.textContent = "";
+  errorEl.style.color = "";
 
-  const login = document.getElementById("login").value.trim();
+  const login    = document.getElementById("login").value.trim();
   const password = document.getElementById("password").value;
   const remember = document.getElementById("rememberMe")?.checked;
 
@@ -15,7 +22,7 @@ form.addEventListener("submit", async (e) => {
   }
 
   try {
-    const res = await fetch("/api/auth/login", {
+    const res  = await fetch("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ login, password, remember })
@@ -28,8 +35,11 @@ form.addEventListener("submit", async (e) => {
       return;
     }
 
+    // emailPending: be van jelentkezve, de az email még nincs megerősítve
+    // A notification-badge.js a fejlécen megmutatja a bannert
     location.href = "/";
   } catch (err) {
     errorEl.textContent = "Server hiba";
   }
 });
+

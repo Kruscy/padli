@@ -8,19 +8,19 @@
       <a href="mailto:csimotaclan@gmail.com">csimotaclan@gmail.com</a>
     </p>
     <p class="footer-links">
-      <a href="/privacy.html">Adatvédelmi Nyilatkozat</a>
+      <a href="/privacy.html">Adatvédelmi Nyilatkozat</a> ·
+      <a href="/impressum.html">Impressum</a> ·
+      <a href="/aszf.html">ÁSZF</a>
     </p>
   </div>
 </footer>
-<script>
-  var _paq = window._paq = window._paq || [];
-  _paq.push(['trackPageView']);
-  _paq.push(['enableLinkTracking']);
-  (function() {
-    var u="//mamato.csimota.duckdns.org/";
-    _paq.push(['setTrackerUrl', u+'matomo.php']);
-    _paq.push(['setSiteId', '1']);
-    var d=document, g=d.createElement('script'), s=d.getElementsByTagName('script')[0];
-    g.async=true; g.src=u+'matomo.js'; s.parentNode.insertBefore(g,s);
-  })();
-</script>
+<div id="cookieBanner" style="display:none;position:fixed;bottom:0;left:0;right:0;background:#1a1a28;border-top:1px solid #2a2a40;padding:14px 20px;z-index:10001;align-items:center;gap:16px;flex-wrap:wrap;font-size:0.88rem;color:#bbb">
+  <span style="flex:1;min-width:220px">
+    Ez az oldal analitikai sütiket (Matomo) használ a látogatottság méréséhez – saját szerveren, külső félnek nem adjuk át.
+    <a href="/privacy.html" style="color:#7c3aed">Adatvédelmi nyilatkozat</a>
+  </span>
+  <div style="display:flex;gap:10px;flex-shrink:0">
+    <button id="cookieDeclineBtn" style="padding:7px 16px;background:transparent;border:1px solid #444;border-radius:6px;color:#aaa;cursor:pointer;font-size:0.85rem">Elutasítom</button>
+    <button id="cookieAcceptBtn" style="padding:7px 16px;background:#7c3aed;border:none;border-radius:6px;color:#fff;cursor:pointer;font-size:0.85rem">Elfogadom</button>
+  </div>
+</div>

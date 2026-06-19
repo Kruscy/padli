@@ -2,6 +2,7 @@
 <html lang="hu">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PadlizsánFanSub - Profilom</title>
 <link rel="icon" type="image/png" sizes="32x32" href="/assets/favico.png">
 <link rel="stylesheet" href="/css/sidebar.css">
@@ -55,18 +56,7 @@
     <button onclick="saveAvatar()">Mentés</button>
   </div>
 </div>
-<script>
-(async () => {
-  const res = await fetch("/api/user/me");
-  if (!res.ok) return;
-
-  const data = await res.json();
-
-  if (data.avatar) {
-    document.getElementById("avatar").src = data.avatar;
-  }
-})();
-</script>
+<script src="/js/profile-init.js"></script>
 <div id="footer"></div>
 <script src="/js/footer.js"></script>
 

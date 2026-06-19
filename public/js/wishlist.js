@@ -152,9 +152,15 @@ function renderWishlist(items, containerId) {
 }
 
 /* ================= ANILIST KERESŐ ================= */
-const input = document.getElementById("searchInput");
-const resultsBox = document.getElementById("searchResults");
+const input = document.getElementById("wishlistSearchInput");
+const resultsBox = document.getElementById("wishlistSearchResults");
 let debounce;
+
+document.addEventListener("click", (e) => {
+  if (!e.target.closest(".wishlist-search-wrapper")) {
+    resultsBox.innerHTML = "";
+  }
+});
 
 input.addEventListener("input", () => {
   clearTimeout(debounce);

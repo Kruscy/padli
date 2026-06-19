@@ -81,22 +81,53 @@ function renderFeatured(post) {
   const a = document.createElement("a");
   a.className = "blog-featured-card";
   a.href = `/blog-post.html?slug=${encodeURIComponent(post.slug)}`;
-  a.innerHTML = `
-    ${post.cover_url
-      ? `<img src="${post.cover_url}" alt="${esc(post.title)}" class="blog-featured-img">`
-      : `<div class="blog-featured-img-placeholder">${catIcon}</div>`
-    }
+
+  const bodyHtml = `
     <div class="blog-featured-body">
       <span class="post-category">${esc(catLabel)}</span>
       <h2>${esc(post.title)}</h2>
       <p class="post-lead">${esc(post.excerpt || excerpt)}</p>
       <div class="blog-featured-meta">
         <span>${dateStr}</span>
-        ${post.author ? `<span>✍️ ${esc(post.author)}</span>` : ""}
+        ${post.author ? `<span>\u270d\ufe0f ${esc(post.author)}</span>` : ""}
       </div>
-      <span class="read-more-link">Elolvasom →</span>
+      <span class="read-more-link">Elolvasom \u2192</span>
     </div>
   `;
+
+  if (post.cover_url) {
+    // Alapbol portrait (manga boritok altalaban allo) - layout azonnal megjelenik
+    a.classList.add("featured-portrait");
+
+    const img = document.createElement("img");
+    img.alt = post.title;
+    img.className = "blog-featured-img";
+
+    img.onload = () => {
+      if (img.naturalWidth > img.naturalHeight) {
+        a.classList.replace("featured-portrait", "featured-landscape");
+      }
+    };
+    img.onerror = () => {
+      a.classList.replace("featured-portrait", "featured-landscape");
+    };
+
+    img.src = post.cover_url;
+
+    a.appendChild(img);
+    a.insertAdjacentHTML("beforeend", bodyHtml);
+
+    // Cache-bol betoltott kep: onload nem fut le, complete mar true
+    if (img.complete && img.naturalWidth > 0) {
+      if (img.naturalWidth > img.naturalHeight) {
+        a.classList.replace("featured-portrait", "featured-landscape");
+      }
+    }
+  } else {
+    a.classList.add("featured-landscape");
+    a.innerHTML = `<div class="blog-featured-img-placeholder">${catIcon}</div>` + bodyHtml;
+  }
+
   featuredEl.appendChild(a);
 }
 

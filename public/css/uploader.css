@@ -1,0 +1,340 @@
+:root {
+  --bg: #080810;
+  --surface: #0e0e1c;
+  --card: #13131f;
+  --border: rgba(255,255,255,.07);
+  --accent: #7c3aed;
+  --text: #e8e8f5;
+  --muted: #555570;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Poppins', system-ui, sans-serif;
+  min-height: 100vh;
+}
+
+.uploader-main {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 24px 16px 60px;
+}
+
+h1 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin-bottom: 6px;
+  color: #fff;
+}
+
+.subtitle {
+  font-size: .85rem;
+  color: var(--muted);
+  margin-bottom: 24px;
+}
+
+/* ── Drag & drop zóna ── */
+.drop-zone {
+  border: 2px dashed rgba(124,58,237,.5);
+  border-radius: 16px;
+  background: rgba(124,58,237,.05);
+  padding: 48px 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color .2s, background .2s;
+  margin-bottom: 24px;
+  position: relative;
+}
+
+.drop-zone.drag-over {
+  border-color: #7c3aed;
+  background: rgba(124,58,237,.12);
+}
+
+.drop-zone-icon { font-size: 2.5rem; margin-bottom: 10px; }
+
+.drop-zone p { color: var(--muted); font-size: .9rem; line-height: 1.6; }
+
+.drop-zone strong { color: #a78bfa; }
+
+.drop-zone input[type="file"] {
+  position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+}
+
+.btn-row {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 18px;
+  border-radius: 10px;
+  border: none;
+  font-size: .85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity .15s, transform .15s;
+}
+
+.btn:hover { opacity: .85; transform: scale(1.03); }
+.btn:active { transform: scale(.97); }
+.btn:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+
+.btn-primary { background: #7c3aed; color: #fff; }
+.btn-secondary { background: rgba(255,255,255,.08); color: #ccc; }
+.btn-danger { background: rgba(239,68,68,.15); color: #f87171; border: 1px solid rgba(239,68,68,.3); }
+
+/* ── Upload queue ── */
+.queue-section { margin-bottom: 28px; }
+
+.queue-section h2 {
+  font-size: .95rem;
+  font-weight: 700;
+  color: #a78bfa;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.queue-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.queue-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: .82rem;
+}
+
+.queue-item-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #ccc;
+}
+
+.queue-item-size { color: var(--muted); flex-shrink: 0; font-size: .78rem; }
+
+.queue-item-status { flex-shrink: 0; font-size: .8rem; font-weight: 600; }
+.queue-item-status.pending  { color: var(--muted); }
+.queue-item-status.uploading { color: #f59e0b; }
+.queue-item-status.done     { color: #22c55e; }
+.queue-item-status.error    { color: #f87171; }
+
+.queue-progress {
+  height: 3px;
+  background: rgba(255,255,255,.06);
+  border-radius: 2px;
+  margin-top: 2px;
+  overflow: hidden;
+}
+
+.queue-progress-bar {
+  height: 100%;
+  background: #7c3aed;
+  border-radius: 2px;
+  transition: width .3s;
+}
+
+/* ── Böngésző kereső ── */
+.browser-search-wrap {
+  margin-bottom: 10px;
+}
+
+.browser-search {
+  width: 100%;
+  padding: 9px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,.1);
+  background: var(--card);
+  color: var(--text);
+  font-size: .88rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color .2s;
+}
+
+.browser-search:focus {
+  border-color: var(--accent);
+}
+
+.browser-search::placeholder {
+  color: var(--muted);
+}
+
+/* ── Fájlböngésző ── */
+.browser-section h2 {
+  font-size: .95rem;
+  font-weight: 700;
+  color: #a78bfa;
+  margin-bottom: 12px;
+}
+
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  font-size: .82rem;
+}
+
+.breadcrumb-part {
+  color: #a78bfa;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.breadcrumb-sep { color: var(--muted); }
+.breadcrumb-current { color: var(--text); }
+
+.file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 9px 12px;
+  transition: background .15s;
+}
+
+.file-item:hover { background: #1a1a2e; }
+
+.file-item-icon { font-size: 1.1rem; flex-shrink: 0; }
+
+.file-item-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: .88rem;
+  cursor: pointer;
+}
+
+.file-item-name.is-dir { color: #93c5fd; font-weight: 600; }
+.file-item-name.is-file { color: var(--text); }
+
+.file-item-size { color: var(--muted); font-size: .78rem; flex-shrink: 0; }
+
+.file-item-del {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: #f87171;
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 2px 6px;
+  border-radius: 6px;
+  opacity: .5;
+  transition: opacity .15s, background .15s;
+}
+
+.file-item-del:hover { opacity: 1; background: rgba(239,68,68,.12); }
+
+.empty-dir {
+  text-align: center;
+  padding: 32px;
+  color: var(--muted);
+  font-size: .9rem;
+}
+
+/* ── Összesítő ── */
+.upload-stats {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.stat-chip {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: .82rem;
+  color: var(--muted);
+}
+
+.stat-chip strong { color: var(--text); }
+
+/* ── Scrollbar ── */
+.queue-list::-webkit-scrollbar { width: 5px; }
+.queue-list::-webkit-scrollbar-track { background: transparent; }
+.queue-list::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+
+/* ── Mobil ── */
+@media (max-width: 600px) {
+  .drop-zone { padding: 32px 16px; }
+  .drop-zone-icon { font-size: 2rem; }
+  .btn-row { gap: 8px; }
+}
+
+/* ── Összesített progress ── */
+.overall-progress-wrap {
+  margin: 10px 0 4px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.overall-progress-bar-bg {
+  flex: 1;
+  height: 10px;
+  background: #1e1e2e;
+  border-radius: 999px;
+  overflow: hidden;
+  border: 1px solid #2a2a3a;
+}
+
+.overall-progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #7c3aed, #22c55e);
+  border-radius: 999px;
+  transition: width 0.25s ease;
+  width: 0%;
+}
+
+.overall-progress-label {
+  font-size: .82rem;
+  color: var(--muted);
+  min-width: 36px;
+  text-align: right;
+}
+
+.upload-done-msg {
+  color: #22c55e;
+  font-weight: 700;
+  font-size: .95rem;
+  padding: 8px 0 2px;
+}

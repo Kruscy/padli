@@ -2,6 +2,7 @@
 <html lang="hu">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PadlizsanFanSub - Admin</title>
 <link rel="stylesheet" href="/css/sidebar.css">
 <link rel="stylesheet" href="/css/admin.css">
@@ -24,14 +25,22 @@
   <button class="tab-btn" data-tab="tab-mangas">📚 Mangák</button>
   <button class="tab-btn" data-tab="tab-blog">✍️ Blog</button>
   <button class="tab-btn" data-tab="tab-padli">🤖 Padli AI</button>
+  <button class="tab-btn" data-tab="tab-libraries">📁 Könyvtárak</button>
+  <button class="tab-btn" data-tab="tab-gifts">🎁 Patreon Gift</button>
 </div>
 
 <div id="tab-users" class="tab-panel active">
+  <div style="margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+    <button id="sendVerifyEmailsBtn" onclick="sendVerificationEmails()" style="background:#6366f1;color:#fff;border:none;padding:9px 20px;border-radius:8px;cursor:pointer;font-weight:600;font-size:0.88rem">
+      ✉️ Verifikációs email küldése (nem megerősített tagoknak)
+    </button>
+    <span id="sendVerifyStatus" style="font-size:0.83rem;color:#888"></span>
+  </div>
   <table class="users-table">
     <thead>
       <tr>
-        <th>ID</th><th>Felhasználónév</th><th>Email</th>
-        <th>Role</th><th>Patreon</th><th>Tier</th><th>AniList</th><th>Létrehozva</th>
+        <th>ID</th><th>Felhasználónév</th><th>Pontok</th>
+        <th>Role</th><th>Patreon</th><th>Tier</th><th>Email</th><th>AniList</th><th>Létrehozva</th>
       </tr>
     </thead>
     <tbody id="usersTableBody"></tbody>
@@ -357,6 +366,47 @@
 
     </div>
   </div>
+</div>
+
+<div id="tab-libraries" class="tab-panel">
+  <h2 style="margin-bottom:16px">📁 Feltöltők könyvtárai</h2>
+  <p style="color:#888;font-size:.88rem;margin-bottom:20px">
+    Csak Admin és Uploader tier felhasználók jelennek meg. Az alapértelmezett gyökér a felhasználónév.
+  </p>
+  <div id="kavitaDirsHint" style="margin-bottom:16px;display:flex;gap:8px;flex-wrap:wrap"></div>
+  <div id="uploaderRootsList"></div>
+</div>
+
+<div id="tab-gifts" class="tab-panel">
+  <h2 style="margin-bottom:16px">🎁 Patreon Gift kódok</h2>
+
+  <!-- Statisztika -->
+  <div id="giftsStats" style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap"></div>
+
+  <!-- Hozzáadás -->
+  <div style="background:#0f172a;border-radius:12px;padding:18px;margin-bottom:20px">
+    <p style="color:#94a3b8;font-size:.85rem;margin-bottom:10px">Új kódok hozzáadása (egy Patreon link / sor):</p>
+    <textarea id="giftsLinks" rows="4" placeholder="https://www.patreon.com/Padlizsanfansub/redeem/XXXXX&#10;https://www.patreon.com/Padlizsanfansub/redeem/YYYYY"
+      style="width:100%;background:#1e293b;border:1px solid #334155;border-radius:8px;padding:10px;color:#fff;font-size:.85rem;resize:vertical;box-sizing:border-box"></textarea>
+    <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap;align-items:center">
+      <label style="color:#94a3b8;font-size:.85rem">Időtartam:
+        <input type="number" id="giftsDuration" value="1" min="1" max="12"
+          style="width:55px;margin-left:6px;background:#1e293b;border:1px solid #334155;border-radius:6px;padding:5px 8px;color:#fff;font-size:.85rem"> hónap
+      </label>
+      <label style="color:#94a3b8;font-size:.85rem">Ár:
+        <input type="number" id="giftsCost" value="100" min="0"
+          style="width:70px;margin-left:6px;background:#1e293b;border:1px solid #334155;border-radius:6px;padding:5px 8px;color:#fff;font-size:.85rem"> pont
+      </label>
+      <button onclick="addGifts()"
+        style="background:#7c3aed;color:#fff;border:none;padding:7px 18px;border-radius:8px;cursor:pointer;font-weight:600;font-size:.85rem">
+        ➕ Hozzáadás
+      </button>
+      <span id="giftsAddStatus" style="font-size:.82rem;color:#22c55e;display:none"></span>
+    </div>
+  </div>
+
+  <!-- Lista -->
+  <div id="giftsList"></div>
 </div>
 
 <div id="footer"></div>

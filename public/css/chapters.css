@@ -1,6 +1,14 @@
 /* ===== PAGE BASE ===== */
-body {
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
   margin: 0;
+  overflow-x: hidden;
+}
+
+body {
   background: #0e1117;
   color: #ffffff;
   font-family: "Poppins", system-ui, sans-serif;
@@ -9,7 +17,7 @@ body {
 main.content {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 24px;
+  padding: 80px 24px 24px;
 }
 
 /* ===== MANGA HEADER ===== */
@@ -243,4 +251,50 @@ main.content {
     border-color 0.2s ease,
     transform 0.15s ease,
     box-shadow 0.15s ease;
+}
+
+/* ===== MOBIL ===== */
+@media (max-width: 640px) {
+  main.content {
+    padding: 76px 14px 24px;
+  }
+
+  .manga-header {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .manga-cover {
+    width: 140px;
+    display: block;
+    margin: 0 auto;
+  }
+
+  .manga-meta {
+    width: 100%;
+    min-width: 0;
+  }
+
+  #mangaTitle {
+    font-size: 20px;
+  }
+
+  .chapter-row {
+    grid-template-columns: 28px 1fr auto;
+    gap: 8px;
+    padding: 12px 12px;
+  }
+
+  .scan-date {
+    font-size: 11px;
+  }
+
+  .action-bar {
+    gap: 8px;
+  }
+
+  .btn {
+    padding: 8px 12px;
+    font-size: 13px;
+  }
 }

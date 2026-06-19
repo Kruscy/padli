@@ -22,9 +22,10 @@
   cursor: pointer;
 
   display: block;
-  width: 180px;      /* kb 10 karakter szélesség */
-  margin: 20px auto; /* KÖZÉPRE */
+  width: auto;
+  margin: 0;
   text-align: center;
+  white-space: nowrap;
 }
 
 .poll-card {
@@ -78,4 +79,17 @@
   height: 100%;
   background: linear-gradient(135deg,#ff424d,#ff6b6b);
   transition: width .4s;
+}
+
+@media (max-width: 600px) {
+  .polls-page {
+    padding: 0 14px;
+    margin: 20px auto;
+  }
+
+  .polls-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
 }

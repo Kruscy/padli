@@ -389,56 +389,69 @@ select:focus {
 }
 
 .image-list-item {
-  position: relative;
-  margin-bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 4px;
   border: 2px solid var(--border);
   border-radius: 8px;
-  overflow: hidden;
+  padding: 7px 10px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all 0.12s;
+  background: transparent;
 }
-
 .image-list-item:hover {
-  border-color: var(--accent);
- background: rgba(124,58,237,.05);
+  background: rgba(255,255,255,.04);
+  border-color: rgba(255,255,255,.2);
 }
 
+/* Aktuális: lila */
 .image-list-item.current {
-  border-color: var(--accent2);
-  box-shadow: 0 0 12px rgba(124, 58, 237, 0.3);
+  border-color: #7c3aed !important;
+  background: rgba(124,58,237,.12) !important;
+  box-shadow: 0 0 8px rgba(124,58,237,.25);
 }
 
-.image-list-item.has-bug::after {
-  content: '🐛';
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  background: var(--green);
-  border-radius: 50%;
-  width: 20px;
-  height: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.7rem;
+/* Van hibajegy: piros körvonal */
+.image-list-item.has-bug-report {
+  border-color: rgba(239,68,68,.5);
 }
 
-.image-list-item img {
-  width: 100%;
-  display: block;
+/* Nincs hibajegy: szürke */
+.image-list-item.no-bug {
+  opacity: 0.45;
+  cursor: default;
+}
+.image-list-item.no-bug:hover {
+  background: transparent;
+  border-color: var(--border);
 }
 
-.image-list-item.current.has-bug-report {
-  border: 2px solid var(--red);
-  background: rgba(239, 68, 68, 0.1);
-  box-shadow: 0 0 12px rgba(239, 68, 68, 0.3);
+/* Van saját javítás: zöld pont */
+.image-list-item.has-my-fix {
+  border-color: rgba(34,197,94,.5);
 }
-.image-list-item.current:not(.has-bug-report) {
-  border: 2px solid var(--green);
-  border-left: 4px solid var(--green);
-  background: rgba(34, 197, 94, 0.1);
-  box-shadow: 0 0 12px rgba(34, 197, 94, 0.3);
+
+.img-item-num {
+  font-size: .72rem;
+  color: #888;
+  font-family: var(--mono);
 }
+.img-item-name {
+  font-size: .8rem;
+  color: #ccc;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.img-item-status {
+  font-size: .7rem;
+  font-weight: 600;
+  margin-top: 1px;
+}
+.img-item-status.red  { color: #f87171; }
+.img-item-status.green { color: #4ade80; }
+.img-item-status.grey { color: #555; }
 
 
 .image-list-item-info {

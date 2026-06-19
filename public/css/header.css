@@ -1,34 +1,83 @@
 .topbar {
-  position: sticky;   /* ⬅ EZ HIÁNYZOTT */
-   width: 100%;
-  max-width: 100%;
-box-sizing: border-box;
-  top: 0;             /* ⬅ EZ IS KELL */
-   z-index: 10000;     /* ⬅ hogy minden felett legyen */
+  position: -webkit-sticky !important;
+  position: sticky !important;
+  top: 0;
+  z-index: 10000;
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
   display: flex;
   align-items: center;
   gap: 1rem;
-  padding: 0.75rem 1.5rem;
+  padding: 0.65rem 1.5rem;
   background: linear-gradient(180deg, #0f1220, #0b0d12);
   border-bottom: 1px solid #1f2333;
+  margin: 0 !important;
 }
-.topbar > * {
+
+/* ── Bal csoport: hamburger + logo ── */
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex: 1;
   min-width: 0;
 }
-.content {
-  padding-top: 4.5rem;
+
+/* ── Jobb csoport: közösség + harang + avatar ── */
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex: 1;
+  justify-content: flex-end;
+  min-width: 0;
 }
+
+/* ── Patreon + Discord ikonok a topbarban ── */
+.topbar-community-btn {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  text-decoration: none;
+  line-height: 0;
+  transition: opacity .15s, transform .15s;
+}
+
+.topbar-community-btn:hover {
+  opacity: .75;
+  transform: scale(1.08);
+}
+
+.topbar-community-btn span { display: none; }
+
+.topbar-patreon img {
+  max-height: 38px;
+  width: auto;
+}
+
+.topbar-discord img {
+  max-height: 26px;
+  width: auto;
+}
+
+/* 900px alatt: gombok eltűnnek a topbarból (dropdown-ban megmaradnak) */
+@media (max-width: 900px) {
+  .topbar-community-btn { display: none; }
+}
+
 .menu-btn {
   font-size: clamp(1.2rem, 2vw, 1.5rem);
   background: none;
   border: none;
   color: white;
   cursor: pointer;
-transition: transform .2s ease;
+  transition: transform .2s ease;
+  flex-shrink: 0;
 }
+
 .menu-btn:hover {
   transform: scale(1.15);
-  filter: brightness(1);
 }
 
 .logo {
@@ -40,6 +89,8 @@ transition: transform .2s ease;
   font-family: "Poppins", system-ui, sans-serif;
   color: #ffffff;
   text-decoration: none;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .logo img {
@@ -47,23 +98,57 @@ transition: transform .2s ease;
   width: auto;
 }
 
-.search-wrapper {
-  flex: 1 1 20rem;
-  display: flex;
+/* ═══════════════════════════════════════════════════════════
+   KERESŐ
+   Asztali: középen, mindig nyitva, toggle gomb rejtve
+   Mobil (≤768px): összenyomva, gombra nyílik ki
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Toggle gomb — asztalin rejtve ── */
+.search-toggle-btn {
+  display: none;
+  flex-shrink: 0;
+  width: 2.6rem;
+  height: 2.6rem;
+  background: rgba(255,255,255,.07);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 50%;
+  color: #aaa;
+  cursor: pointer;
+  align-items: center;
   justify-content: center;
-  position: relative;
-min-width: 10rem;
+  overflow: hidden;
+  transition: background .18s, color .18s;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
+.search-toggle-btn:hover {
+  background: rgba(124,92,255,.18);
+  color: #c4b5fd;
+  border-color: #7c3aed;
+}
+
+/* ── Wrapper — asztali: középen, max szélesség ── */
+.search-wrapper {
+  display: flex;
+  align-items: center;
+  position: relative;
+  flex: 0 1 420px;
+  min-width: 0;
+}
+
+/* ── Input — asztali: mindig látszik ── */
 .search-wrapper input {
-  width: 100%;
-max-width: 30rem;
-  padding: 0.6rem 1rem;
+  flex: 1;
+  min-width: 0;
+  padding: 0.55rem 1rem;
   border-radius: 0.75rem;
-  border: 1px solid #333;
-  background: #0e111b;
+  border: 1px solid #2a2d3e;
+  background: #0b0e1a;
   color: #fff;
   font-size: 0.9rem;
+  transition: border-color 0.2s;
 }
 
 .search-wrapper input:focus {
@@ -71,12 +156,41 @@ max-width: 30rem;
   border-color: #7c5cff;
 }
 
+.search-wrapper input::placeholder {
+  color: #555;
+}
+
+/* Találatok — teljes oldal szélességű, felülről pozicionálva */
+.search-results {
+  position: fixed;
+  top: 60px;
+  left: 0;
+  right: 0;
+  width: 100%;
+  max-width: 680px;
+  margin: 0 auto;
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-top: none;
+  border-radius: 0 0 12px 12px;
+  z-index: 20001;
+  max-height: 420px;
+  overflow-y: auto;
+  box-shadow: 0 12px 30px rgba(0,0,0,.5);
+}
+
+.search-results.hidden { display: none; }
+
 .search-item {
   display: flex;
-  gap: 10px;
-  padding: 10px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
   cursor: pointer;
+  border-bottom: 1px solid rgba(255,255,255,.04);
 }
+
+.search-item:last-child { border-bottom: none; }
 
 .search-item:hover {
   background: #1e293b;
@@ -87,13 +201,22 @@ max-width: 30rem;
   height: 55px;
   object-fit: cover;
   border-radius: 6px;
+  flex-shrink: 0;
 }
-/* ==== LOGOUT ICON ==== */
 
+.search-item span {
+  font-size: 0.92rem;
+  color: #e8e8f5;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ICON BUTTONS
+   ═══════════════════════════════════════════════════════════ */
 .icon-btn {
   background: none;
   border: none;
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 .icon-btn img {
@@ -107,28 +230,9 @@ max-width: 30rem;
   opacity: 1;
 }
 
-/* ==== PATREON ICON ==== */
-
-.patreon {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-}
-
-.patreon img {
-  height: clamp(2rem, 3vw, 2.5rem);              /* tényleges ikon méret */
-  width: auto;
-  display: block;
-  transition: transform 0.2s ease, filter 0.2s ease;
-  filter: brightness(0.9);
-}
-
-.patreon:hover img {
-  transform: scale(1.15);
-  filter: brightness(1);
-}
-/* ==== SETTINGS BUTTON ==== */
-
+/* ═══════════════════════════════════════════════════════════
+   SETTINGS / PROFIL DROPDOWN
+   ═══════════════════════════════════════════════════════════ */
 .settings-btn {
   width: 42px;
   height: 42px;
@@ -137,38 +241,31 @@ max-width: 30rem;
   justify-content: center;
 }
 
-.settings-btn .gear {
-  font-size: 16px;
-  transition: transform 0.2s ease, filter 0.2s ease;
-  opacity: .85;
-}
 .header-avatar {
   width: 33px;
-  height: auto;
+  height: 33px;
   border-radius: 50%;
   object-fit: cover;
-  border: 2px solid #000; /* Fehér keret */
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.2); /* Alapárnyék */
+  border: 2px solid #000;
+  box-shadow: 0 0 10px rgba(0,0,0,.2);
 }
-/* Különböző tier szintű aurák */
+
+/* Tier aurák */
 .settings-wrapper.szuper-tamogato .header-avatar {
-  border: 2px solid gold; /* Arany aura a szuper támogatóhoz */
-  box-shadow: 0 0 15px 5px gold; /* Arany fény körül */
+  border: 2px solid gold;
+  box-shadow: 0 0 15px 5px gold;
 }
-
 .settings-wrapper.booster .header-avatar {
-  border: 2px solid silver; /* Ezüst aura a boosterhez */
-  box-shadow: 0 0 15px 5px silver; /* Ezüst fény körül */
+  border: 2px solid silver;
+  box-shadow: 0 0 15px 5px silver;
 }
-
 .settings-wrapper.tamogato .header-avatar {
-  border: 2px solid #cd7f32; /* Bronz aura a támogatóhoz */
-  box-shadow: 0 0 15px 5px #cd7f32; /* Bronz fény körül */
+  border: 2px solid #cd7f32;
+  box-shadow: 0 0 15px 5px #cd7f32;
 }
-
 .settings-wrapper.admin #headerAvatar {
-  border: 2px solid purple !important; /* Vörös aura az adminhoz */
-  box-shadow: 0 0 15px 5px purple !important; /* Vörös fény körül */
+  border: 2px solid purple !important;
+  box-shadow: 0 0 15px 5px purple !important;
 }
 
 .settings-btn:hover .gear {
@@ -176,12 +273,11 @@ max-width: 30rem;
   opacity: 1;
 }
 
-/* ===== SETTINGS DROPDOWN ===== */
-
 .settings-wrapper {
   position: relative;
   display: flex;
   align-items: center;
+  flex-shrink: 0;
 }
 
 #settingsBtn img {
@@ -198,13 +294,13 @@ max-width: 30rem;
 .settings-menu {
   position: absolute;
   right: 0;
-  top: 100%;
+  top: calc(100% + 8px);
   background: #0f172a;
-  font-size: 20px;
-  float: left;
+  border: 1px solid rgba(255,255,255,.08);
   border-radius: 12px;
   padding: 6px;
-  min-width: 180px;
+  min-width: 200px;
+  width: min(240px, 90vw);
   box-shadow: 0 12px 35px rgba(0,0,0,.65);
   z-index: 20000;
 }
@@ -213,12 +309,12 @@ max-width: 30rem;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 14px;
+  padding: 9px 12px;
   border-radius: 8px;
   color: #fff;
   text-decoration: none;
   font-weight: 600;
-  font-size: 20px;
+  font-size: 14px;
   transition: background .15s ease;
 }
 
@@ -226,158 +322,129 @@ max-width: 30rem;
   background: #1e293b;
 }
 
-.hidden {
-  display: none;
-}
-/* ===== SETTINGS ADMIN ACTION ===== */
+.hidden { display: none; }
 
+/* ─── Elválasztó ─────────────────────────────────────────── */
+.settings-divider {
+  height: 1px;
+  background: rgba(255,255,255,.08);
+  margin: 6px 4px;
+}
+
+/* ─── Közösség linkek (Patreon + Discord) ────────────────── */
+.settings-community-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  color: #adb5d6;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 600;
+  transition: background .15s, color .15s;
+}
+
+.settings-community-item:hover {
+  background: #1e293b;
+  color: #fff;
+}
+
+.community-icon {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  opacity: .85;
+  flex-shrink: 0;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SETTINGS ADMIN ACTION
+   ═══════════════════════════════════════════════════════════ */
 .settings-action {
   width: 100%;
   background: #1f2937;
   border: none;
   border-radius: 8px;
-  padding: 10px 14px;
+  padding: 9px 12px;
   color: #fff;
   font-weight: 600;
+  font-size: 14px;
   cursor: pointer;
   transition: background .15s ease, transform .15s ease;
+  text-align: left;
 }
-/* hover */
+
 .settings-action:hover {
   background: linear-gradient(180deg, #9a3412, #c2410c);
   transform: scale(1.03);
-  box-shadow: 0 6px 18px rgba(0,0,0,.5);
 }
 
-/* aktív kattintás */
-.settings-action:active {
-  transform: scale(0.98);
-}
+.settings-action:active { transform: scale(0.98); }
+.settings-action:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
 
-/* disabled állapot (scan fut) */
-.settings-action:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none;
-  box-shadow: none;
-}
-
-/* admin gomb elkülönítés */
 .settings-menu .settings-action {
-  margin-top: 8px;
-  border-top: 1px solid rgba(255,255,255,.08);
-  padding-top: 12px;
+  margin-top: 4px;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   ONLINE ITEM
+   ═══════════════════════════════════════════════════════════ */
 .online-item {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 12px;
-  font-size: 16px;
+  padding: 8px 12px;
+  font-size: 13px;
   color: #cbd5f5;
   border-bottom: 1px solid #1e293b;
-}
-
-.online-dot {
-  width: .6rem;
-  height: .6rem;
-  border-radius: 50%;
-  background: #22c55e;
 }
 
 .online-item span:last-child {
   font-weight: 600;
   color: #22c55e;
 }
-/* ===== MOBIL ÁLLÓ (portrait) NAGYÍTÁS ===== */
-@media (max-width: 768px) and (orientation: portrait) {
 
-  .topbar {
-    padding: 1rem;
-    gap: 1rem;
-  }
-
-  .logo {
-    font-size: 1.2rem;
-  }
-
-  .logo img {
-    height: 2.5rem;
-  }
-
-  .menu-btn {
-    font-size: 1.6rem;
-  }
-
-  .search-wrapper input {
-    font-size: 1rem;
-    padding: 0.9rem 1rem;
-  }
-
-  .icon-btn img,
-  #settingsBtn img {
-    width: 2.6rem;
-  }
-
-  .patreon img {
-    height: 2.8rem;
-  }
-
-  .settings-menu a {
-    font-size: 1.1rem;
-    padding: 0.8rem 1rem;
-  }
-
-  .online-item {
-    font-size: 1.1rem;
-  }
-}
-/* ===== MENÜ IKONOK ===== */
+/* ═══════════════════════════════════════════════════════════
+   MENU ICONS / LOGOUT
+   ═══════════════════════════════════════════════════════════ */
 .menu-icon {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   object-fit: contain;
 }
 
-/* ===== LOGOUT ITEM ===== */
 .logout-item {
   display: flex;
   align-items: center;
   gap: 10px;
-
   width: 100%;
-  padding: 10px 12px;
-
+  padding: 9px 12px;
   background: none;
   border: none;
   color: white;
-
   font-size: 14px;
+  font-weight: 600;
   text-align: left;
   cursor: pointer;
-}
-
-/* hover ugyanaz mint a többi */
-.logout-item:hover {
-  background: rgba(255,255,255,0.05);
   border-radius: 8px;
 }
-/* ===== USER HEADER A MENÜBEN ===== */
+
+.logout-item:hover {
+  background: rgba(255,255,255,.05);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SETTINGS USER HEADER
+   ═══════════════════════════════════════════════════════════ */
 .settings-user {
   display: flex;
   align-items: center;
   gap: 10px;
-   text-align: center;
+  text-align: center;
   justify-content: center;
-  padding: 12px;
-  border-bottom: 1px solid rgba(255,255,255,0.05);
-}
-
-.settings-user img {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  object-fit: cover;
+  padding: 10px 12px 12px;
+  border-bottom: 1px solid rgba(255,255,255,.05);
 }
 
 #menuUserName {
@@ -386,18 +453,17 @@ max-width: 30rem;
 }
 
 .user-tier {
-  font-size: 12px;
+  font-size: 11px;
   opacity: 0.6;
 }
-/* ═══════════════════════════════════════════════════════════
-   NOTIFICATION BADGE - Header CSS kiegészítés
-   Add hozzá a header.css végéhez!
-   ═══════════════════════════════════════════════════════════ */
 
-/* Notification badge wrapper */
+/* ═══════════════════════════════════════════════════════════
+   NOTIFICATION BADGE
+   ═══════════════════════════════════════════════════════════ */
 .notification-badge-wrapper {
   position: relative;
   display: inline-block;
+  flex-shrink: 0;
 }
 
 .notification-btn {
@@ -406,15 +472,12 @@ max-width: 30rem;
   background: none;
   border: none;
   cursor: pointer;
-  padding: 8px 12px;
+  padding: 8px 10px;
   transition: all 0.2s;
 }
 
-.notification-btn:hover {
-  transform: scale(1.1);
-}
+.notification-btn:hover { transform: scale(1.1); }
 
-/* Notification count badge */
 .notification-count {
   position: absolute;
   top: 4px;
@@ -429,20 +492,17 @@ max-width: 30rem;
   justify-content: center;
   font-size: 0.7rem;
   font-weight: 700;
-  border: 2px solid var(--bg);
+  border: 2px solid #0b0d12;
   animation: pulse 2s infinite;
 }
 
-.notification-count.hidden {
-  display: none;
-}
+.notification-count.hidden { display: none; }
 
 @keyframes pulse {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.1); }
 }
 
-/* Notification dropdown */
 .notification-dropdown {
   position: absolute;
   top: calc(100% + 8px);
@@ -450,26 +510,23 @@ max-width: 30rem;
   width: 360px;
   max-height: 500px;
   background: #0f172a;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255,255,255,.1);
   border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 8px 32px rgba(0,0,0,.4);
   overflow: hidden;
-  z-index: 1000;
+  z-index: 10001;
   display: flex;
   flex-direction: column;
 }
 
-.notification-dropdown.hidden {
-  display: none;
-}
+.notification-dropdown.hidden { display: none; }
 
-/* Notification header */
 .notification-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 14px 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(255,255,255,.08);
   flex-shrink: 0;
 }
 
@@ -479,52 +536,47 @@ max-width: 30rem;
   font-size: 1rem;
 }
 
-.mark-all-read-btn {
+.notification-header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.mark-all-read-btn, .delete-all-notif-btn {
   background: none;
   border: none;
   color: #7c3aed;
   cursor: pointer;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   font-weight: 600;
   transition: color 0.2s;
 }
 
-.mark-all-read-btn:hover {
-  color: #a78bfa;
-}
+.mark-all-read-btn:hover, .delete-all-notif-btn:hover { color: #a78bfa; }
 
-/* Notification list */
 .notification-list {
   flex: 1;
   overflow-y: auto;
   max-height: 400px;
 }
 
-.notification-loading,
-.notification-empty {
+.notification-loading, .notification-empty {
   padding: 24px;
   text-align: center;
   color: #666;
   font-size: 0.9rem;
 }
 
-/* Individual notification */
 .notification-item {
   padding: 12px 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255,255,255,.05);
   cursor: pointer;
   transition: background 0.15s;
   display: flex;
   gap: 10px;
 }
 
-.notification-item:hover {
-  background: rgba(124, 58, 237, 0.08);
-}
-
-.notification-item.unread {
-  background: rgba(124, 58, 237, 0.1);
-}
+.notification-item:hover { background: rgba(124,58,237,.08); }
+.notification-item.unread { background: rgba(124,58,237,.1); }
 
 .notification-dot {
   width: 8px;
@@ -535,10 +587,7 @@ max-width: 30rem;
   margin-top: 6px;
 }
 
-.notification-content {
-  flex: 1;
-  min-width: 0;
-}
+.notification-content { flex: 1; min-width: 0; }
 
 .notification-message {
   font-size: 0.9rem;
@@ -552,28 +601,111 @@ max-width: 30rem;
   color: #666;
 }
 
-/* Scrollbar */
-.notification-list::-webkit-scrollbar {
-  width: 6px;
-}
+.notification-list::-webkit-scrollbar { width: 6px; }
+.notification-list::-webkit-scrollbar-track { background: #1e293b; }
+.notification-list::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+.notification-list::-webkit-scrollbar-thumb:hover { background: #64748b; }
 
-.notification-list::-webkit-scrollbar-track {
-  background: #1e293b;
-}
-
-.notification-list::-webkit-scrollbar-thumb {
-  background: #475569;
-  border-radius: 3px;
-}
-
-.notification-list::-webkit-scrollbar-thumb:hover {
-  background: #64748b;
-}
-
-/* Mobile responsive */
+/* ═══════════════════════════════════════════════════════════
+   RESZPONZÍV
+   ═══════════════════════════════════════════════════════════ */
 @media (max-width: 768px) {
+  .topbar {
+    padding: 0.6rem 0.9rem;
+    gap: 0.4rem;
+  }
+
+  /* Bal/jobb wrapper mobilon */
+  .topbar-left { flex: 0 0 auto; gap: 0.4rem; }
+  .topbar-right { flex: 0 0 auto; gap: 0.2rem; }
+
+  /* Mobilon: kereső összenyomva a két csoport között */
+  .search-wrapper {
+    flex: 1;
+    min-width: 0;
+    max-width: none;
+  }
+
+  .search-toggle-btn {
+    display: flex;
+  }
+
+  /* Logo szöveg: összezsugorodik helyet adva a keresőnek */
+  .logo span {
+    display: inline-block;
+    white-space: nowrap;
+    vertical-align: middle;
+    overflow: hidden;
+    max-width: 220px;
+    opacity: 1;
+    transition: max-width 0.28s ease, opacity 0.22s ease;
+  }
+
+  .topbar.search-open .logo span {
+    max-width: 0;
+    opacity: 0;
+  }
+
+  /* Input mobilon alap: rejtve */
+  .search-wrapper input {
+    max-width: 0;
+    width: 0;
+    opacity: 0;
+    pointer-events: none;
+    padding: 0;
+    border-width: 0;
+    font-size: 16px;
+    transition: max-width 0.28s ease, opacity 0.2s, padding 0.28s;
+  }
+
+  /* Nyitott: input kinyújtózik, toggle gomb eltűnik */
+  .search-wrapper.open input {
+    max-width: 100%;
+    width: auto;
+    opacity: 1;
+    pointer-events: auto;
+    padding: 0.55rem 0.9rem;
+    border-width: 1px;
+    flex: 1;
+  }
+
+  .search-wrapper.open .search-toggle-btn {
+    display: none;
+  }
+
+  .search-results {
+    max-width: 100%;
+    border-radius: 0 0 10px 10px;
+  }
+
   .notification-dropdown {
-    width: calc(100vw - 20px);
-    right: -10px;
+    width: calc(100vw - 16px);
+    right: -8px;
+  }
+
+  .settings-menu {
+    right: 0;
+    width: min(240px, calc(100vw - 16px));
+  }
+}
+
+@media (max-width: 480px) {
+  .topbar {
+    padding: 0.6rem 0.75rem;
+    gap: 0.4rem;
+  }
+
+  .logo img {
+    height: 1.8rem;
+  }
+
+  .notification-btn {
+    padding: 6px 8px;
+    font-size: 1.1rem;
+  }
+
+  .header-avatar {
+    width: 28px;
+    height: 28px;
   }
 }

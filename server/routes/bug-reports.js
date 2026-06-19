@@ -29,13 +29,30 @@ router.get("/", requireLogin, async (req, res) => {
     const { manga_slug, chapter, closed } = req.query;
     
     let query = `
-      SELECT 
+      SELECT
         br.*,
         u.username,
         m.title as manga_title,
         cb.username as closed_by_name,
         m.uploaders as translator,
-        (SELECT COUNT(*) FROM bug_report_comments WHERE bug_report_id = br.id) as comment_count
+        (SELECT COUNT(*) FROM bug_report_comments WHERE bug_report_id = br.id) as comment_count,
+        COALESCE((
+          SELECT json_agg(json_build_object(
+            'id', bf2.id,
+            'fixed_image_url', bf2.fixed_image_url,
+            'fixed_by', bf2.fixed_by,
+            'fixed_by_name', bf2.fixed_by_name,
+            'fixed_at', bf2.fixed_at,
+            'is_applied', bf2.is_applied,
+            'award_points', bf2.award_points,
+            'likes', bf2.likes,
+            'dislikes', bf2.dislikes
+          ) ORDER BY bf2.created_at DESC)
+          FROM bug_fixes bf2
+          WHERE bf2.manga_slug = br.manga_slug
+            AND bf2.chapter = br.chapter
+            AND bf2.image_index = br.image_index
+        ), '[]') as fixes
       FROM bug_reports br
       LEFT JOIN users u ON u.id = br.user_id
       LEFT JOIN users cb ON cb.id = br.closed_by
@@ -103,6 +120,97 @@ router.get("/image", requireLogin, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+/* ── NOTIFICATIONS – specifikus route-ok ELŐBB, :id wildcard UTÁNA ── */
+ 
+// GET összes
+router.get("/notifications", requireLogin, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const { rows } = await pool.query(
+      "SELECT * FROM notifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50",
+      [userId]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error("GET NOTIFICATIONS ERROR:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+ 
+// GET olvasatlan szám
+router.get("/notifications/unread-count", requireLogin, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const { rows } = await pool.query(
+      "SELECT COUNT(*) as count FROM notifications WHERE user_id = $1 AND is_read = false",
+      [userId]
+    );
+    res.json({ count: parseInt(rows[0].count) });
+  } catch (err) {
+    console.error("GET UNREAD COUNT ERROR:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+ 
+// POST összes olvasottnak (ELŐBB mint /:id/mark-read)
+router.post("/notifications/mark-all-read", requireLogin, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    await pool.query(
+      "UPDATE notifications SET is_read = true WHERE user_id = $1 AND is_read = false",
+      [userId]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error("MARK ALL READ ERROR:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+ 
+// DELETE összes (ELŐBB mint /:id)
+router.delete("/notifications", requireLogin, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    await pool.query("DELETE FROM notifications WHERE user_id = $1", [userId]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("DELETE ALL NOTIFICATIONS ERROR:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+ 
+// POST egy olvasottnak (wildcard – UTOLSÓ a POST-ok közül)
+router.post("/notifications/:id/mark-read", requireLogin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.session.user.id;
+    await pool.query(
+      "UPDATE notifications SET is_read = true WHERE id = $1 AND user_id = $2",
+      [id, userId]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error("MARK READ ERROR:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+ 
+// DELETE egy értesítés (wildcard – UTOLSÓ a DELETE-ek közül)
+router.delete("/notifications/:id", requireLogin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.session.user.id;
+    await pool.query(
+      "DELETE FROM notifications WHERE id = $1 AND user_id = $2",
+      [id, userId]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error("DELETE NOTIFICATION ERROR:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 /* ── GET /api/bug-reports/:id – egy hibajegy lekérése ───── */
 router.get("/:id", requireLogin, async (req, res) => {
   try {
@@ -128,7 +236,7 @@ router.get("/:id", requireLogin, async (req, res) => {
 /* ── POST /api/bug-reports – új hibajegy beküldése ─────── */
 router.post("/", requireLogin, async (req, res) => {
   try {
-    const { image_url, description } = req.body;
+    const { image_url, description, image_index: explicitIndex } = req.body;
     const userId   = req.session.user?.id;
     const username = req.session.user?.username;
 
@@ -141,12 +249,40 @@ router.post("/", requireLogin, async (req, res) => {
       return res.status(400).json({ error: "Érvénytelen kép URL" });
     }
 
-    const { provider, mangaSlug, chapter, imageFile, imageIndex } = parsed;
+    const { provider, mangaSlug, chapter, imageFile } = parsed;
+    // Frontend által küldött index prioritást élvez; fallback: URL-ből parsed
+    const imageIndex = (explicitIndex !== undefined && explicitIndex !== null && !isNaN(parseInt(explicitIndex)))
+      ? parseInt(explicitIndex)
+      : parsed.imageIndex;
+
+    // Deduplication: ha már van nyitott hibajegy ugyanarra a képre, növeljük a számlálót
+    const existing = await pool.query(`
+      SELECT id FROM bug_reports
+      WHERE manga_slug=$1 AND chapter=$2 AND (image_index=$3 OR (image_index IS NULL AND image_file=$4)) AND is_closed=false
+      LIMIT 1
+    `, [mangaSlug, chapter, imageIndex, imageFile]);
+
+    if (existing.rows.length) {
+      const existingId = existing.rows[0].id;
+      await pool.query(
+        `UPDATE bug_reports SET report_count = report_count + 1 WHERE id=$1`,
+        [existingId]
+      );
+      // Az új bejelentő leírását kommentként mentjük el
+      const description = req.body?.description;
+      if (description?.trim()) {
+        await pool.query(
+          `INSERT INTO bug_report_comments (bug_report_id, user_id, comment) VALUES ($1, $2, $3)`,
+          [existingId, req.session.user?.id || null, description.trim()]
+        );
+      }
+      return res.status(201).json({ ...existing.rows[0], merged: true });
+    }
 
     const { rows } = await pool.query(`
       INSERT INTO bug_reports
-        (provider, manga_slug, chapter, image_file, image_index, image_url, user_id, username, description)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+        (provider, manga_slug, chapter, image_file, image_index, image_url, user_id, username, description, report_count)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,1)
       RETURNING *
     `, [provider, mangaSlug, chapter, imageFile, imageIndex, image_url,
         userId || null, username || "Névtelen", description.trim()]);
@@ -168,7 +304,7 @@ router.post("/:id/close", requireAdmin, async (req, res) => {
     const { closed, close_reason, closed_without_fix } = req.body;
     const userId = req.session.user.id;
     const bugId = req.params.id;
-    
+
     const { rows } = await pool.query(`
       UPDATE bug_reports
       SET is_closed = $1,
@@ -185,11 +321,17 @@ router.post("/:id/close", requireAdmin, async (req, res) => {
       userId,
       bugId
     ]);
-    
+
     if (rows.length === 0) {
       return res.status(404).json({ error: "Hibajegy nem található" });
     }
-    
+
+    // CF cache purge ha lezárás (nem újranyitás)
+    if (closed !== false) {
+      const r = rows[0];
+      purgeImageCF(r.manga_slug, r.chapter, r.image_file).catch(() => {});
+    }
+
     res.json({ success: true, bug_report: rows[0] });
   } catch (err) {
     console.error("Close bug report error:", err);
@@ -276,6 +418,24 @@ router.post("/fix", requireLogin, async (req, res) => {
       RETURNING *
     `, [manga_slug, chapter, image_index, image_file, fixed_image_url, userId, username]);
 
+    if (rows[0]) {
+      // Értesítés az összes adminnak
+      try {
+        const { rows: admins } = await pool.query(`SELECT id FROM users WHERE role = 'admin'`);
+        const msg  = `🖊️ ${username} javított egy képet — ${manga_slug} ${chapter} #${image_index ?? image_file}. Jóváhagyás szükséges!`;
+        const link = `/bug-reports.html`;
+        for (const admin of admins) {
+          if (admin.id === userId) continue;
+          await pool.query(
+            `INSERT INTO notifications (user_id, type, message, link) VALUES ($1, 'fix_submitted', $2, $3)`,
+            [admin.id, msg, link]
+          );
+        }
+      } catch (notifErr) {
+        console.warn("[fix] értesítés hiba:", notifErr.message);
+      }
+    }
+
     res.status(201).json(rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -309,6 +469,19 @@ router.post("/fix/:id/vote", requireLogin, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+/* ── PATCH /api/bug-reports/fix/:id/award-points – pontrendszer toggle ── */
+router.patch("/fix/:id/award-points", requireAdmin, async (req, res) => {
+  try {
+    const { award_points } = req.body;
+    const { rows } = await pool.query(
+      `UPDATE bug_fixes SET award_points=$1 WHERE id=$2 RETURNING id, award_points`,
+      [award_points !== false, parseInt(req.params.id)]
+    );
+    if (!rows.length) return res.status(404).json({ error: "Nem található" });
+    res.json({ ok: true, ...rows[0] });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 /* ── POST /api/bug-reports/fix/upload – javított kép feltöltése ── */
 router.post("/fix/upload", requireLogin, upload.single("image"), async (req, res) => {
   try {
@@ -326,21 +499,23 @@ router.post("/fix/upload", requireLogin, upload.single("image"), async (req, res
       manga_slug, chapter);
     fs.mkdirSync(dir, { recursive: true });
 
-    // Fájlnév: image_index.jpg
-    const filename = `${image_index}.jpg`;
+    // Fájlnév: image_index_userId.jpg (egy user csak egyet tölthet fel képenként)
+    const filename = `${image_index}_${userId}.jpg`;
     const filepath = path.join(dir, filename);
     fs.writeFileSync(filepath, req.file.buffer);
 
-    const fixedUrl = `/uploads/bugs/javitott/${manga_slug}/${chapter}/${filename}`;
+    const fixedUrl = `/uploads/bugs/javitott/${manga_slug}/${chapter}/${image_index}_${userId}.jpg`;
 
-    // DB mentés
+    // DB mentés — ha már van javítása, frissítjük
     const providerVal = provider || "unknown";
     const { rows } = await pool.query(`
       INSERT INTO bug_fixes
         (provider, manga_slug, chapter, image_index, image_file, fixed_image_url,
-         fixed_by, fixed_by_name, fixed_at)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW())
-      ON CONFLICT DO NOTHING
+         fixed_by, fixed_by_name, fixed_at, award_points)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW(),true)
+      ON CONFLICT (manga_slug, chapter, image_index, fixed_by)
+      DO UPDATE SET fixed_image_url = EXCLUDED.fixed_image_url,
+                    fixed_at = NOW()
       RETURNING *
     `, [providerVal, manga_slug, chapter, parseInt(image_index), filename, fixedUrl, userId, username]);
 
@@ -375,10 +550,12 @@ router.post("/fix/:id/apply", requireAdmin, async (req, res) => {
     }
     const originalFilename = reportRows[0].image_file;
 
-    // 2. Javított kép helye (uploads/bugs/javitott/...)
-    const fixedDir  = path.join(process.cwd(), "uploads", "bugs", "javitott", fix.manga_slug, fix.chapter);
-    const fixedFile = path.join(fixedDir, `${fix.image_index}.jpg`);
-
+    // 2. Javított kép helye — a fixed_image_url-ből vesszük a pontos fájlnevet (pl. 19_5.jpg)
+    const fixedDir = path.join(process.cwd(), "uploads", "bugs", "javitott", fix.manga_slug, fix.chapter);
+    if (!fix.fixed_image_url) {
+      return res.status(404).json({ error: "A javítás nem tartalmaz fájl URL-t" });
+    }
+    const fixedFile = path.join(fixedDir, path.basename(fix.fixed_image_url));
     if (!fs.existsSync(fixedFile)) {
       return res.status(404).json({ error: "Javított kép fájl nem található: " + fixedFile });
     }
@@ -428,24 +605,85 @@ router.post("/fix/:id/apply", requireAdmin, async (req, res) => {
       WHERE manga_slug=$2 AND chapter=$3 AND image_index=$4
     `, [req.session.user.id, fix.manga_slug, fix.chapter, fix.image_index]);
 
-    // 7.5. Pont hozzáadása a javítónak (ha még nem kapta meg)
+    // 7.5. Pont hozzáadása — csak ha award_points true
     try {
-      const { rows: pointCheck } = await pool.query(
-        `SELECT id FROM user_points WHERE fix_id = $1`,
-        [req.params.id]
-      );
-      
-      if (!pointCheck.length) {
-        await pool.query(`
-          INSERT INTO user_points (user_id, fix_id, points, approved_by, earned_at)
-          VALUES ($1, $2, 1, $3, NOW())
-        `, [fix.fixed_by, req.params.id, req.session.user.id]);
-        
-        console.log(`[PONT] +1 pont hozzáadva user_id=${fix.fixed_by} (fix_id=${req.params.id})`);
+      if (fix.award_points !== false) {
+        const { rows: pointCheck } = await pool.query(
+          `SELECT id FROM user_points WHERE fix_id = $1`,
+          [req.params.id]
+        );
+        if (!pointCheck.length) {
+          await pool.query(`
+            INSERT INTO user_points (user_id, fix_id, points, approved_by, earned_at)
+            VALUES ($1, $2, 5, $3, NOW())
+          `, [fix.fixed_by, req.params.id, req.session.user.id]);
+          console.log(`[PONT] +5 pont user_id=${fix.fixed_by} (fix_id=${req.params.id})`);
+        }
+      } else {
+        console.log(`[PONT] Kihagyva (award_points=false) fix_id=${req.params.id}`);
       }
     } catch (pointErr) {
       console.error("[PONT hiba]", pointErr.message);
-      // Nem állítjuk le a folyamatot, ha a pont hozzáadás sikertelen
+    }
+
+    // 7.6. Többi (el nem fogadott) javítás fájljainak törlése
+    try {
+      const { rows: otherFixes } = await pool.query(
+        `SELECT fixed_image_url FROM bug_fixes WHERE manga_slug=$1 AND chapter=$2 AND image_index=$3 AND id != $4`,
+        [fix.manga_slug, fix.chapter, fix.image_index, req.params.id]
+      );
+      for (const other of otherFixes) {
+        try {
+          const p = path.join(process.cwd(), other.fixed_image_url);
+          if (fs.existsSync(p)) fs.unlinkSync(p);
+        } catch (_) {}
+      }
+    } catch (_) {}
+
+    // 7.6. Notification küldése
+    try {
+      const fixerName = fix.fixed_by_name || "Javító";
+      const mangaInfo = `${fix.manga_slug} ${fix.chapter} #${fix.image_index}`;
+      const bugLink   = `/bug-reports.html?id=`;
+
+      const { rows: reporters } = await pool.query(`
+        SELECT DISTINCT user_id FROM bug_reports
+        WHERE manga_slug=$1 AND chapter=$2 AND image_index=$3 AND user_id IS NOT NULL
+      `, [fix.manga_slug, fix.chapter, fix.image_index]);
+
+      for (const reporter of reporters) {
+        const { rows: rr } = await pool.query(`
+          SELECT id FROM bug_reports
+          WHERE manga_slug=$1 AND chapter=$2 AND image_index=$3 AND user_id=$4
+          LIMIT 1
+        `, [fix.manga_slug, fix.chapter, fix.image_index, reporter.user_id]);
+        await pool.query(`
+          INSERT INTO notifications (user_id, type, message, link)
+          VALUES ($1, 'bug_closed', $2, $3)
+        `, [
+          reporter.user_id,
+          `A hibajegyed javítva lett: ${mangaInfo} – Javította: ${fixerName}`,
+          rr[0] ? `${bugLink}${rr[0].id}` : null
+        ]);
+      }
+
+      if (fix.fixed_by && fix.fixed_by !== req.session.user.id) {
+        const { rows: fixerReport } = await pool.query(`
+          SELECT id FROM bug_reports
+          WHERE manga_slug=$1 AND chapter=$2 AND image_index=$3
+          LIMIT 1
+        `, [fix.manga_slug, fix.chapter, fix.image_index]);
+        await pool.query(`
+          INSERT INTO notifications (user_id, type, message, link)
+          VALUES ($1, 'bug_closed', $2, $3)
+        `, [
+          fix.fixed_by,
+          `Javításod elfogadva! +1 pont jóváírva – ${mangaInfo}`,
+          fixerReport[0] ? `${bugLink}${fixerReport[0].id}` : null
+        ]);
+      }
+    } catch (notifErr) {
+      console.error("[NOTIF hiba]", notifErr.message);
     }
 
     // 8. Cloudflare cache purge csak erre az egy képre
@@ -477,6 +715,50 @@ router.post("/fix/:id/apply", requireAdmin, async (req, res) => {
   }
 });
 
+/* ── POST /api/bug-reports/fix/:id/correct – admin korrekció ── */
+router.post("/fix/:id/correct", requireAdmin, upload.single("image"), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: "Nincs fájl" });
+
+    const { rows: fixRows } = await pool.query("SELECT * FROM bug_fixes WHERE id=$1", [req.params.id]);
+    if (!fixRows.length) return res.status(404).json({ error: "Fix nem található" });
+    const fix = fixRows[0];
+
+    const { rows: reportRows } = await pool.query(
+      `SELECT image_file FROM bug_reports WHERE manga_slug=$1 AND chapter=$2 AND image_index=$3 LIMIT 1`,
+      [fix.manga_slug, fix.chapter, fix.image_index]
+    );
+    if (!reportRows.length) return res.status(404).json({ error: "Bug report nem található" });
+    const originalFilename = reportRows[0].image_file;
+
+    const { rows: pathRows } = await pool.query(
+      `SELECT l.path AS library_path, m.folder AS manga_folder
+       FROM manga m JOIN library l ON l.id = m.library_id WHERE m.slug=$1 LIMIT 1`,
+      [fix.manga_slug]
+    );
+    if (!pathRows.length) return res.status(404).json({ error: "Manga nem található" });
+
+    const { library_path, manga_folder } = pathRows[0];
+
+    const fs   = await import("fs");
+    const path = await import("path");
+
+    const originalPath = path.join(library_path, manga_folder, fix.chapter, originalFilename);
+    if (!fs.existsSync(originalPath)) return res.status(404).json({ error: "Eredeti kép nem található: " + originalPath });
+
+    fs.writeFileSync(originalPath, req.file.buffer);
+
+    await pool.query(`UPDATE bug_fixes SET fixed_at=NOW() WHERE id=$1`, [req.params.id]);
+
+    purgeImageCF(fix.manga_slug, fix.chapter, originalFilename).catch(() => {});
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Fix correct error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 /* ══════════════════════════════════════════════════════════
    MIDDLEWARE
    ══════════════════════════════════════════════════════════ */
@@ -484,6 +766,30 @@ router.post("/fix/:id/apply", requireAdmin, async (req, res) => {
 function requireLogin(req, res, next) {
   if (!req.session?.user) return res.status(401).json({ error: "Bejelentkezés szükséges" });
   next();
+}
+
+/* ── CF cache purge egy képre ───────────────────────────── */
+async function purgeImageCF(mangaSlug, chapter, imageFile) {
+  const CF_ZONE  = process.env.CF_ZONE_ID;
+  const CF_TOKEN = process.env.CF_API_TOKEN;
+  const CF_DOMAIN = process.env.CF_DOMAIN || "https://padlizsanfansub.hu";
+  if (!CF_ZONE || !CF_TOKEN) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT l.name AS library_name
+      FROM manga m JOIN library l ON l.id = m.library_id
+      WHERE m.slug = $1 LIMIT 1
+    `, [mangaSlug]);
+    if (!rows.length) return;
+    const url = `${CF_DOMAIN}/api/image/${encodeURIComponent(rows[0].library_name)}/${encodeURIComponent(mangaSlug)}/${encodeURIComponent(chapter)}/${encodeURIComponent(imageFile)}`;
+    await fetch(`https://api.cloudflare.com/client/v4/zones/${CF_ZONE}/purge_cache`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${CF_TOKEN}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ files: [url] })
+    });
+  } catch (err) {
+    console.warn("[CF purge hiba]", err.message);
+  }
 }
 
 async function requireAdmin(req, res, next) {
@@ -555,39 +861,22 @@ router.post("/:id/comments", requireLogin, async (req, res) => {
     if (bugReport.rows.length > 0) {
       const reportUserId = bugReport.rows[0].user_id;
       const { manga_slug, chapter, image_index } = bugReport.rows[0];
+      const commenterName = req.session.user.username;
+      const msg = `${commenterName} válaszolt a hibajegyre (${manga_slug} Ch${chapter} #${image_index})`;
+      const link = `/bug-reports.html?id=${id}`;
 
-      // Értesítés a report tulajdonosának (ha nem ő kommentelt)
-      if (reportUserId !== userId) {
-        await pool.query(`
-          INSERT INTO notifications (user_id, type, message, link)
-          VALUES ($1, $2, $3, $4)
-        `, [
-          reportUserId,
-          'bug_comment',
-          `Új válasz érkezett a hibajegyedhez (${manga_slug} Ch${chapter} #${image_index})`,
-          `/bug-reports.html?id=${id}`
-        ]);
-      }
-
-      // Admin komment esetén: értesítés adminoknak is (opcio)
-      if (req.session.user.role === 'admin') {
-        // Minden kommentelő értesítése (kivéve aki most kommentelt)
-        await pool.query(`
-          INSERT INTO notifications (user_id, type, message, link)
-          SELECT DISTINCT c.user_id, $1, $2, $3
-          FROM bug_report_comments c
-          WHERE c.bug_report_id = $4
-            AND c.user_id != $5
-            AND c.user_id != $6
-        `, [
-          'bug_comment',
-          `Admin válaszolt a hibajegyedben (${manga_slug} Ch${chapter} #${image_index})`,
-          `/bug-reports.html?id=${id}`,
-          id,
-          userId,
-          reportUserId
-        ]);
-      }
+      // Értesítés mindenki számára aki részt vett (report owner + összes kommentelő),
+      // kivéve aki most kommentelt — és mindenkit csak egyszer
+      await pool.query(`
+        INSERT INTO notifications (user_id, type, message, link)
+        SELECT DISTINCT u_id, $1, $2, $3
+        FROM (
+          SELECT user_id AS u_id FROM bug_reports WHERE id = $4
+          UNION
+          SELECT user_id AS u_id FROM bug_report_comments WHERE bug_report_id = $4
+        ) participants
+        WHERE u_id != $5
+      `, ['bug_comment', msg, link, id, userId]);
     }
 
     // User adatok lekérése a válaszhoz
@@ -635,15 +924,15 @@ router.post("/:id/close-with-reason", requireLogin, async (req, res) => {
       WHERE id = $3
     `, [reason.trim(), req.session.user.id, id]);
 
-    // Bug report adatok lekérése értesítéshez
+    // Bug report adatok lekérése értesítéshez + CF purge-hoz
     const bugData = await pool.query(`
-      SELECT user_id, manga_slug, chapter, image_index
+      SELECT user_id, manga_slug, chapter, image_index, image_file
       FROM bug_reports
       WHERE id = $1
     `, [id]);
 
     if (bugData.rows.length > 0) {
-      const { user_id, manga_slug, chapter, image_index } = bugData.rows[0];
+      const { user_id, manga_slug, chapter, image_index, image_file } = bugData.rows[0];
 
       // Értesítés a bejelentőnek
       await pool.query(`
@@ -655,6 +944,9 @@ router.post("/:id/close-with-reason", requireLogin, async (req, res) => {
         `A hibajegyed lezárásra került: ${manga_slug} Ch${chapter} #${image_index}`,
         `/bug-reports.html?id=${id}`
       ]);
+
+      // CF cache purge
+      purgeImageCF(manga_slug, chapter, image_file).catch(() => {});
     }
 
     res.json({ success: true });
@@ -694,98 +986,5 @@ router.delete("/:id/comments/:commentId", requireLogin, async (req, res) => {
   }
 });
 
-/* ──────────────────────────────────────────────────────────
-   GET /api/notifications - Értesítések lekérése
-   ────────────────────────────────────────────────────────── */
-router.get("/notifications", requireLogin, async (req, res) => {
-  try {
-    const userId = req.session.user.id;
-
-    const { rows } = await pool.query(`
-      SELECT *
-      FROM notifications
-      WHERE user_id = $1
-      ORDER BY created_at DESC
-      LIMIT 50
-    `, [userId]);
-
-    res.json(rows);
-
-  } catch (err) {
-    console.error("GET NOTIFICATIONS ERROR:", err);
-    res.status(500).json({ error: "Server error" });
-  }
-});
-
-/* ──────────────────────────────────────────────────────────
-   GET /api/notifications/unread-count - Olvasatlan értesítések száma
-   ────────────────────────────────────────────────────────── */
-router.get("/notifications/unread-count", requireLogin, async (req, res) => {
-  try {
-    const userId = req.session.user.id;
-
-    const { rows } = await pool.query(`
-      SELECT COUNT(*) as count
-      FROM notifications
-      WHERE user_id = $1 AND is_read = false
-    `, [userId]);
-
-    res.json({ count: parseInt(rows[0].count) });
-
-  } catch (err) {
-    console.error("GET UNREAD COUNT ERROR:", err);
-    res.status(500).json({ error: "Server error" });
-  }
-});
-
-/* ──────────────────────────────────────────────────────────
-   POST /api/notifications/:id/mark-read - Értesítés olvasottnak jelölése
-   ────────────────────────────────────────────────────────── */
-router.post("/notifications/:id/mark-read", requireLogin, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const userId = req.session.user.id;
-
-    await pool.query(`
-      UPDATE notifications
-      SET is_read = true
-      WHERE id = $1 AND user_id = $2
-    `, [id, userId]);
-
-    res.json({ success: true });
-
-  } catch (err) {
-    console.error("MARK READ ERROR:", err);
-    res.status(500).json({ error: "Server error" });
-  }
-});
-
-/* ──────────────────────────────────────────────────────────
-   POST /api/notifications/mark-all-read - Összes olvasottnak
-   ────────────────────────────────────────────────────────── */
-router.post("/notifications/mark-all-read", requireLogin, async (req, res) => {
-  try {
-    const userId = req.session.user.id;
-
-    await pool.query(`
-      UPDATE notifications
-      SET is_read = true
-      WHERE user_id = $1 AND is_read = false
-    `, [userId]);
-
-    res.json({ success: true });
-
-  } catch (err) {
-    console.error("MARK ALL READ ERROR:", err);
-    res.status(500).json({ error: "Server error" });
-  }
-});
-
-/* ──────────────────────────────────────────────────────────
-   EXPORTS
-   ────────────────────────────────────────────────────────── */
-
-
 
 export default router;
-

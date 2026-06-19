@@ -2,6 +2,7 @@
 <html lang="hu">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PadlizsanFanSub - Settings</title>
 <link rel="stylesheet" href="/css/sidebar.css">
 <link rel="stylesheet" href="/css/search.css">
@@ -27,6 +28,7 @@
       <button data-tab="patreon" class="active">Patreon</button>
       <button data-tab="account">👤 Fiók</button>
       <button data-tab="anilist">📚 AniList</button>
+      <button data-tab="gdpr">🔒 Adataim</button>
     </aside>
 
     <!-- JOBB OLDALI TARTALOM -->
@@ -71,27 +73,105 @@
 	</section>
 
 <section id="tab-patreon" class="tab active">
-  <h2>💜 Patreon</h2>
+  <h2>💜 Előfizetés</h2>
+  <p style="color:#a0a0b0;margin-bottom:20px">Támogasd az oldalt és kapj exkluzív hozzáférést!</p>
 
-  <!-- NINCS ÖSSZEKÖTVE -->
-  <div id="patreon-disconnected" class="patreon-box hidden">
-    <p>
-      Kösd össze a Patreon fiókodat, hogy megkapd az extra tartalmakat.
-    </p>
+  <!-- STRIPE ELŐFIZETÉS -->
+  <div style="margin-bottom:28px">
+    <h3 style="color:#e0e0e0;font-size:1rem;margin-bottom:6px">💳 Stripe — Bankkártyás fizetés</h3>
+    <p style="color:#888;font-size:0.83rem;margin-bottom:16px">Előfizethetsz bankkártyával. Automatikusan megújul, bármikor lemondható.</p>
 
-    <button id="patreonConnectBtn" class="patreon-btn">
-      💜 Patreon összekapcsolása
-    </button>
+    <!-- aktív Stripe előfizetés -->
+    <div id="stripe-active-box" class="patreon-box hidden" style="margin-bottom:16px">
+      <p><b>Aktív tier:</b> <span id="stripeActiveTier" style="color:#a78bfa"></span></p>
+      <p><b>Következő megújulás:</b> <span id="stripePeriodEnd" style="color:#888;font-size:0.88rem"></span></p>
+      <div id="stripe-cancel-pending" class="hidden" style="color:#f59e0b;font-size:0.85rem;margin:8px 0">
+        ⚠️ Lemondás folyamatban — az időszak végéig aktív marad.
+      </div>
+      <button id="stripeUnsubBtn" class="disconnect-btn" style="margin-top:10px">
+        Előfizetés lemondása
+      </button>
+      <div id="stripeUnsubStatus" style="margin-top:6px;font-size:0.82rem;color:#888"></div>
+    </div>
+
+    <!-- tier kártyák -->
+    <div id="stripe-tiers" style="display:flex;gap:12px;flex-wrap:wrap"></div>
+    <div id="stripe-sub-status" style="margin-top:10px;font-size:0.83rem;color:#888"></div>
   </div>
 
-  <!-- ÖSSZEKÖTVE -->
-  <div id="patreon-connected" class="patreon-box hidden">
-    <p><b>Állapot:</b> <span id="patreonActive"></span></p>
-    <p><b>Tier:</b> <span id="patreonTier"></span></p>
+  <hr style="border-color:#2a2a3a;margin:20px 0">
 
-    <button id="patreonDisconnectBtn" class="disconnect-btn">
-      Leválasztás
+  <!-- PATREON ÖSSZEKAPCSOLÁS -->
+  <div>
+    <h3 style="color:#e0e0e0;font-size:1rem;margin-bottom:6px">💜 Patreon — Meglévő előfizetés összekapcsolása</h3>
+    <p style="color:#888;font-size:0.83rem;margin-bottom:14px">Ha már fizetsz Patreonon, kösd össze a fiókodat az extra juttatásokért.</p>
+    <p style="color:#a0a0b0;margin-bottom:12px;font-size:0.88rem">Felhasználó: <strong id="patreonUsername" style="color:#ede8f8">...</strong></p>
+
+    <!-- NINCS ÖSSZEKÖTVE -->
+    <div id="patreon-disconnected" class="patreon-box hidden">
+      <button id="patreonConnectBtn" class="patreon-btn">
+        💜 Patreon összekapcsolása
+      </button>
+    </div>
+
+    <!-- ÖSSZEKÖTVE -->
+    <div id="patreon-connected" class="patreon-box hidden">
+      <p><b>Állapot:</b> <span id="patreonActive"></span></p>
+      <p><b>Tier:</b> <span id="patreonTier"></span></p>
+
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px">
+        <button id="patreonSyncBtn" class="patreon-btn" style="background:#2a1e3e;border:1px solid #7c3aed;font-size:0.88rem;padding:8px 18px">
+          🔄 Jogosultság frissítése
+        </button>
+        <button id="patreonDisconnectBtn" class="disconnect-btn">
+          Leválasztás
+        </button>
+      </div>
+      <div id="patreonSyncStatus" style="margin-top:8px;font-size:0.83rem;color:#888"></div>
+    </div>
+  </div>
+</section>
+
+<section id="tab-gdpr" class="tab">
+  <h2>🔒 Adataim (GDPR)</h2>
+  <p style="color:#a0a0b0;margin-bottom:24px;line-height:1.7">
+    Az EU általános adatvédelmi rendelet (GDPR) értelmében joga van lekérni az összes
+    tárolt adatát, illetve véglegesen törölni fiókját és minden személyes adatát.
+  </p>
+
+  <div style="display:flex;flex-direction:column;gap:16px;max-width:420px">
+
+    <div style="background:#1a1a28;border:1px solid #2a2a3a;border-radius:10px;padding:16px 20px">
+      <p style="color:#e0e0e0;font-size:0.9rem;margin:0 0 12px;font-weight:600">Analitikai sütik (Matomo)</p>
+      <p style="color:#999;font-size:0.83rem;margin:0 0 14px;line-height:1.6">
+        A Matomo egy saját szerveren futó látogatóelemző. Nem oszt meg adatot külső féllel.
+      </p>
+      <div style="display:flex;align-items:center;gap:12px">
+        <button id="cookieStatusBtn" class="save-btn" style="background:#2a2a40;border:1px solid #444;font-size:0.85rem;padding:7px 16px">
+          ...
+        </button>
+        <span id="cookieStatusText" style="color:#888;font-size:0.83rem"></span>
+      </div>
+    </div>
+
+    <hr style="border-color:#2a2a3a;margin:4px 0">
+
+    <button id="gdprExportBtn" class="save-btn" style="background:#2a2a40;border:1px solid #444">
+      📥 Adataim letöltése (JSON)
     </button>
+
+    <hr style="border-color:#2a2a3a;margin:8px 0">
+
+    <p style="color:#f87171;font-size:0.85rem;line-height:1.6">
+      ⚠️ A fiók törlése <strong>visszavonhatatlan</strong>. Minden olvasási előrehaladásod,
+      értékelésed, kedvenced és egyéb személyes adatod véglegesen törlődik.
+      A vásárlási adataidat anonimizálva megőrizzük számviteli kötelezettség miatt.
+    </p>
+
+    <button id="gdprDeleteBtn" class="save-btn" style="background:#3a1a1a;border:1px solid #7f1d1d;color:#fca5a5">
+      🗑️ Fiókom végleges törlése
+    </button>
+    <div id="gdprStatus" class="status"></div>
   </div>
 </section>
 
@@ -121,6 +201,7 @@
 <script src="/js/footer.js"></script>
 <script src="/js/anilist-settings.js"></script>
 <script src="/js/patreon-settings.js"></script>
+<script src="/js/stripe-settings.js"></script>
 <script type="module" src="/js/layout-loader.js"></script>
 <script src="/js/sidebar.js"></script>
 <script src="/js/auth-check.js"></script>

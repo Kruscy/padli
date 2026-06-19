@@ -1,0 +1,232 @@
+/* shop.css – Kredit vásárlás oldal */
+
+.shop-wrap {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 32px 20px 80px;
+}
+
+/* ── FEJLÉC ──────────────────────────────────────────────── */
+.shop-header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.shop-title {
+  font-size: clamp(1.6rem, 4vw, 2.2rem);
+  font-weight: 800;
+  color: #f0f0fa;
+  margin: 0 0 10px;
+}
+
+.shop-subtitle {
+  font-size: 1rem;
+  color: #7a6e8f;
+  margin: 0 0 16px;
+}
+
+.shop-balance {
+  display: inline-block;
+  padding: 8px 20px;
+  background: #1a1528;
+  border: 1px solid #2a1f40;
+  border-radius: 999px;
+  font-size: .9rem;
+  color: #ede8f8;
+}
+
+.shop-balance strong {
+  color: #9d5cf6;
+  font-size: 1.1rem;
+}
+
+/* ── ÜZENET ──────────────────────────────────────────────── */
+.shop-msg {
+  padding: 14px 20px;
+  border-radius: 10px;
+  margin-bottom: 24px;
+  font-weight: 600;
+  font-size: .95rem;
+}
+
+.shop-msg-success {
+  background: rgba(61,214,140,.1);
+  border: 1px solid rgba(61,214,140,.3);
+  color: #3dd68c;
+}
+
+.shop-msg-error {
+  background: rgba(240,64,96,.1);
+  border: 1px solid rgba(240,64,96,.3);
+  color: #f04060;
+}
+
+/* ── GRID ────────────────────────────────────────────────── */
+.shop-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 20px;
+  margin-bottom: 48px;
+}
+
+.shop-loading {
+  color: #7a6e8f;
+  text-align: center;
+  padding: 40px;
+}
+
+/* ── KÁRTYA ──────────────────────────────────────────────── */
+.shop-card {
+  position: relative;
+  background: #110e1a;
+  border: 1px solid #2a1f40;
+  border-radius: 16px;
+  padding: 28px 20px 24px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  transition: transform .18s, box-shadow .18s, border-color .18s;
+}
+
+.shop-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px rgba(0,0,0,.4);
+  border-color: var(--card-color);
+}
+
+.shop-card-best {
+  border-color: var(--card-color);
+  background: linear-gradient(160deg, #1a1030, #110e1a);
+}
+
+.shop-badge {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--card-color);
+  color: #fff;
+  font-size: .72rem;
+  font-weight: 800;
+  padding: 4px 14px;
+  border-radius: 999px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.shop-card-icon {
+  font-size: 2.4rem;
+  margin-bottom: 4px;
+}
+
+.shop-card-name {
+  font-size: .85rem;
+  font-weight: 700;
+  color: #ede8f8;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.shop-card-credits {
+  font-size: 2.8rem;
+  font-weight: 800;
+  color: var(--card-color);
+  line-height: 1;
+  margin: 6px 0 2px;
+}
+
+.shop-card-unit {
+  font-size: .8rem;
+  color: #7a6e8f;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+}
+
+.shop-card-per {
+  font-size: .78rem;
+  color: #7a6e8f;
+  margin-top: 4px;
+}
+
+.shop-card-price {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #f0f0fa;
+  margin: 8px 0 4px;
+}
+
+.shop-btn {
+  width: 100%;
+  padding: 12px;
+  background: var(--card-color);
+  border: none;
+  border-radius: 10px;
+  color: #fff;
+  font-size: .92rem;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  margin-top: 8px;
+  transition: opacity .15s;
+}
+
+.shop-btn:hover { opacity: .85; }
+.shop-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+/* ── RENDELÉSEK ──────────────────────────────────────────── */
+.shop-orders {
+  border-top: 1px solid #2a1f40;
+  padding-top: 32px;
+}
+
+.shop-orders-title {
+  font-size: 1.1rem;
+  color: #ede8f8;
+  margin-bottom: 16px;
+}
+
+.shop-order-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: #110e1a;
+  border: 1px solid #2a1f40;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  font-size: .85rem;
+}
+
+.shop-order-pkg {
+  color: #9d5cf6;
+  font-weight: 700;
+  text-transform: capitalize;
+  min-width: 60px;
+}
+
+.shop-order-pts {
+  color: #3dd68c;
+  font-weight: 700;
+  flex: 1;
+}
+
+.shop-order-amt {
+  color: #ede8f8;
+}
+
+.shop-order-date {
+  color: #7a6e8f;
+  font-size: .78rem;
+}
+
+@media (max-width: 600px) {
+  .shop-grid { grid-template-columns: 1fr 1fr; }
+  .shop-card-credits { font-size: 2rem; }
+}
+
+@media (max-width: 400px) {
+  .shop-grid { grid-template-columns: 1fr; }
+}

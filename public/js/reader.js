@@ -2,6 +2,8 @@
    reader.js - PadlizsanFanSub olvasó
    ============================================================ */
 
+history.scrollRestoration = "manual";
+
 const params   = new URLSearchParams(location.search);
 const slug     = params.get("slug");
 let chapter    = params.get("chapter");
@@ -40,6 +42,7 @@ let lastSent      = 0;
 let saveTimeout   = null;
 let allFiles      = []; // betöltött fájlnévlista
 let currentLibrary = ""; // library neve az image URL-hez
+let fixVersions   = {}; // { filename: unix_timestamp } — javított képek cache-bust
 let chapters      = [];
 
 function getCurrentPage() {
@@ -116,36 +119,40 @@ async function loadProgress() {
 
 /* ── LAKAT OLDAL ─────────────────────────────────────────── */
 async function showLockPage(targetSlug) {
-  let connected = false;
+  let patreonConnected = false;
   try {
-    const ps = await fetch("/api/patreon/status");
-    if (ps.ok) {
-      const pd = await ps.json();
-      connected = pd.connected === true;
-    }
+    const ps = await fetch("/api/patreon/status", { credentials: "include" });
+    if (ps.ok) { const d = await ps.json(); patreonConnected = !!d.connected; }
   } catch {}
 
-  const title  = connected ? "🔒 Támogasd az oldalt!" : "🔒 Prémium tartalom";
-  const text   = connected
-    ? "Ez a fejezet az előfizetők számára már elérhető.<br>Ingyenes tagoknak <b>24 óra</b> várakozás szükséges."
-    : "Ez a fejezet még nem érhető el ingyenesen.<br>Kösd össze Patreon fiókodat, hogy azonnal hozzáférhess!";
-  const action = connected
-    ? `<a href="https://patreon.com/Padlizsanfansub" target="_blank" class="lock-btn">💜 Előfizetés a Patreonon</a>`
-    : `<button onclick="location.href='/api/patreon/connect'" class="lock-btn">💜 Patreon összekapcsolása</button>`;
+  // paywall.js module-ként töltődik — várunk rá max 2s
+  if (!window._buildPaywallHTML) {
+    await new Promise(r => {
+      const t = setInterval(() => { if (window._buildPaywallHTML) { clearInterval(t); r(); } }, 50);
+      setTimeout(() => { clearInterval(t); r(); }, 2000);
+    });
+  }
+  const paywallHTML = window._buildPaywallHTML
+    ? window._buildPaywallHTML({ patreonConnected })
+    : `<p>Ez a fejezet prémium tartalom. <a href="/settings.html">Előfizetés</a></p>`;
 
-  pagesEl.innerHTML = `
-    <div class="lock-page">
-      <img src="/assets/padlizsanfansublakat.png" style="height:120px">
-      <img src="/assets/pat2.png" style="height:80px">
-      <h2>${title}</h2>
-      <p>${text}</p>
-      ${action}
-      <br>
-      <button class="lock-back" onclick="location.href='/chapters.html?slug=${targetSlug || slug}'">
+  // Overlay modal — ugyanolyan mint a chapters oldalon
+  const existing = document.getElementById("readerLockModal");
+  if (existing) existing.remove();
+
+  const modal = document.createElement("div");
+  modal.id = "readerLockModal";
+  modal.className = "locked-modal";
+  modal.innerHTML = `
+    <div class="locked-backdrop"></div>
+    <div class="locked-box">
+      ${paywallHTML}
+      <button class="lock-close" onclick="location.href='/chapters.html?slug=${targetSlug || slug}'">
         ← Vissza a fejezetlistához
       </button>
     </div>
   `;
+  document.body.appendChild(modal);
 }
 
 /* ── KÉPEK BETÖLTÉSE (prioritásos, szekvenciális) ─────────── */
@@ -160,6 +167,7 @@ async function loadPages() {
   const data = await res.json();
   allFiles = data.pages;
   currentLibrary = data.library;
+  fixVersions = data.fixVersions || {};
 
   if (!allFiles.length) return true;
 
@@ -176,6 +184,8 @@ function buildScrollPages() {
   pagesEl.innerHTML = "";
   pagesEl.className = "mode-scroll";
 
+  if (startPage === 0) window.scrollTo(0, 0);
+
   // Prioritásos betöltés: startPage körüli képek először
   const order = priorityOrder(allFiles.length, startPage > 0 ? startPage - 1 : 0);
 
@@ -185,7 +195,7 @@ function buildScrollPages() {
     wrap.dataset.index = i;
 
     const img = document.createElement("img");
-    img.dataset.src = `/api/image/${currentLibrary}/${slug}/${chapter}/${encodeURIComponent(f)}`;
+    img.dataset.src = `/api/image/${currentLibrary}/${slug}/${chapter}/${encodeURIComponent(f)}${fixVersions[f] ? `?v=${fixVersions[f]}` : ""}`;
     img.dataset.index = i;
     img.style.display = "none";
 
@@ -214,7 +224,7 @@ function buildBookPages() {
     div.dataset.index = i;
 
     const img = document.createElement("img");
-    img.dataset.src = `/api/image/${currentLibrary}/${slug}/${chapter}/${encodeURIComponent(f)}`;
+    img.dataset.src = `/api/image/${currentLibrary}/${slug}/${chapter}/${encodeURIComponent(f)}${fixVersions[f] ? `?v=${fixVersions[f]}` : ""}`;
     img.alt = "";
 
     div.appendChild(img);
@@ -459,7 +469,11 @@ async function loadNav() {
 
   // Következő fejezet
   document.getElementById("nextBtn").onclick = async () => {
-    if (index >= chapters.length - 1) return;
+    if (index >= chapters.length - 1) {
+      await saveProgress(getCurrentPage());
+      location.href = `/chapters.html?slug=${slug}`;
+      return;
+    }
     const nextChapter = chapters[index + 1].folder;
 
     const checkRes = await fetch(`/api/pages/${slug}/${nextChapter}`);

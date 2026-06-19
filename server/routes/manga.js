@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import { pool } from "../db.js";
 import { requireLogin } from "../middleware/auth.js";
+import { getPresignedUrl, mangaImageToR2Key, objectExists, listFiles, localPathToR2Key } from "../r2.js";
 
 const router = express.Router();
 /* ================= HELPERS ================= */
@@ -15,9 +16,14 @@ function extractPageNumber(filename) {
 /* ================= MANGA LIST ================= */
 router.get("/manga", requireLogin, async (_req, res) => {
   try {
-    const { rows } = await pool.query(
-      "SELECT title, slug, cover_url FROM manga ORDER BY title"
-    );
+const { rows } = await pool.query(`
+      SELECT m.title, m.slug, m.cover_url,
+        COUNT(c.id)::int AS chapter_count
+      FROM manga m
+      LEFT JOIN chapter c ON c.manga_id = m.id
+      GROUP BY m.id
+      ORDER BY m.title
+    `);
     res.json(rows);
   } catch (e) {
     console.error(e);
@@ -193,7 +199,8 @@ if (chRes.rows.length) {
     SELECT
       l.path AS library_path,
       l.name AS library_name,
-      m.folder AS manga_folder
+      m.folder AS manga_folder,
+      m.r2_migrated
     FROM chapter c
     JOIN manga m ON m.id = c.manga_id
     JOIN library l ON l.id = m.library_id
@@ -207,13 +214,17 @@ if (chRes.rows.length) {
     return res.status(404).json({ error: "Chapter not found" });
   }
 
-  const { library_path, library_name, manga_folder } = result.rows[0];
+  const { library_path, library_name, manga_folder, r2_migrated } = result.rows[0];
   const dir = path.join(library_path, manga_folder, chapter);
 
   try {
-    const files = fs
-      .readdirSync(dir)
-      .filter(f => /\.(jpg|jpeg|png|webp)$/i.test(f));
+    let files;
+    if (r2_migrated) {
+      const prefix = localPathToR2Key(`${library_path}/${manga_folder}/${chapter}/`.replace(/\/+/g, "/"));
+      files = (await listFiles(prefix)).filter(f => /\.(jpg|jpeg|png|webp)$/i.test(f));
+    } else {
+      files = fs.readdirSync(dir).filter(f => /\.(jpg|jpeg|png|webp)$/i.test(f));
+    }
 
     const pages = files
       .map(f => ({ f, n: extractPageNumber(f) }))
@@ -225,7 +236,19 @@ if (chRes.rows.length) {
       })
       .map(p => p.f);
 
-    res.json({ pages, library: library_name });
+    // Javított képek verziói — böngésző cache-bust
+    const { rows: fixRows } = await pool.query(
+      `SELECT image_file, EXTRACT(EPOCH FROM fixed_at)::bigint AS v
+       FROM bug_fixes
+       WHERE manga_slug = $1 AND chapter = $2 AND is_applied = true`,
+      [slug, chapter]
+    );
+    const fixVersions = {};
+    for (const r of fixRows) {
+      if (r.image_file) fixVersions[r.image_file] = Number(r.v);
+    }
+
+    res.json({ pages, library: library_name, fixVersions });
   } catch (e) {
     console.error(e);
     res.status(404).json({ error: "Pages not found" });
@@ -241,7 +264,8 @@ router.get("/image/:library/:slug/:chapter/:file", async (req, res) => {
     `
     SELECT
       l.path AS library_path,
-      m.folder AS manga_folder
+      m.folder AS manga_folder,
+      m.r2_migrated
     FROM chapter c
     JOIN manga m ON m.id = c.manga_id
     JOIN library l ON l.id = m.library_id
@@ -253,11 +277,38 @@ router.get("/image/:library/:slug/:chapter/:file", async (req, res) => {
 
   if (!result.rows.length) return res.status(404).end();
 
-  const { library_path, manga_folder } = result.rows[0];
-  const imgPath = path.join(library_path, manga_folder, chapter, file);
+  const { library_path, manga_folder, r2_migrated } = result.rows[0];
 
+  // Path traversal védelem
+  const baseDir = path.resolve(path.join(library_path, manga_folder, chapter));
+  const imgPath = path.resolve(path.join(baseDir, file));
+  if (!imgPath.startsWith(baseDir + path.sep) && imgPath !== baseDir) return res.status(403).end();
+
+  // R2-migrated manga: direkten R2, nincs SSD fallback
+  if (r2_migrated) {
+    try {
+      const r2Key = mangaImageToR2Key(library_path, manga_folder, chapter, file);
+      const url = await getPresignedUrl(r2Key, 3600);
+      return res.redirect(302, url);
+    } catch (r2Err) {
+      console.error("R2 presigned URL hiba:", r2Err.message);
+      return res.status(502).end();
+    }
+  }
+
+  // R2-ről próbál elsőnek — ha ott van, presigned URL redirect
+  try {
+    const r2Key = mangaImageToR2Key(library_path, manga_folder, chapter, file);
+    if (await objectExists(r2Key)) {
+      const url = await getPresignedUrl(r2Key, 3600);
+      return res.redirect(302, url);
+    }
+  } catch (r2Err) {
+    console.warn("R2 lookup failed, falling back to local:", r2Err.message);
+  }
+
+  // Fallback: lokális fájl (amíg a migráció fut)
   if (!fs.existsSync(imgPath)) return res.status(404).end();
-
   res.sendFile(imgPath);
 });
 

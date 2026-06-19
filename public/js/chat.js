@@ -1,6 +1,8 @@
 /* ===== CHAT WIDGET ===== */
 
-const WS_URL = `wss://${location.hostname}/ws`;
+const WS_URL = location.protocol === "https:"
+  ? `wss://${location.hostname}/ws`
+  : `ws://${location.hostname}:${parseInt(location.port) + 1}/`;
 let ws = null;
 let isOpen = false;
 let messages = [];

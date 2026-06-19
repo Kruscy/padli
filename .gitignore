@@ -9,3 +9,13 @@ libraries.jsos
 ./logs
 ./deploy.sh
 uploads/
+# SSH kulcsok
+medvedisznoember1990
+medvedisznoember1990.pub
+*.pem
+*.key
+id_rsa
+id_ed25519
+# Cache
+cache/
+server/cache/*.json

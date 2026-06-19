@@ -1,0 +1,243 @@
+/* stats-widget.css – Olvasási statisztika widget */
+
+/* ── ASZTALI: OLDALSÓ PANEL ──────────────────────────────── */
+
+#statsTab {
+  display: none;
+  position: fixed;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%) rotate(0deg);
+  background: #7c3aed;
+  color: #fff;
+  font-size: .8rem;
+  font-weight: 700;
+  padding: 10px 8px;
+  border-radius: 8px 0 0 8px;
+  cursor: pointer;
+  z-index: 200;
+  writing-mode: vertical-rl;
+  letter-spacing: .08em;
+  transition: background .15s, right .35s;
+  user-select: none;
+}
+
+#statsTab:hover { background: #6d28d9; }
+#statsTab.active { right: 320px; }
+
+#statsPanel {
+  display: none;
+  position: fixed;
+  right: -340px;
+  top: 56px; /* header magassága */
+  bottom: 0;
+  width: 320px;
+  background: #0f0f1a;
+  border-left: 1px solid #2a1f40;
+  z-index: 199;
+  flex-direction: column;
+  transition: right .35s cubic-bezier(.4,0,.2,1);
+  overflow: hidden;
+}
+
+#statsPanel.open {
+  right: 0;
+}
+
+/* Main content eltolása */
+@media (min-width: 901px) {
+  #statsTab { display: flex; }
+  #statsPanel { display: flex; }
+
+  main.content.stats-pushed {
+    margin-right: 320px;
+    transition: margin-right .35s cubic-bezier(.4,0,.2,1);
+  }
+}
+
+/* ── PANEL FEJLÉC ────────────────────────────────────────── */
+
+.stats-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid #2a1f40;
+  flex-shrink: 0;
+}
+
+.stats-title {
+  font-size: .9rem;
+  font-weight: 700;
+  color: #ede8f8;
+}
+
+.stats-close {
+  background: none;
+  border: none;
+  color: #7a6e8f;
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: color .15s;
+}
+
+.stats-close:hover { color: #fff; }
+
+/* ── PERIÓDUS GOMBOK ─────────────────────────────────────── */
+
+.stats-periods {
+  display: flex;
+  gap: 6px;
+  padding: 12px 16px;
+  flex-shrink: 0;
+  border-bottom: 1px solid #2a1f40;
+}
+
+.stats-period-btn {
+  flex: 1;
+  padding: 6px 8px;
+  background: #1a1528;
+  border: 1px solid #2a1f40;
+  border-radius: 8px;
+  color: #7a6e8f;
+  font-size: .78rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all .15s;
+}
+
+.stats-period-btn:hover { border-color: #7c3aed; color: #9d5cf6; }
+.stats-period-btn.active { background: #7c3aed; border-color: #7c3aed; color: #fff; }
+
+/* ── LISTA ───────────────────────────────────────────────── */
+
+.stats-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.stats-list::-webkit-scrollbar { width: 4px; }
+.stats-list::-webkit-scrollbar-track { background: transparent; }
+.stats-list::-webkit-scrollbar-thumb { background: #2a1f40; border-radius: 2px; }
+
+.stats-loading,
+.stats-empty {
+  padding: 24px;
+  text-align: center;
+  color: #7a6e8f;
+  font-size: .85rem;
+}
+
+.stats-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  text-decoration: none;
+  color: inherit;
+  transition: background .15s;
+}
+
+.stats-item:hover { background: rgba(124,58,237,.08); }
+
+.stats-rank {
+  font-size: .78rem;
+  font-weight: 700;
+  color: #7a6e8f;
+  width: 18px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.stats-item:nth-child(1) .stats-rank { color: #f0c040; }
+.stats-item:nth-child(2) .stats-rank { color: #b0b8c8; }
+.stats-item:nth-child(3) .stats-rank { color: #c87840; }
+
+.stats-cover {
+  width: 36px;
+  height: 50px;
+  object-fit: cover;
+  border-radius: 4px;
+  flex-shrink: 0;
+  background: #1a1528;
+}
+
+.stats-cover-ph {
+  width: 36px;
+  height: 50px;
+  background: #1a1528;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  flex-shrink: 0;
+}
+
+.stats-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.stats-manga-title {
+  font-size: .8rem;
+  font-weight: 600;
+  color: #ede8f8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-bottom: 4px;
+}
+
+.stats-bar-wrap {
+  height: 4px;
+  background: #2a1f40;
+  border-radius: 999px;
+  overflow: hidden;
+  margin-bottom: 3px;
+}
+
+.stats-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #7c3aed, #9d5cf6);
+  border-radius: 999px;
+  transition: width .4s;
+}
+
+.stats-nums {
+  font-size: .7rem;
+  color: #7a6e8f;
+}
+
+/* ── MOBIL: INLINE (index.html-ben) ─────────────────────── */
+
+#statsInline {
+  display: none;
+  background: #0f0f1a;
+  border: 1px solid #2a1f40;
+  border-radius: 12px;
+  overflow: hidden;
+  margin: 0 0 24px;
+}
+
+.stats-inline-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid #2a1f40;
+}
+
+.stats-periods-inline {
+  border-bottom: 1px solid #2a1f40;
+}
+
+#statsInline .stats-list {
+  max-height: 400px;
+}
+
+@media (max-width: 900px) {
+  #statsTab { display: none !important; }
+  #statsPanel { display: none !important; }
+  #statsInline { display: block; }
+}

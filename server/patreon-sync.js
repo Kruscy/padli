@@ -7,7 +7,7 @@ console.log("ENV TEST:", process.env.PATREON_CAMPAIGN_ID);
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function fetchAllMembers() {
-  let url = `https://www.patreon.com/api/oauth2/v2/campaigns/${process.env.PATREON_CAMPAIGN_ID}/members?include=currently_entitled_tiers,user&fields[member]=patron_status&page[count]=50`;
+  let url = `https://www.patreon.com/api/oauth2/v2/campaigns/${process.env.PATREON_CAMPAIGN_ID}/members?include=currently_entitled_tiers,user&fields[member]=patron_status,email&page[count]=50`;
 
   const members = [];
 
@@ -56,10 +56,38 @@ console.log(`Fetched ${members.length} members`);
     try {
       const patreonUserId = String(m.relationships.user.data.id);
 
-const userRes = await pool.query(
+let statusRes = await pool.query(
   `SELECT user_id FROM patreon_status WHERE patreon_user_id = $1`,
   [patreonUserId]
 );
+
+// Ha nincs még linkelve: próbáljunk email alapján párosítani
+// (csak megerősített email című site userekhez)
+if (!statusRes.rows.length) {
+  const memberEmail = m.attributes?.email;
+  if (memberEmail) {
+    const emailMatch = await pool.query(
+      `SELECT id FROM users WHERE lower(email) = lower($1) AND email_verified = true`,
+      [memberEmail]
+    );
+    if (emailMatch.rows.length) {
+      const matchedUserId = emailMatch.rows[0].id;
+      await pool.query(
+        `INSERT INTO patreon_status (patreon_user_id, user_id, active, tier, payment_source, last_sync)
+         VALUES ($1, $2, false, NULL, 'patreon', NOW())
+         ON CONFLICT (patreon_user_id) DO NOTHING`,
+        [patreonUserId, matchedUserId]
+      );
+      console.log(`Auto-linked Patreon ${patreonUserId} (${memberEmail}) → user ${matchedUserId}`);
+      statusRes = await pool.query(
+        `SELECT user_id FROM patreon_status WHERE patreon_user_id = $1`,
+        [patreonUserId]
+      );
+    }
+  }
+}
+
+const userRes = statusRes;
 
 let isAdmin = false;
 
@@ -105,6 +133,7 @@ if (isAdmin) {
             tier = $2,
             last_sync = NOW()
         WHERE patreon_user_id = $3
+          AND (payment_source IS NULL OR payment_source = 'patreon')
         `,
         [active, tier, patreonUserId]
       );
@@ -123,12 +152,12 @@ if (isAdmin) {
       SET active = false,
           tier = NULL,
           last_sync = NOW()
-WHERE patreon_user_id NOT IN (${ids.map((_, i) => `$${i + 1}`).join(",")})
-AND user_id NOT IN (
-  SELECT id FROM users WHERE role = 'admin'
-) 
-  `
-      ,
+      WHERE patreon_user_id NOT IN (${ids.map((_, i) => `$${i + 1}`).join(",")})
+        AND (payment_source IS NULL OR payment_source = 'patreon')
+        AND user_id NOT IN (
+          SELECT id FROM users WHERE role = 'admin'
+        )
+      `,
       ids
     );
   }

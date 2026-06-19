@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Email megerősítés – PadlizsanFanSub</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favico.png">
+  <link rel="stylesheet" href="/css/auth.css">
+  <style>
+    body { background:#0c0c12; display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0; font-family:sans-serif; }
+    .verify-box { background:#1a1a2e; border:1px solid #2a2a4a; border-radius:16px; padding:48px 40px; max-width:460px; width:90%; text-align:center; color:#e0e0e0; }
+    .verify-icon { font-size:3.5rem; margin-bottom:16px; }
+    h2 { color:#a78bfa; margin:0 0 12px; font-size:1.4rem; }
+    p  { color:#bbb; line-height:1.7; margin:0 0 10px; font-size:0.93rem; }
+    .btn { display:inline-block; background:linear-gradient(135deg,#7c3aed,#5b21b6); color:#fff; padding:12px 28px; border-radius:10px; font-weight:700; text-decoration:none; margin-top:20px; font-size:0.95rem; }
+    #resendSection { margin-top:20px; }
+    #resendSection input { background:#12122a; border:1px solid #2a2a4a; color:#e0e0e0; padding:9px 14px; border-radius:8px; width:100%; box-sizing:border-box; margin-bottom:10px; font-size:0.9rem; }
+    #resendSection button { background:#6366f1; color:#fff; border:none; padding:10px 24px; border-radius:8px; cursor:pointer; font-size:0.88rem; }
+    #resendMsg { margin-top:8px; font-size:0.83rem; color:#888; }
+  </style>
+</head>
+<body>
+<div class="verify-box" id="box">
+  <div class="verify-icon">⏳</div>
+  <h2>Ellenőrzés...</h2>
+  <p>Kérlek várj.</p>
+</div>
+
+<script src="/js/verify-email-init.js"></script>
+</body>
+</html>

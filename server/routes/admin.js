@@ -111,11 +111,14 @@ await pool.query(
 router.get("/users", async (req, res) => {
   try {
     const { rows } = await pool.query(`
-      SELECT id, username, email, role, created_at, ps.tier, ps.active, u.anilist_connected
+SELECT u.id, u.username, u.role, u.created_at, ps.tier, ps.active, u.anilist_connected,
+        u.email_verified,
+        COALESCE(SUM(up.points) FILTER (WHERE up.spent = false), 0)::int AS points
       FROM users u
-      LEFT JOIN patreon_status ps
-        ON ps.user_id = u.id
-      ORDER BY created_at DESC
+      LEFT JOIN patreon_status ps ON ps.user_id = u.id
+      LEFT JOIN user_points up ON up.user_id = u.id
+      GROUP BY u.id, u.username, u.role, u.created_at, ps.tier, ps.active, u.anilist_connected, u.email_verified
+      ORDER BY u.created_at DESC
     `);
 
     res.json(rows);
@@ -322,6 +325,298 @@ router.get("/images", (req, res) => {
   } catch (err) {
     console.error("Images list error:", err);
     res.status(500).json({ error: "Hiba a fájlok listázásánál" });
+  }
+});
+
+/* ═══════════════════════════════════════════════════════════
+   KÖNYVTÁRAK – uploader root kezelés
+   ═══════════════════════════════════════════════════════════ */
+const KAVITA_BASE = "/mnt/manga/Kavita";
+
+router.get("/uploader-roots", async (req, res) => {
+  try {
+    const [usersRes, namesRes, canUploadRes] = await Promise.all([
+      pool.query(`
+        SELECT u.id, u.username, ps.tier, ps.uploader_root, COALESCE(ps.active, false) AS supporter_access
+        FROM users u
+        JOIN patreon_status ps ON ps.user_id = u.id
+        WHERE ps.tier IN ('Admin', 'Uploader')
+        ORDER BY ps.tier, u.username
+      `),
+      pool.query(`SELECT name, root_path FROM uploader_names ORDER BY name`),
+      pool.query(`
+        SELECT u.id, u.username, u.can_upload, COALESCE(ps.uploader_root, '') AS uploader_root,
+               COALESCE(ps.active, false) AS supporter_access
+        FROM users u
+        LEFT JOIN patreon_status ps ON ps.user_id = u.id
+        WHERE u.upload_granted = true AND COALESCE(ps.tier, '') NOT IN ('Admin', 'Uploader')
+        ORDER BY u.username
+      `)
+    ]);
+    res.json({ users: usersRes.rows, uploaderNames: namesRes.rows, canUploadUsers: canUploadRes.rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.patch("/supporter-access/:userId", express.json(), async (req, res) => {
+  const { userId } = req.params;
+  const { active } = req.body;
+  if (typeof active !== "boolean") return res.status(400).json({ error: "Hiányzó active boolean" });
+  try {
+    const { rowCount } = await pool.query(
+      `UPDATE patreon_status SET active = $1 WHERE user_id = $2`,
+      [active, userId]
+    );
+    if (!rowCount) {
+      await pool.query(
+        `INSERT INTO patreon_status (patreon_user_id, user_id, active) VALUES ($1, $2, $3)`,
+        [`manual_${userId}`, userId, active]
+      );
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get("/users/search", async (req, res) => {
+  const q = (req.query.q || "").trim();
+  if (!q) return res.json([]);
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, username FROM users WHERE username ILIKE $1 ORDER BY username LIMIT 10`,
+      [`%${q}%`]
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get("/kavita-dirs", (req, res) => {
+  try {
+    if (!fs.existsSync(KAVITA_BASE)) return res.json([]);
+    const dirs = fs.readdirSync(KAVITA_BASE, { withFileTypes: true })
+      .filter(e => e.isDirectory())
+      .map(e => e.name)
+      .sort();
+    res.json(dirs);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+function resolveRoot(root) {
+  // Ha abszolút út (/-vel kezdődik): közvetlenül elfogadja, de csak /mnt/ alatt
+  // Ha relatív: KAVITA_BASE alá illeszti
+  if (root.startsWith("/")) {
+    const full = path.resolve(root);
+    if (!full.startsWith("/mnt/") && full !== "/mnt") return null;
+    return full;
+  }
+  const full = path.resolve(path.join(KAVITA_BASE, root));
+  if (!full.startsWith(KAVITA_BASE + path.sep) && full !== KAVITA_BASE) return null;
+  return full;
+}
+
+router.post("/uploader-root/:userId", express.json(), async (req, res) => {
+  const { userId } = req.params;
+  let { root } = req.body;
+  root = (root || "").trim().replace(/\\/g, "/");
+
+  if (root && !resolveRoot(root)) {
+    return res.status(400).json({ error: "Érvénytelen útvonal" });
+  }
+
+  await pool.query(
+    `UPDATE patreon_status SET uploader_root = $1 WHERE user_id = $2`,
+    [root || null, userId]
+  );
+  res.json({ ok: true });
+});
+
+router.post("/uploader-name-root", express.json(), async (req, res) => {
+  let { name, root } = req.body;
+  if (!name?.trim()) return res.status(400).json({ error: "Hiányzó név" });
+  root = (root || "").trim().replace(/\\/g, "/");
+
+  if (root && !resolveRoot(root)) {
+    return res.status(400).json({ error: "Érvénytelen útvonal" });
+  }
+
+  await pool.query(
+    `UPDATE uploader_names SET root_path = $1 WHERE name = $2`,
+    [root || null, name.trim()]
+  );
+  res.json({ ok: true });
+});
+
+router.post("/sync-uploader-manga", async (req, res) => {
+  try {
+    const { rows: uploaderRoots } = await pool.query(
+      `SELECT name, root_path FROM uploader_names WHERE root_path IS NOT NULL AND root_path != ''`
+    );
+    if (!uploaderRoots.length) return res.json({ updated: 0 });
+
+    const { rows: mangas } = await pool.query(`
+      SELECT m.id, m.uploaders, l.path AS lib_path, m.folder
+      FROM manga m
+      JOIN library l ON l.id = m.library_id
+    `);
+
+    let updated = 0;
+    for (const manga of mangas) {
+      const mangaFullPath = (manga.lib_path + "/" + manga.folder).replace(/\/+/g, "/");
+      for (const uploader of uploaderRoots) {
+        const uploaderBase = uploader.root_path.startsWith("/")
+          ? path.resolve(uploader.root_path)
+          : (KAVITA_BASE + "/" + uploader.root_path).replace(/\/+/g, "/");
+        if (mangaFullPath.startsWith(uploaderBase + "/") || mangaFullPath === uploaderBase) {
+          const current = manga.uploaders || [];
+          if (!current.includes(uploader.name)) {
+            await pool.query(
+              `UPDATE manga SET uploaders = array_append(COALESCE(uploaders, '{}'), $1) WHERE id = $2 AND NOT ($1 = ANY(COALESCE(uploaders, '{}')))`,
+              [uploader.name, manga.id]
+            );
+            updated++;
+          }
+        }
+      }
+    }
+
+    res.json({ updated });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ═══════════════════════════════════════════════════════════
+   PATREON GIFT KEZELÉS
+   ═══════════════════════════════════════════════════════════ */
+
+router.get("/patreon-gifts", async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT g.id, g.duration_months, g.cost_points, g.status, g.created_at, g.purchased_at,
+             u.username AS purchased_by_name,
+             -- Megvásárolt kódnál csak az első 36 char + **** jelenik meg (link vége rejtett)
+             CASE WHEN g.status = 'purchased'
+               THEN LEFT(g.patreon_link, 36) || '****'
+               ELSE g.patreon_link
+             END AS display_link
+      FROM patreon_gifts g
+      LEFT JOIN users u ON u.id = g.purchased_by
+      ORDER BY g.status ASC, g.created_at DESC
+    `);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/patreon-gifts", express.json(), async (req, res) => {
+  const { links, duration_months, cost_points } = req.body;
+  if (!Array.isArray(links) || !links.length) return res.status(400).json({ error: "Hiányzó linkek" });
+  const dur = parseInt(duration_months) || 1;
+  const cost = parseInt(cost_points) ?? 100;
+  let added = 0;
+  for (const raw of links) {
+    const link = (raw || "").trim();
+    if (!link) continue;
+    const segment = link.split("/").pop().toUpperCase();
+    const code = "GIFT-" + segment;
+    try {
+      const r = await pool.query(
+        `INSERT INTO patreon_gifts (gift_code, patreon_link, duration_months, cost_points, status)
+         VALUES ($1, $2, $3, $4, 'available')
+         ON CONFLICT (gift_code) DO NOTHING
+         RETURNING id`,
+        [code, link, dur, cost]
+      );
+      if (r.rows.length) added++;
+    } catch {}
+  }
+  res.json({ ok: true, added });
+});
+
+router.delete("/patreon-gifts/:id", async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `DELETE FROM patreon_gifts WHERE id = $1 AND status = 'available' RETURNING id`,
+      [req.params.id]
+    );
+    if (!rows.length) return res.status(400).json({ error: "Nem törölhető (már megvásárolt vagy nem létezik)" });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ── POST /admin/send-verification-emails ────────────────── */
+// Tömeges verifikációs email küldés a meglévő, nem verifikált felhasználóknak
+import { randomBytes, createHash } from "crypto";
+
+router.post("/send-verification-emails", async (req, res) => {
+  try {
+    // Lekérjük az összes nem verifikált felhasználót (max 200/hívás)
+    const { rows: users } = await pool.query(`
+      SELECT id, username, email FROM users
+      WHERE email_verified = false OR email_verified IS NULL
+      ORDER BY id ASC
+      LIMIT 200
+    `);
+
+    if (!users.length) return res.json({ ok: true, sent: 0, message: "Nincs verifikálandó felhasználó." });
+
+    const BASE_URL = process.env.BASE_URL || "https://padlizsanfansub.hu";
+    const deadline = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000); // 14 nap
+
+    let sent = 0, failed = 0;
+
+    for (const user of users) {
+      try {
+        const rawToken    = randomBytes(32).toString("hex");
+        const hashedToken = createHash("sha256").update(rawToken).digest("hex");
+
+        await pool.query(`
+          UPDATE users SET
+            email_verification_token = $1,
+            email_verification_expires = NOW() + INTERVAL '15 days',
+            verified_deadline = $2
+          WHERE id = $3
+        `, [hashedToken, deadline, user.id]);
+
+        const link = `${BASE_URL}/verify-email.html?token=${rawToken}`;
+        const html = `
+          <div style="font-family:sans-serif;max-width:520px;margin:0 auto;background:#1a1a2e;color:#e0e0e0;border-radius:12px;padding:32px 28px">
+            <img src="${BASE_URL}/assets/logo.png" style="height:48px;margin-bottom:20px" alt="PadlizsanFanSub">
+            <h2 style="color:#a78bfa;margin:0 0 12px">Erősítsd meg az email címed!</h2>
+            <p style="color:#bbb;line-height:1.7">Szia <strong style="color:#fff">${user.username}</strong>!</p>
+            <p style="color:#bbb;line-height:1.7">Bevezettük az email megerősítést a PadlizsanFanSub oldalon. Kérjük, erősítsd meg a regisztrált email címed az alábbi gombra kattintva.</p>
+            <p style="color:#f59e0b;font-size:0.9rem">⚠️ <strong>14 napod van</strong> megerősíteni a fiókod (${deadline.toLocaleDateString("hu-HU")}). Utána a bejelentkezés korlátozott lesz.</p>
+            <a href="${link}" style="display:inline-block;background:linear-gradient(135deg,#7c3aed,#5b21b6);color:#fff;padding:14px 32px;border-radius:10px;font-weight:700;text-decoration:none;margin:16px 0">
+              ✉️ Email megerősítése
+            </a>
+            <p style="color:#888;font-size:0.82rem;margin-top:20px">A link 15 napig érvényes.</p>
+            <hr style="border-color:#2a2a3a;margin:20px 0">
+            <p style="color:#555;font-size:0.78rem">PadlizsanFanSub · padlizsanfansub.hu</p>
+          </div>`;
+
+        await sendMail({ to: user.email, subject: "✉️ Erősítsd meg az email címed – PadlizsanFanSub", html });
+        sent++;
+
+        // Kis szünet hogy ne legyen SMTP spam
+        await new Promise(r => setTimeout(r, 200));
+      } catch (mailErr) {
+        console.warn(`[verify-mass] ${user.email}: ${mailErr.message}`);
+        failed++;
+      }
+    }
+
+    res.json({ ok: true, sent, failed, total: users.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

@@ -6,6 +6,7 @@
   <title>PadlizsanFanSub – Reader</title>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/favico.png">
   <link rel="stylesheet" href="/css/reader.css">
+  <link rel="stylesheet" href="/css/locked.css">
 </head>
 <body>
 
@@ -43,13 +44,11 @@
 </div>
 
 <!-- Könyv mód nyilak kattintáskezelő -->
-<script>
-  document.getElementById("bookPrev")?.addEventListener("click", () => bookPrev());
-  document.getElementById("bookNext")?.addEventListener("click", () => bookNext());
-</script>
+<script src="/js/reader-book-nav-init.js"></script>
 
-<script src="/js/bug-report.js"></script>
-<script src="/js/reader.js"></script>
+<script src="/js/bug-report-modal.js"></script>
+<script type="module" src="/js/paywall.js"></script>
+<script src="/js/reader.js?v=20260608"></script>
 <script type="module" src="/js/layout-loader.js"></script>
 </body>
 </html>

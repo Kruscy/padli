@@ -1,7 +1,16 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  overflow-x: hidden;
+}
+
 .wishlist-page {
   max-width: 900px;
-  margin: 40px auto;
-  padding: 0 20px;
+  margin: 0 auto;
+  padding: 80px 20px 40px;
 }
 
 .claimed-badge {
@@ -79,9 +88,6 @@
   margin: 0;
   font-size: 18px;
 }
-.search-results:empty {
-  display: none;
-}
 .wish-info p {
   margin: 4px 0;
   font-size: 13px;
@@ -141,4 +147,40 @@
     0 0 40px rgba(124, 58, 237, 0.4),  /* Középső aura */
     0 0 60px rgba(139, 92, 246, 0.2);  /* Külső glow */
   animation: pulseGlow 2s infinite;
+}
+
+@media (max-width: 600px) {
+  .wishlist-page {
+    padding: 76px 12px 32px;
+  }
+
+  .wish {
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .wish img {
+    width: 56px;
+    height: 80px;
+  }
+
+  .wish-info h3 {
+    font-size: 15px;
+  }
+
+  .wish-actions {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .wish-actions button {
+    flex: 1;
+    font-size: 12px;
+    padding: 5px 8px;
+  }
+
+  .page-title {
+    font-size: 22px;
+  }
 }

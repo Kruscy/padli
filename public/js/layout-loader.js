@@ -8,6 +8,54 @@ async function loadPartial(id, url) {
   document.getElementById(id).innerHTML = html;
 }
 
+/* ================= SEARCH TOGGLE ================= */
+function initSearchToggle() {
+  const wrapper = document.getElementById("searchWrapper");
+  const toggleBtn = document.getElementById("searchToggleBtn");
+  const input = document.getElementById("searchInput");
+  const results = document.getElementById("searchResults");
+  if (!wrapper || !toggleBtn || !input) return;
+
+  let justOpened = false;
+
+  const topbar = document.querySelector(".topbar");
+
+  function openSearch() {
+    justOpened = true;
+    wrapper.classList.add("open");
+    topbar?.classList.add("search-open");
+    setTimeout(() => input.focus(), 50);
+    setTimeout(() => { justOpened = false; }, 300);
+  }
+
+  function closeSearch() {
+    if (!input.value.trim()) {
+      wrapper.classList.remove("open");
+      topbar?.classList.remove("search-open");
+    }
+    if (results) results.classList.add("hidden");
+  }
+
+  toggleBtn.addEventListener("click", openSearch);
+  toggleBtn.addEventListener("touchstart", (e) => { e.preventDefault(); openSearch(); });
+
+  document.addEventListener("click", (e) => {
+    if (justOpened) return;
+    if (!wrapper.contains(e.target) && !(results && results.contains(e.target))) {
+      closeSearch();
+    }
+  });
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      input.value = "";
+      wrapper.classList.remove("open");
+      topbar?.classList.remove("search-open");
+      if (results) results.classList.add("hidden");
+    }
+  });
+}
+
 /* ================= SETTINGS MENU ================= */
 function initSettingsMenu() {
   const btn = document.getElementById("settingsBtn");
@@ -32,6 +80,14 @@ async function initAdminControls() {
   if (!res.ok) return;
 
   const user = await res.json();
+
+  // Feltöltő gomb: Admin vagy Uploader tiernek
+  const uploaderBtn = document.getElementById("uploaderBtn");
+  if (uploaderBtn && (user.tier === "Admin" || user.tier === "Uploader")) {
+    uploaderBtn.classList.remove("hidden");
+    uploaderBtn.addEventListener("click", () => { window.location.href = "/uploader.html"; });
+  }
+
   if (user.role !== "admin") return;
 
   /* ===== SCAN GOMB ===== */
@@ -79,6 +135,7 @@ async function loadLayout() {
 
   // search CSAK header után
   initSearch();
+  initSearchToggle();
 
   // settings menu CSAK header után
   initSettingsMenu();
@@ -124,7 +181,23 @@ if (!document.getElementById("chatWidget")) {
   };
   document.body.appendChild(chatJS);
 }
+
+  // Notification badge betöltése
+  if (!document.querySelector('link[href="/css/notification-badge.css"]')) {
+    const notifCSS = document.createElement("link");
+    notifCSS.rel = "stylesheet";
+    notifCSS.href = "/css/notification-badge.css";
+    document.head.appendChild(notifCSS);
+  }
+
+  if (!document.getElementById("notificationBadgeScript")) {
+    const notifJS = document.createElement("script");
+    notifJS.id = "notificationBadgeScript";
+    notifJS.src = "/js/notification-badge.js";
+    document.body.appendChild(notifJS);
+  }
 }
+
 async function loadOnlineCount() {
   try {
     const res = await fetch("/api/online-count");
