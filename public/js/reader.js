@@ -195,7 +195,7 @@ function buildScrollPages() {
     wrap.dataset.index = i;
 
     const img = document.createElement("img");
-    img.dataset.src = `/api/image/${currentLibrary}/${slug}/${chapter}/${encodeURIComponent(f)}${fixVersions[f] ? `?v=${fixVersions[f]}` : ""}`;
+    img.dataset.src = `/api/image/${currentLibrary}/${slug}/${chapter}/${encodeURIComponent(f)}?r2=1${fixVersions[f] ? `&v=${fixVersions[f]}` : ""}`;
     img.dataset.index = i;
     img.style.display = "none";
 
@@ -224,7 +224,7 @@ function buildBookPages() {
     div.dataset.index = i;
 
     const img = document.createElement("img");
-    img.dataset.src = `/api/image/${currentLibrary}/${slug}/${chapter}/${encodeURIComponent(f)}${fixVersions[f] ? `?v=${fixVersions[f]}` : ""}`;
+    img.dataset.src = `/api/image/${currentLibrary}/${slug}/${chapter}/${encodeURIComponent(f)}?r2=1${fixVersions[f] ? `&v=${fixVersions[f]}` : ""}`;
     img.alt = "";
 
     div.appendChild(img);

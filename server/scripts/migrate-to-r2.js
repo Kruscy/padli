@@ -13,8 +13,17 @@
 import "dotenv/config";
 import fs from "fs";
 import path from "path";
+import pg from "pg";
 import { S3Client, PutObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
 import { NodeHttpHandler } from "@smithy/node-http-handler";
+
+const pool = new pg.Pool({
+  host: process.env.PGHOST || "localhost",
+  port: process.env.PGPORT || 5432,
+  database: process.env.PGDATABASE,
+  user: process.env.PGUSER,
+  password: process.env.PGPASSWORD,
+});
 
 const CONCURRENCY = 30; // párhuzamos feltöltések száma
 const BUCKET = process.env.R2_BUCKET_NAME;
@@ -136,6 +145,9 @@ async function main() {
     console.log(`Fájlok száma: ${files.length}`);
     totalFiles += files.length;
 
+    // Kavitánál nyilvántartjuk az újonnan feltöltött manga könyvtárakat
+    const uploadedMangaDirs = new Set();
+
     let done = 0;
     const tasks = files.map(filePath => async () => {
       const key = toKey(local, r2prefix, filePath);
@@ -145,6 +157,10 @@ async function main() {
         } else {
           await upload(filePath, key);
           uploaded++;
+          // manga mappa = a fejezet szülőmappája
+          if (name === "kavita") {
+            uploadedMangaDirs.add(path.dirname(path.dirname(filePath)));
+          }
         }
       } catch (e) {
         failed++;
@@ -164,6 +180,31 @@ async function main() {
 
     await runPool(tasks, CONCURRENCY);
     console.log("");
+
+    // Kavita: újonnan feltöltött mangák r2_migrated=true beállítása
+    if (name === "kavita" && uploadedMangaDirs.size > 0) {
+      console.log(`\n📦 r2_migrated frissítése ${uploadedMangaDirs.size} manga mappára...`);
+      let updated = 0;
+      for (const mangaDir of uploadedMangaDirs) {
+        const libraryPath = path.dirname(mangaDir);
+        const mangaFolder = path.basename(mangaDir);
+        try {
+          const res = await pool.query(
+            `UPDATE manga SET r2_migrated = true
+             FROM library l
+             WHERE manga.library_id = l.id
+               AND l.path = $1
+               AND manga.folder = $2
+               AND manga.r2_migrated = false`,
+            [libraryPath, mangaFolder]
+          );
+          updated += res.rowCount;
+        } catch (e) {
+          console.warn(`[WARN] DB update hiba (${mangaFolder}): ${e.message}`);
+        }
+      }
+      console.log(`✅ r2_migrated=true: ${updated} manga frissítve`);
+    }
   }
 
   const totalSec = Math.round((Date.now() - startTime) / 1000);
@@ -172,6 +213,7 @@ async function main() {
   console.log(`Feltöltve: ${uploaded}, Kihagyva: ${skipped}, Hiba: ${failed}`);
   console.log(`Idő: ${Math.floor(totalSec / 3600)}ó ${Math.floor((totalSec % 3600) / 60)}p ${totalSec % 60}s`);
 
+  await pool.end();
   if (failed > 0) process.exit(1);
 }
 

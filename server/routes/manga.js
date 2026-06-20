@@ -1,6 +1,7 @@
 import express from "express";
 import fs from "fs";
 import path from "path";
+import { Readable } from "stream";
 import { pool } from "../db.js";
 import { requireLogin } from "../middleware/auth.js";
 import { getPresignedUrl, mangaImageToR2Key, objectExists, listFiles, localPathToR2Key } from "../r2.js";
@@ -222,6 +223,10 @@ if (chRes.rows.length) {
     if (r2_migrated) {
       const prefix = localPathToR2Key(`${library_path}/${manga_folder}/${chapter}/`.replace(/\/+/g, "/"));
       files = (await listFiles(prefix)).filter(f => /\.(jpg|jpeg|png|webp)$/i.test(f));
+      // Fallback: ha R2-n még nincs fent (pl. friss feltöltés scan előtt), lokálisból
+      if (files.length === 0 && fs.existsSync(dir)) {
+        files = fs.readdirSync(dir).filter(f => /\.(jpg|jpeg|png|webp)$/i.test(f));
+      }
     } else {
       files = fs.readdirSync(dir).filter(f => /\.(jpg|jpeg|png|webp)$/i.test(f));
     }
@@ -284,32 +289,44 @@ router.get("/image/:library/:slug/:chapter/:file", async (req, res) => {
   const imgPath = path.resolve(path.join(baseDir, file));
   if (!imgPath.startsWith(baseDir + path.sep) && imgPath !== baseDir) return res.status(403).end();
 
-  // R2-migrated manga: direkten R2, nincs SSD fallback
-  if (r2_migrated) {
-    try {
-      const r2Key = mangaImageToR2Key(library_path, manga_folder, chapter, file);
-      const url = await getPresignedUrl(r2Key, 3600);
-      return res.redirect(302, url);
-    } catch (r2Err) {
-      console.error("R2 presigned URL hiba:", r2Err.message);
-      return res.status(502).end();
-    }
+  const R2_PUBLIC = process.env.R2_PUBLIC_URL;
+
+  function serveLocal() {
+    if (!fs.existsSync(imgPath)) return res.status(404).end();
+    res.sendFile(imgPath);
   }
 
-  // R2-ről próbál elsőnek — ha ott van, presigned URL redirect
+  async function proxyR2(r2Key) {
+    const url = `${R2_PUBLIC}/${r2Key}`;
+    const r2Res = await fetch(url);
+    if (!r2Res.ok) {
+      // R2-ből nem jön → fallback lokális SSD-re (pl. új feltöltés még nem scannelt)
+      serveLocal();
+      return;
+    }
+    res.setHeader("Content-Type", r2Res.headers.get("content-type") || "image/jpeg");
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    Readable.fromWeb(r2Res.body).pipe(res);
+  }
+
+  // R2-migrated manga: proxy R2-ről, fallback lokálisra ha nincs fent még
+  if (r2_migrated) {
+    const r2Key = mangaImageToR2Key(library_path, manga_folder, chapter, file);
+    return proxyR2(r2Key).catch(() => serveLocal());
+  }
+
+  // R2-ről próbál elsőnek — ha ott van, proxy
   try {
     const r2Key = mangaImageToR2Key(library_path, manga_folder, chapter, file);
     if (await objectExists(r2Key)) {
-      const url = await getPresignedUrl(r2Key, 3600);
-      return res.redirect(302, url);
+      return proxyR2(r2Key).catch(() => serveLocal());
     }
   } catch (r2Err) {
     console.warn("R2 lookup failed, falling back to local:", r2Err.message);
   }
 
-  // Fallback: lokális fájl (amíg a migráció fut)
-  if (!fs.existsSync(imgPath)) return res.status(404).end();
-  res.sendFile(imgPath);
+  // Fallback: lokális fájl
+  serveLocal();
 });
 
 /* ================= NEXT / PREV ================= */

@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { spawn } from "child_process";
 import { pool } from "./db.js";
 import { scanMetadata } from "./metadata-scan.js";
 import { setNewMangaCache } from "./cache/new-manga.js";
@@ -504,6 +505,23 @@ ${linkList}`
     } finally {
       discordBot.destroy();
     }
+  })
+  .then(() => {
+    // Scan után auto-upload: Kavitában lévő új fájlok feltöltése R2-be
+    const logPath = `/opt/padli/logs/r2-migrate-scan-${Date.now()}.log`;
+    const r2Upload = spawn(
+      "node",
+      ["./server/scripts/migrate-to-r2.js", "kavita"],
+      {
+        cwd: "/opt/padli",
+        detached: true,
+        stdio: ["ignore",
+          fs.openSync(logPath, "a"),
+          fs.openSync(logPath, "a")]
+      }
+    );
+    r2Upload.unref();
+    console.log(`📤 R2 upload elindítva (log: ${logPath})`);
   })
   .catch(err => {
     console.error("❌ Scan failed:", err);
