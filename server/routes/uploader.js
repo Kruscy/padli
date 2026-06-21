@@ -34,6 +34,27 @@ async function uploadToR2(fullPath, buffer) {
   }));
 }
 
+// R2 sync sor: max 2 egyidejű feltöltés, többi várakozik
+const r2SyncQueue = [];
+let r2SyncActive = 0;
+const R2_SYNC_CONCURRENCY = 2;
+
+function enqueueR2Sync(task) {
+  r2SyncQueue.push(task);
+  drainR2Queue();
+}
+
+function drainR2Queue() {
+  while (r2SyncActive < R2_SYNC_CONCURRENCY && r2SyncQueue.length > 0) {
+    const task = r2SyncQueue.shift();
+    r2SyncActive++;
+    task().finally(() => {
+      r2SyncActive--;
+      drainR2Queue();
+    });
+  }
+}
+
 const router = express.Router();
 const BASE_DIR = "/mnt/manga/Kavita";
 
@@ -154,24 +175,26 @@ async function purgeOverwrittenFile(fullPath, filename, chapter) {
   }
 }
 
-/* ── R2 upload ha a manga már migrált ───────────────────── */
-async function syncToR2IfMigrated(fullPath, buffer) {
+/* ── R2 upload ha a manga már migrált (sorba rendezve) ─── */
+function syncToR2IfMigrated(fullPath, buffer) {
   const ext = path.extname(fullPath).toLowerCase();
   if (!IMAGE_EXTS.has(ext)) return;
-  try {
-    const { rows } = await pool.query(`
-      SELECT m.r2_migrated
-      FROM manga m
-      JOIN library l ON l.id = m.library_id
-      WHERE $1 LIKE (l.path || '/' || m.folder || '/%')
-      LIMIT 1
-    `, [fullPath]);
-    if (!rows.length || !rows[0].r2_migrated) return;
-    await uploadToR2(fullPath, buffer);
-    console.log("[R2 sync] feltöltve:", fullPath);
-  } catch (err) {
-    console.warn("[R2 sync] hiba:", err.message);
-  }
+  enqueueR2Sync(async () => {
+    try {
+      const { rows } = await pool.query(`
+        SELECT m.r2_migrated
+        FROM manga m
+        JOIN library l ON l.id = m.library_id
+        WHERE $1 LIKE (l.path || '/' || m.folder || '/%')
+        LIMIT 1
+      `, [fullPath]);
+      if (!rows.length || !rows[0].r2_migrated) return;
+      await uploadToR2(fullPath, buffer);
+      console.log("[R2 sync] feltöltve:", fullPath);
+    } catch (err) {
+      console.warn("[R2 sync] hiba:", err.message);
+    }
+  });
 }
 
 /* ── POST /api/uploader/upload ──────────────────────────── */
@@ -190,8 +213,8 @@ router.post("/upload", requireUploader, upload.single("file"), async (req, res) 
     fs.mkdirSync(path.dirname(fullPath), { recursive: true });
     fs.writeFileSync(fullPath, req.file.buffer);
 
-    // R2 sync: minden képnél ha a manga már migrált (felülírás is, új is)
-    syncToR2IfMigrated(fullPath, req.file.buffer).catch(() => {});
+    // R2 sync: sorba rendezve, max 2 egyidejű feltöltés
+    syncToR2IfMigrated(fullPath, req.file.buffer);
 
     if (wasOverwrite) {
       const parts = relativePath.replace(/\\/g, "/").split("/").filter(Boolean);

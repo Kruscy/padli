@@ -20,29 +20,58 @@ router.use((req, res, next) => {
 
 /* ================= SCAN LIBRARY ================= */
 
+const SCAN_LOCK = "/tmp/padlizsanfansub.scan.lock";
+let scanQueued = false;
+
+function isScanRunning() {
+  if (!fs.existsSync(SCAN_LOCK)) return false;
+  // Stale lock ellenőrzés: ha a PID már nem él, töröljük
+  try {
+    const pid = parseInt(fs.readFileSync(SCAN_LOCK, "utf8").trim(), 10);
+    process.kill(pid, 0); // 0 = csak ellenőrzés, nem küld signalt
+    return true; // PID él → scan fut
+  } catch {
+    fs.unlinkSync(SCAN_LOCK); // stale lock → töröljük
+    return false;
+  }
+}
+
+function spawnScan() {
+  clearNewReleasesCache();
+  const scan = spawn("node", ["./server/scan.js"], {
+    cwd: "/opt/padli",
+    detached: true,
+    stdio: "ignore"
+  });
+  scan.unref();
+  console.log("🔄 Admin scan started");
+}
+
 router.post("/scan", (req, res) => {
   try {
-    // 🔥 CACHE TÖRLÉS – AMINT SCAN INDUL
-	clearNewReleasesCache();
-    // AZONNAL válaszolunk a frontendnek
-    res.json({ ok: true });
-
-    // háttérben elindítjuk a scan-t
-    const scan = spawn(
-      "node",
-      ["./server/scan.js"],
-      {
-        cwd: "/opt/padli",
-        detached: true,
-        stdio: "ignore"
+    if (isScanRunning()) {
+      if (!scanQueued) {
+        scanQueued = true;
+        console.log("⏳ Scan már fut – a következő scan sorba állt");
+        // Megvárjuk amíg a lock felszabadul, majd elindítjuk
+        const interval = setInterval(() => {
+          if (!isScanRunning()) {
+            clearInterval(interval);
+            scanQueued = false;
+            spawnScan();
+          }
+        }, 5000); // 5 másodpercenként ellenőrzi
+      } else {
+        console.log("⏳ Scan már fut és egy scan már sorban van – eldobva");
       }
-    );
+      return res.json({ ok: true, queued: true });
+    }
 
-    scan.unref();
-
-    console.log("🔄 Admin scan started");
+    spawnScan();
+    res.json({ ok: true });
   } catch (err) {
     console.error("❌ Scan spawn failed", err);
+    res.status(500).json({ error: "Scan failed" });
   }
 });
 
