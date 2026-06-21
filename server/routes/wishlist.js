@@ -64,7 +64,7 @@ router.post("/", requireLogin, async (req, res) => {
       query ($id: Int) {
         Media(id: $id, type: MANGA) {
           id
-          title { english }
+          title { english romaji native }
           coverImage { large }
           chapters
         }
@@ -87,6 +87,9 @@ router.post("/", requireLogin, async (req, res) => {
       return res.status(400).json({ error: "Nem található" });
     }
 
+    const title = m.title.english || m.title.romaji || m.title.native;
+    if (!title) return res.status(400).json({ error: "Nem található cím" });
+
     const result = await pool.query(`
       INSERT INTO wishlist (user_id, anilist_id, title, cover_url, episodes)
       VALUES ($1,$2,$3,$4,$5)
@@ -94,7 +97,7 @@ router.post("/", requireLogin, async (req, res) => {
     `, [
       req.session.user.id,
       m.id,
-      m.title.english,
+      title,
       m.coverImage?.large,
       m.chapters
     ]);

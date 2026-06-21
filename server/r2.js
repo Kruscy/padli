@@ -29,14 +29,10 @@ export async function objectExists(key) {
 }
 
 // /mnt/manga/Kavita/{user}/{manga}/{chapter}/{file} → manga/kavita/{user}/{manga}/{chapter}/{file}
-// /mnt/manga2/padli_manga/{...}                    → manga/padli_manga/{...}
 // /opt/padli/uploads/{file}                        → uploads/{file}
 export function localPathToR2Key(absolutePath) {
   if (absolutePath.startsWith("/mnt/manga/Kavita/")) {
     return "manga/kavita/" + absolutePath.slice("/mnt/manga/Kavita/".length);
-  }
-  if (absolutePath.startsWith("/mnt/manga2/padli_manga/")) {
-    return "manga/padli_manga/" + absolutePath.slice("/mnt/manga2/padli_manga/".length);
   }
   if (absolutePath.startsWith("/opt/padli/uploads/")) {
     return "uploads/" + absolutePath.slice("/opt/padli/uploads/".length);

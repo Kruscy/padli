@@ -3,6 +3,36 @@ import fs from "fs";
 import path from "path";
 import multer from "multer";
 import { pool } from "../db.js";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { localPathToR2Key } from "../r2.js";
+
+const r2 = new S3Client({
+  region: "auto",
+  endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+  credentials: {
+    accessKeyId: process.env.R2_ACCESS_KEY_ID,
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+  },
+});
+
+const IMAGE_EXTS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"]);
+
+async function uploadToR2(fullPath, buffer) {
+  const ext = path.extname(fullPath).toLowerCase();
+  if (!IMAGE_EXTS.has(ext)) return;
+  const key = localPathToR2Key(fullPath);
+  const contentType = {
+    ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+    ".png": "image/png", ".webp": "image/webp",
+    ".gif": "image/gif", ".avif": "image/avif",
+  }[ext] ?? "application/octet-stream";
+  await r2.send(new PutObjectCommand({
+    Bucket: process.env.R2_BUCKET_NAME,
+    Key: key,
+    Body: buffer,
+    ContentType: contentType,
+  }));
+}
 
 const router = express.Router();
 const BASE_DIR = "/mnt/manga/Kavita";
@@ -111,15 +141,36 @@ async function purgeOverwrittenFile(fullPath, filename, chapter) {
     if (!rows.length) return;
     const { slug, library_name } = rows[0];
 
-    const url = `${CF_DOMAIN}/api/image/${encodeURIComponent(library_name)}/${encodeURIComponent(slug)}/${encodeURIComponent(chapter)}/${encodeURIComponent(filename)}`;
+    const base = `${CF_DOMAIN}/api/image/${encodeURIComponent(library_name)}/${encodeURIComponent(slug)}/${encodeURIComponent(chapter)}/${encodeURIComponent(filename)}`;
+    // Mindkét URL-t töröljük: alap és ?r2=1-es (CF ezeket külön cache-eli)
     await fetch(`https://api.cloudflare.com/client/v4/zones/${CF_ZONE}/purge_cache`, {
       method: "POST",
       headers: { "Authorization": `Bearer ${CF_TOKEN}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ files: [url] })
+      body: JSON.stringify({ files: [base, `${base}?r2=1`] })
     });
-    console.log("[CF purge] felülírt kép:", url);
+    console.log("[CF purge] felülírt kép:", base);
   } catch (err) {
     console.warn("[CF purge] hiba:", err.message);
+  }
+}
+
+/* ── R2 upload ha a manga már migrált ───────────────────── */
+async function syncToR2IfMigrated(fullPath, buffer) {
+  const ext = path.extname(fullPath).toLowerCase();
+  if (!IMAGE_EXTS.has(ext)) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT m.r2_migrated
+      FROM manga m
+      JOIN library l ON l.id = m.library_id
+      WHERE $1 LIKE (l.path || '/' || m.folder || '/%')
+      LIMIT 1
+    `, [fullPath]);
+    if (!rows.length || !rows[0].r2_migrated) return;
+    await uploadToR2(fullPath, buffer);
+    console.log("[R2 sync] feltöltve:", fullPath);
+  } catch (err) {
+    console.warn("[R2 sync] hiba:", err.message);
   }
 }
 
@@ -138,6 +189,9 @@ router.post("/upload", requireUploader, upload.single("file"), async (req, res) 
 
     fs.mkdirSync(path.dirname(fullPath), { recursive: true });
     fs.writeFileSync(fullPath, req.file.buffer);
+
+    // R2 sync: minden képnél ha a manga már migrált (felülírás is, új is)
+    syncToR2IfMigrated(fullPath, req.file.buffer).catch(() => {});
 
     if (wasOverwrite) {
       const parts = relativePath.replace(/\\/g, "/").split("/").filter(Boolean);

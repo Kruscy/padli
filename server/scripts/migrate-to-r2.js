@@ -40,9 +40,8 @@ const r2 = new S3Client({
 });
 
 const SOURCES = {
-  kavita:  { local: "/mnt/manga/Kavita",        r2prefix: "manga/kavita" },
-  padli:   { local: "/mnt/manga2/padli_manga",  r2prefix: "manga/padli_manga" },
-  uploads: { local: "/opt/padli/uploads",        r2prefix: "uploads" },
+  kavita:  { local: "/mnt/manga/Kavita",  r2prefix: "manga/kavita" },
+  uploads: { local: "/opt/padli/uploads", r2prefix: "uploads" },
 };
 
 const filter = process.argv[2]; // opcionális: kavita / padli / uploads

@@ -42,7 +42,7 @@ app.use(helmet({
                         "https://cdn.jsdelivr.net"],
       fontSrc:         ["'self'", "https://fonts.gstatic.com"],
       imgSrc:          ["'self'", "data:", "blob:", "https:"],
-      connectSrc:      ["'self'", "wss://padlizsanfansub.hu", "https://padlizsanfansub.hu"],
+      connectSrc:      ["'self'", "wss://padlizsanfansub.hu", "https://padlizsanfansub.hu", "https://mamato.csimota.duckdns.org"],
       mediaSrc:        ["'self'", "https:"],
       frameSrc:        ["'none'"],
       objectSrc:       ["'none'"],
