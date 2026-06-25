@@ -1,6 +1,10 @@
 // server/routes/bug-reports.js
 import express from "express";
+import fsSync from "fs";
+import pathSync from "path";
 import { pool } from "../db.js";
+import { r2, BUCKET, localPathToR2Key } from "../r2.js";
+import { PutObjectCommand } from "@aws-sdk/client-s3";
 import multer from "multer";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -492,8 +496,8 @@ router.post("/fix/upload", requireLogin, upload.single("image"), async (req, res
     if (!req.file) return res.status(400).json({ error: "Nincs fájl" });
 
     // Mappa struktúra: uploads/bugs/javitott/manga_slug/chapter/
-    const fs   = await import("fs");
-    const path = await import("path");
+    const fs = fsSync;
+    const path = pathSync;
 
     const dir = path.join(process.cwd(), "uploads", "bugs", "javitott",
       manga_slug, chapter);
@@ -535,8 +539,8 @@ router.post("/fix/:id/apply", requireAdmin, async (req, res) => {
     if (!fixRows.length) return res.status(404).json({ error: "Nem található" });
     const fix = fixRows[0];
 
-    const fs   = await import("fs");
-    const path = await import("path");
+    const fs = fsSync;
+    const path = pathSync;
 
     // 1. Eredeti fájlnév lekérése a bug_reports táblából
     const { rows: reportRows } = await pool.query(`
@@ -548,7 +552,8 @@ router.post("/fix/:id/apply", requireAdmin, async (req, res) => {
     if (!reportRows.length) {
       return res.status(404).json({ error: "Bug report nem található az eredeti fájlnévhez" });
     }
-    const originalFilename = reportRows[0].image_file;
+    // ?r2=1 és egyéb query paraméterek levágása
+    const originalFilename = reportRows[0].image_file.split("?")[0];
 
     // 2. Javított kép helye — a fixed_image_url-ből vesszük a pontos fájlnevet (pl. 19_5.jpg)
     const fixedDir = path.join(process.cwd(), "uploads", "bugs", "javitott", fix.manga_slug, fix.chapter);
@@ -574,23 +579,20 @@ router.post("/fix/:id/apply", requireAdmin, async (req, res) => {
     }
 
     const { library_path, manga_folder } = pathRows[0];
-    const originalPath = path.join(library_path, manga_folder, fix.chapter, originalFilename);
+    const originalPath = pathSync.join(library_path, manga_folder, fix.chapter, originalFilename);
 
-    if (!fs.existsSync(originalPath)) {
-      return res.status(404).json({ error: "Eredeti kép nem található: " + originalPath });
-    }
-
-    // 3. Javított → eredeti fájl felülírása (read/write NFS kompatibilis)
-    const fileData = fs.readFileSync(fixedFile);
-    fs.writeFileSync(originalPath, fileData);
+    // 3. Javított fájl beolvasása, majd célhelyre írás (ha a mappa/fájl nem létezik, létrehozzuk)
+    const fileData = fsSync.readFileSync(fixedFile);
+    fsSync.mkdirSync(pathSync.dirname(originalPath), { recursive: true });
+    fsSync.writeFileSync(originalPath, fileData);
 
     // 4. Javított kép törlése az uploads mappából
-    fs.unlinkSync(fixedFile);
+    fsSync.unlinkSync(fixedFile);
 
     // 5. Ha a mappa üres lett, törli azt is
     try {
-      const remaining = fs.readdirSync(fixedDir);
-      if (remaining.length === 0) fs.rmdirSync(fixedDir);
+      const remaining = fsSync.readdirSync(fixedDir);
+      if (remaining.length === 0) fsSync.rmdirSync(fixedDir);
     } catch (_) {}
 
     // 6. DB frissítés
@@ -598,6 +600,21 @@ router.post("/fix/:id/apply", requireAdmin, async (req, res) => {
       `UPDATE bug_fixes SET is_applied=true, fixed_image_url=$1 WHERE id=$2`,
       [originalPath, req.params.id]
     );
+
+    // 6.5. R2 feltöltés + chapter updated_at cache-bust
+    try {
+      const r2Key = localPathToR2Key(originalPath);
+      const ct = /\.png$/i.test(originalFilename) ? "image/png" : "image/jpeg";
+      await r2.send(new PutObjectCommand({ Bucket: BUCKET, Key: r2Key, Body: fileData, ContentType: ct }));
+      await pool.query(
+        `UPDATE chapter SET updated_at = NOW()
+         WHERE folder = $1 AND manga_id = (SELECT id FROM manga WHERE slug = $2 LIMIT 1)`,
+        [fix.chapter, fix.manga_slug]
+      );
+      console.log(`[fix-apply] R2 feltöltve: ${r2Key}`);
+    } catch (r2Err) {
+      console.error("[fix-apply] R2 hiba:", r2Err.message);
+    }
 
     // 7. Kapcsolódó bug reportok lezárása
     await pool.query(`
@@ -686,26 +703,26 @@ router.post("/fix/:id/apply", requireAdmin, async (req, res) => {
       console.error("[NOTIF hiba]", notifErr.message);
     }
 
-    // 8. Cloudflare cache purge csak erre az egy képre
-    const CF_ZONE   = process.env.CF_ZONE_ID;
-    const CF_TOKEN  = process.env.CF_API_TOKEN;
-    const CF_DOMAIN = process.env.CF_DOMAIN || "https://padlizsanfansub.hu";
-
-    if (CF_ZONE && CF_TOKEN) {
-      const imageUrl = `${CF_DOMAIN}/api/image/${fix.provider}/${fix.manga_slug}/${fix.chapter}/${encodeURIComponent(originalFilename)}`;
-      try {
+    // 8. Cloudflare cache purge — API URL + R2 public URL
+    try {
+      const CF_ZONE   = process.env.CF_ZONE_ID;
+      const CF_TOKEN  = process.env.CF_API_TOKEN;
+      const CF_DOMAIN = process.env.CF_DOMAIN || "https://padlizsanfansub.hu";
+      const R2_PUBLIC = process.env.R2_PUBLIC_URL;
+      if (CF_ZONE && CF_TOKEN) {
+        const urls = [
+          `${CF_DOMAIN}/api/image/${fix.provider}/${fix.manga_slug}/${fix.chapter}/${encodeURIComponent(originalFilename)}`,
+        ];
+        if (R2_PUBLIC) urls.push(`${R2_PUBLIC}/${localPathToR2Key(originalPath)}`);
         await fetch(`https://api.cloudflare.com/client/v4/zones/${CF_ZONE}/purge_cache`, {
           method: "POST",
-          headers: {
-            "Authorization": `Bearer ${CF_TOKEN}`,
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({ files: [imageUrl] })
+          headers: { "Authorization": `Bearer ${CF_TOKEN}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ files: urls }),
         });
-        console.log("[CF purge] OK:", imageUrl);
-      } catch (cfErr) {
-        console.warn("[CF purge hiba]", cfErr.message);
+        console.log("[CF purge] OK:", urls.join(", "));
       }
+    } catch (cfErr) {
+      console.warn("[CF purge hiba]", cfErr.message);
     }
 
     res.json({ ok: true, original: originalPath });
@@ -729,7 +746,7 @@ router.post("/fix/:id/correct", requireAdmin, upload.single("image"), async (req
       [fix.manga_slug, fix.chapter, fix.image_index]
     );
     if (!reportRows.length) return res.status(404).json({ error: "Bug report nem található" });
-    const originalFilename = reportRows[0].image_file;
+    const originalFilename = reportRows[0].image_file.split("?")[0];
 
     const { rows: pathRows } = await pool.query(
       `SELECT l.path AS library_path, m.folder AS manga_folder
@@ -740,13 +757,26 @@ router.post("/fix/:id/correct", requireAdmin, upload.single("image"), async (req
 
     const { library_path, manga_folder } = pathRows[0];
 
-    const fs   = await import("fs");
-    const path = await import("path");
+    const fs = fsSync;
+    const path = pathSync;
 
     const originalPath = path.join(library_path, manga_folder, fix.chapter, originalFilename);
-    if (!fs.existsSync(originalPath)) return res.status(404).json({ error: "Eredeti kép nem található: " + originalPath });
-
+    fs.mkdirSync(path.dirname(originalPath), { recursive: true });
     fs.writeFileSync(originalPath, req.file.buffer);
+
+    // R2 feltöltés + updated_at
+    try {
+      const r2Key = localPathToR2Key(originalPath);
+      const ct = /\.png$/i.test(originalFilename) ? "image/png" : "image/jpeg";
+      await r2.send(new PutObjectCommand({ Bucket: BUCKET, Key: r2Key, Body: req.file.buffer, ContentType: ct }));
+      await pool.query(
+        `UPDATE chapter SET updated_at = NOW()
+         WHERE folder = $1 AND manga_id = (SELECT id FROM manga WHERE slug = $2 LIMIT 1)`,
+        [fix.chapter, fix.manga_slug]
+      );
+    } catch (r2Err) {
+      console.error("[correct] R2 hiba:", r2Err.message);
+    }
 
     await pool.query(`UPDATE bug_fixes SET fixed_at=NOW() WHERE id=$1`, [req.params.id]);
 

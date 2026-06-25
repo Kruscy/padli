@@ -150,6 +150,10 @@ function renderEditModal(manga) {
 
       <div class="manga-edit-actions">
         <button class="manga-edit-cancel" id="mangaEditCancel">❌ Mégse</button>
+        <button class="manga-edit-delete" id="mangaEditDelete"
+          style="background:#7f1d1d;color:#fca5a5;border:none;padding:10px 18px;border-radius:10px;cursor:pointer;font-weight:700;font-size:0.9rem;margin-right:auto">
+          🗑️ Manga törlése
+        </button>
         <button class="manga-edit-save" id="mangaEditSave">💾 Mentés</button>
       </div>
     </div>
@@ -162,6 +166,7 @@ function renderEditModal(manga) {
   document.getElementById("mangaEditCancel").addEventListener("click", closeMangaEdit);
   document.getElementById("mangaEditBackdrop").addEventListener("click", closeMangaEdit);
   document.getElementById("mangaEditSave").addEventListener("click", saveMangaEdit);
+  document.getElementById("mangaEditDelete").addEventListener("click", deleteManga);
 
   document.getElementById("editCoverUrl").addEventListener("input", (e) => {
     document.getElementById("editCoverPreview").src = e.target.value || "/assets/no-cover.png";
@@ -367,6 +372,34 @@ function selectAnilistEdit(id, title, coverUrl) {
 function closeMangaEdit() {
   const modal = document.getElementById("mangaEditModal");
   if (modal) modal.classList.add("hidden");
+}
+
+async function deleteManga() {
+  const title = document.getElementById("editTitle").value.trim() || editSlug;
+
+  if (!confirm(`Biztosan TÖRÖLNI akarod ezt a mangát?\n\n"${title}"\n\nEz törli az összes fejezetét is az adatbázisból!`)) return;
+  if (!confirm(`MÁSODSZORI megerősítés: Végleg törlöd?\n\n"${title}"\n\nEz a művelet nem vonható vissza!`)) return;
+
+  const btn = document.getElementById("mangaEditDelete");
+  btn.disabled = true;
+  btn.textContent = "⏳ Törlés...";
+
+  try {
+    const res = await fetch(`/api/admin/manga/${editSlug}`, { method: "DELETE" });
+    const data = await res.json();
+    if (!res.ok) {
+      alert("❌ Hiba: " + (data.error || "Ismeretlen hiba"));
+      btn.disabled = false;
+      btn.textContent = "🗑️ Manga törlése";
+      return;
+    }
+    alert(`✅ "${data.deleted}" sikeresen törölve.`);
+    window.location.href = "/";
+  } catch (err) {
+    alert("❌ Hálózati hiba: " + err.message);
+    btn.disabled = false;
+    btn.textContent = "🗑️ Manga törlése";
+  }
 }
 
 async function saveMangaEdit() {

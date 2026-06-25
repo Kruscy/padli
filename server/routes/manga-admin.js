@@ -71,4 +71,23 @@ router.delete("/chapter/:id", async (req, res) => {
   }
 });
 
+/* ===== MANGA TÖRLÉS ===== */
+router.delete("/manga/:slug", async (req, res) => {
+  try {
+    const { slug } = req.params;
+    const { rows } = await pool.query(`SELECT id, title FROM manga WHERE slug = $1`, [slug]);
+    if (!rows.length) return res.status(404).json({ error: "Manga nem található" });
+    const { id, title } = rows[0];
+
+    await pool.query(`DELETE FROM chapter WHERE manga_id = $1`, [id]);
+    await pool.query(`DELETE FROM manga WHERE id = $1`, [id]);
+
+    console.log(`[manga-delete] Törölve: "${title}" (slug: ${slug}, id: ${id}) – admin: ${req.session.user.username}`);
+    res.json({ ok: true, deleted: title });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "DB error" });
+  }
+});
+
 export default router;

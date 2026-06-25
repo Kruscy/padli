@@ -43,24 +43,27 @@ let saveTimeout   = null;
 let allFiles      = []; // betöltött fájlnévlista
 let currentLibrary = ""; // library neve az image URL-hez
 let fixVersions   = {}; // { filename: unix_timestamp } — javított képek cache-bust
+let chapterVersion = null; // ha be van állítva, minden kép ezt kapja ?v= paraméterként
 let chapters      = [];
 
 function getCurrentPage() {
   if (readMode === "book") return bookPageIndex + 1;
 
-  const imgs = [...document.querySelectorAll("#pages img")];
+  // Wrap diveket használunk (nem img-et): a hidden képek rect.top=0, ami
+  // félreviszi a számolást töltés közben — a wrap mindig layoutban van
+  const wraps = [...document.querySelectorAll("#pages [data-index]")];
   let current = 1;
   const mid = window.innerHeight / 2;
 
-  imgs.forEach((img, i) => {
-    if (img.getBoundingClientRect().top < mid) current = i + 1;
+  wraps.forEach((wrap, i) => {
+    if (wrap.getBoundingClientRect().top < mid) current = i + 1;
   });
 
   return current;
 }
 
 async function saveProgress(page) {
-  if (!page || page === lastSavedPage) return;
+  if (!chapter || !page || page === lastSavedPage) return;
   clearTimeout(saveTimeout);
   saveTimeout = setTimeout(async () => {
     try {
@@ -77,6 +80,20 @@ async function saveProgress(page) {
       lastSavedPage = page;
     } catch {}
   }, 600);
+}
+
+// Azonnali mentés navigálás előtt (saveProgress debounced, navigation nem várja meg)
+async function saveProgressNow(page) {
+  if (!chapter || !page) return;
+  clearTimeout(saveTimeout);
+  try {
+    await fetch("/api/progress", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slug, chapter, page })
+    });
+    lastSavedPage = page;
+  } catch {}
 }
 
 window.addEventListener("scroll", () => {
@@ -108,8 +125,8 @@ async function loadProgress() {
       chapter   = data.chapter;
       startPage = data.page || 0;
     } else if (chapter === data.chapter) {
-      // Ugyanaz a fejezet → folytatjuk ahol abbahagytuk
-      startPage = data.page || 0;
+      // Ugyanaz a fejezet → folytatjuk ahol abbahagytuk, de ?page= URL param elsőbbséget kap
+      if (startPage === 0) startPage = data.page || 0;
     }
     // Ha más fejezet → az URL-ben lévőt töltjük be (szándékos navigálás)
   } catch (err) {
@@ -168,6 +185,7 @@ async function loadPages() {
   allFiles = data.pages;
   currentLibrary = data.library;
   fixVersions = data.fixVersions || {};
+  chapterVersion = data.chapterVersion || null;
 
   if (!allFiles.length) return true;
 
@@ -195,7 +213,7 @@ function buildScrollPages() {
     wrap.dataset.index = i;
 
     const img = document.createElement("img");
-    img.dataset.src = `/api/image/${currentLibrary}/${slug}/${chapter}/${encodeURIComponent(f)}?r2=1${fixVersions[f] ? `&v=${fixVersions[f]}` : ""}`;
+    img.dataset.src = `/api/image/${currentLibrary}/${slug}/${chapter}/${encodeURIComponent(f)}?r2=1${chapterVersion ? `&v=${chapterVersion}` : (fixVersions[f] ? `&v=${fixVersions[f]}` : "")}`;
     img.dataset.index = i;
     img.style.display = "none";
 
@@ -224,7 +242,7 @@ function buildBookPages() {
     div.dataset.index = i;
 
     const img = document.createElement("img");
-    img.dataset.src = `/api/image/${currentLibrary}/${slug}/${chapter}/${encodeURIComponent(f)}?r2=1${fixVersions[f] ? `&v=${fixVersions[f]}` : ""}`;
+    img.dataset.src = `/api/image/${currentLibrary}/${slug}/${chapter}/${encodeURIComponent(f)}?r2=1${chapterVersion ? `&v=${chapterVersion}` : (fixVersions[f] ? `&v=${fixVersions[f]}` : "")}`;
     img.alt = "";
 
     div.appendChild(img);
@@ -432,13 +450,16 @@ window.addEventListener("touchend", async () => {
         const next = chapters[index + 1].folder;
         const checkRes = await fetch(`/api/pages/${slug}/${next}`);
         if (checkRes.status === 403) { await showLockPage(slug); return; }
-        await saveProgress(getCurrentPage());
+        await saveProgressNow(getCurrentPage());
         goToChapter(next);
       }
     } else if (st <= 5) {
       hideChapterHint();
       const index = chapters.findIndex(c => c.folder === chapter);
-      if (index > 0) goToChapter(chapters[index - 1].folder);
+      if (index > 0) {
+        await saveProgressNow(getCurrentPage());
+        goToChapter(chapters[index - 1].folder);
+      }
     }
   }
   touchScrollOverflow = 0;
@@ -463,14 +484,17 @@ async function loadNav() {
   document.getElementById("backBtn").href = `/chapters.html?slug=${slug}`;
 
   // Előző fejezet
-  document.getElementById("prevBtn").onclick = () => {
-    if (index > 0) goToChapter(chapters[index - 1].folder);
+  document.getElementById("prevBtn").onclick = async () => {
+    if (index > 0) {
+      await saveProgressNow(getCurrentPage());
+      goToChapter(chapters[index - 1].folder);
+    }
   };
 
   // Következő fejezet
   document.getElementById("nextBtn").onclick = async () => {
     if (index >= chapters.length - 1) {
-      await saveProgress(getCurrentPage());
+      await saveProgressNow(getCurrentPage());
       location.href = `/chapters.html?slug=${slug}`;
       return;
     }
@@ -482,7 +506,7 @@ async function loadNav() {
       return;
     }
 
-    await saveProgress(getCurrentPage());
+    await saveProgressNow(getCurrentPage());
     goToChapter(nextChapter);
   };
 }

@@ -1,5 +1,9 @@
 import express from "express";
+import fs from "fs";
+import path from "path";
 import { pool } from "../db.js";
+import { r2, BUCKET, localPathToR2Key } from "../r2.js";
+import { PutObjectCommand } from "@aws-sdk/client-s3";
 
 const router = express.Router();
 
@@ -78,25 +82,47 @@ router.post("/:id/fix", requireAdmin, async (req, res) => {
     if (!bug.length) return res.status(404).json({ error: "Nem található" });
     const b = bug[0];
 
+    // 1. Fájlok újrafeltöltése R2-re (lemezről → R2, felülírja az angolt magyarral)
+    const uploadResult = await reuploadChapterToR2(b.manga_slug, b.chapter);
+
+    // 2. chapter.updated_at frissítése → reader ?v= cache-bust
+    if (uploadResult.uploaded > 0) {
+      await pool.query(
+        `UPDATE chapter SET updated_at = NOW()
+         WHERE folder = $1 AND manga_id = (SELECT id FROM manga WHERE slug = $2 LIMIT 1)`,
+        [b.chapter, b.manga_slug]
+      );
+    }
+
+    // 3. Hibajegy lezárása
     await pool.query(
       `UPDATE chapter_bug_reports SET is_fixed=true, fixed_by=$1, fixed_at=NOW() WHERE id=$2`,
       [req.session.user.id, req.params.id]
     );
 
-    // Cloudflare cache purge az egész részre
-    const purgeResult = await purgeChapterCache(b.manga_slug, b.chapter, b.provider);
+    // 4. Cloudflare cache purge
+    const purgeResult = await purgeChapterCache(b.manga_slug, b.chapter);
 
-    res.json({ ok: true, purged: purgeResult });
+    res.json({ ok: true, uploaded: uploadResult.uploaded, purged: purgeResult });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-/* ── POST /api/chapter-bugs/purge – CF cache frissítés ───── */
+/* ── POST /api/chapter-bugs/purge – R2 újrafeltöltés + CF cache ── */
 router.post("/purge", requireAdmin, async (req, res) => {
   try {
-    const { manga_slug, chapter, provider } = req.body;
+    const { manga_slug, chapter } = req.body;
     if (!manga_slug || !chapter) return res.status(400).json({ error: "manga_slug és chapter kötelező" });
-    const purgeResult = await purgeChapterCache(manga_slug, chapter, provider);
-    res.json({ ok: true, purged: purgeResult });
+
+    const uploadResult = await reuploadChapterToR2(manga_slug, chapter);
+    if (uploadResult.uploaded > 0) {
+      await pool.query(
+        `UPDATE chapter SET updated_at = NOW()
+         WHERE folder = $1 AND manga_id = (SELECT id FROM manga WHERE slug = $2 LIMIT 1)`,
+        [chapter, manga_slug]
+      );
+    }
+    const purgeResult = await purgeChapterCache(manga_slug, chapter);
+    res.json({ ok: true, uploaded: uploadResult.uploaded, purged: purgeResult });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -109,64 +135,99 @@ router.delete("/:id", requireAdmin, async (req, res) => {
 });
 
 /* ══════════════════════════════════════════════════════════
-   CF CACHE PURGE HELPER
+   LEMEZ → R2 ÚJRAFELTÖLTÉS
    ══════════════════════════════════════════════════════════ */
-async function purgeChapterCache(mangaSlug, chapter, provider) {
+async function reuploadChapterToR2(mangaSlug, chapter) {
+  const { rows } = await pool.query(`
+    SELECT l.path AS library_path, m.folder AS manga_folder
+    FROM chapter c
+    JOIN manga m ON m.id = c.manga_id
+    JOIN library l ON l.id = m.library_id
+    WHERE m.slug = $1 AND c.folder = $2 LIMIT 1
+  `, [mangaSlug, chapter]);
+
+  if (!rows.length) return { uploaded: 0, reason: "Fejezet nem található DB-ben" };
+
+  const { library_path, manga_folder } = rows[0];
+  const dir = path.join(library_path, manga_folder, chapter);
+
+  let files = [];
+  try {
+    files = fs.readdirSync(dir).filter(f => /\.(jpg|jpeg|png|webp)$/i.test(f));
+  } catch (_) {
+    return { uploaded: 0, reason: "Könyvtár nem olvasható: " + dir };
+  }
+
+  if (!files.length) return { uploaded: 0, reason: "Üres mappa" };
+
+  let uploaded = 0;
+  for (const file of files) {
+    const filePath = path.join(dir, file);
+    const r2Key = localPathToR2Key(filePath);
+    const buf = fs.readFileSync(filePath);
+    const ct = /\.png$/i.test(file) ? "image/png" : "image/jpeg";
+    await r2.send(new PutObjectCommand({ Bucket: BUCKET, Key: r2Key, Body: buf, ContentType: ct }));
+    uploaded++;
+  }
+
+  console.log(`[r2-reupload] ${uploaded} fájl feltöltve: ${mangaSlug} ${chapter}`);
+  return { uploaded };
+}
+
+/* ══════════════════════════════════════════════════════════
+   CF CACHE PURGE — /api/image/... + R2 public URL-ek
+   ══════════════════════════════════════════════════════════ */
+async function purgeChapterCache(mangaSlug, chapter) {
   const CF_ZONE   = process.env.CF_ZONE_ID;
   const CF_TOKEN  = process.env.CF_API_TOKEN;
   const CF_DOMAIN = process.env.CF_DOMAIN || "https://padlizsanfansub.hu";
+  const R2_PUBLIC = process.env.R2_PUBLIC_URL;
 
   if (!CF_ZONE || !CF_TOKEN) return { skipped: true, reason: "Nincs CF konfig" };
 
-  try {
-    // Képlista lekérése DB-ből közvetlenül
-    const { rows: chapterRows } = await pool.query(`
-      SELECT l.path AS library_path, l.name AS library_name, m.folder AS manga_folder
-      FROM chapter c
-      JOIN manga m ON m.id = c.manga_id
-      JOIN library l ON l.id = m.library_id
-      WHERE m.slug = $1 AND c.folder = $2
-      LIMIT 1
-    `, [mangaSlug, chapter]);
+  const { rows } = await pool.query(`
+    SELECT l.path AS library_path, l.name AS library_name, m.folder AS manga_folder
+    FROM chapter c
+    JOIN manga m ON m.id = c.manga_id
+    JOIN library l ON l.id = m.library_id
+    WHERE m.slug = $1 AND c.folder = $2 LIMIT 1
+  `, [mangaSlug, chapter]);
 
-    if (!chapterRows.length) return { skipped: true, reason: "Fejezet nem található DB-ben" };
+  if (!rows.length) return { skipped: true, reason: "Fejezet nem található DB-ben" };
 
-    const { library_path, library_name, manga_folder } = chapterRows[0];
-    const fs = await import("fs");
-    const path = await import("path");
-    const dir = path.join(library_path, manga_folder, chapter);
+  const { library_path, library_name, manga_folder } = rows[0];
+  const dir = path.join(library_path, manga_folder, chapter);
 
-    let files = [];
-    try {
-      files = fs.readdirSync(dir).filter(f => /\.(jpg|jpeg|png|webp)$/i.test(f));
-    } catch (_) { return { skipped: true, reason: "Könyvtár nem olvasható" }; }
+  let files = [];
+  try { files = fs.readdirSync(dir).filter(f => /\.(jpg|jpeg|png|webp)$/i.test(f)); } catch (_) {}
+  if (!files.length) return { skipped: true, reason: "Üres képlista" };
 
-    if (!files.length) return { skipped: true, reason: "Üres képlista" };
-
-    const urls = files.map(f =>
-      `${CF_DOMAIN}/api/image/${encodeURIComponent(library_name)}/${encodeURIComponent(mangaSlug)}/${encodeURIComponent(chapter)}/${encodeURIComponent(f)}`
-    );
-
-    // CF max 30 URL / kérés
-    let purgedCount = 0;
-    for (let i = 0; i < urls.length; i += 30) {
-      const batch = urls.slice(i, i + 30);
-      const r = await fetch(`https://api.cloudflare.com/client/v4/zones/${CF_ZONE}/purge_cache`, {
-        method: "POST",
-        headers: { "Authorization": `Bearer ${CF_TOKEN}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ files: batch })
-      });
-      const result = await r.json();
-      if (result.success) purgedCount += batch.length;
-      else console.warn("[CF purge] batch hiba:", result.errors);
+  const urls = [];
+  for (const f of files) {
+    // /api/image/ proxy URL (böngésző cache)
+    urls.push(`${CF_DOMAIN}/api/image/${encodeURIComponent(library_name)}/${encodeURIComponent(mangaSlug)}/${encodeURIComponent(chapter)}/${encodeURIComponent(f)}`);
+    // R2 public URL (CDN cache)
+    if (R2_PUBLIC) {
+      const r2Key = localPathToR2Key(path.join(dir, f));
+      urls.push(`${R2_PUBLIC}/${r2Key}`);
     }
-
-    console.log(`[CF purge] ${purgedCount}/${urls.length} URL frissítve: ${mangaSlug} ${chapter}`);
-    return { total: urls.length, purged: purgedCount };
-  } catch (err) {
-    console.error("[CF purge hiba]", err.message);
-    return { error: err.message };
   }
+
+  let purgedCount = 0;
+  for (let i = 0; i < urls.length; i += 30) {
+    const batch = urls.slice(i, i + 30);
+    const r = await fetch(`https://api.cloudflare.com/client/v4/zones/${CF_ZONE}/purge_cache`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${CF_TOKEN}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ files: batch }),
+    });
+    const result = await r.json();
+    if (result.success) purgedCount += batch.length;
+    else console.warn("[CF purge] batch hiba:", result.errors);
+  }
+
+  console.log(`[CF purge] ${purgedCount}/${urls.length} URL kitisztítva: ${mangaSlug} ${chapter}`);
+  return { total: urls.length, purged: purgedCount };
 }
 
 export default router;

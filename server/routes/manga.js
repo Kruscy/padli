@@ -201,7 +201,8 @@ if (chRes.rows.length) {
       l.path AS library_path,
       l.name AS library_name,
       m.folder AS manga_folder,
-      m.r2_migrated
+      m.r2_migrated,
+      EXTRACT(EPOCH FROM c.updated_at)::bigint AS chapter_version
     FROM chapter c
     JOIN manga m ON m.id = c.manga_id
     JOIN library l ON l.id = m.library_id
@@ -215,7 +216,7 @@ if (chRes.rows.length) {
     return res.status(404).json({ error: "Chapter not found" });
   }
 
-  const { library_path, library_name, manga_folder, r2_migrated } = result.rows[0];
+  const { library_path, library_name, manga_folder, r2_migrated, chapter_version } = result.rows[0];
   const dir = path.join(library_path, manga_folder, chapter);
 
   try {
@@ -253,7 +254,7 @@ if (chRes.rows.length) {
       if (r.image_file) fixVersions[r.image_file] = Number(r.v);
     }
 
-    res.json({ pages, library: library_name, fixVersions });
+    res.json({ pages, library: library_name, fixVersions, chapterVersion: chapter_version || null });
   } catch (e) {
     console.error(e);
     res.status(404).json({ error: "Pages not found" });

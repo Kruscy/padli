@@ -35,7 +35,7 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc:      ["'self'"],
-      scriptSrc:       ["'self'", "https://mamato.csimota.duckdns.org"],
+      scriptSrc:       ["'self'", "https://mamato.csimota.duckdns.org", "'sha256-KbDJwwq2mVzpJQquothLjsd2EGAi2C42lhXRTSlCHJ8='"],
       scriptSrcAttr:   ["'unsafe-inline'"],
       styleSrc:        ["'self'", "'unsafe-inline'",
                         "https://fonts.googleapis.com",
