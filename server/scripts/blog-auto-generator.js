@@ -230,7 +230,7 @@ export async function generateBlogPost(topicIndex = null) {
   try {
     const imageResp = await openai.images.generate({
       model: "gpt-image-1",
-      prompt: `Minimal pencil sketch, just a few simple lines. Very sparse, almost empty composition. One or two manga book outlines drawn with a single thin pencil line. Minimalist illustration, lots of white space, barely-there sketch marks. No shading, no color, no fill, no text, no watermarks.`,
+      prompt: `Black and white manga sketch illustration on white background. Clean confident pencil line art in anime and manga style. Multiple manga characters in various poses — reading, sitting, expressive faces. Loose but detailed sketchbook aesthetic: clear outlines, light hatching for shading, no color fill. Style like a manga artist practice sketchbook page. No color, no watermarks, no text, wide horizontal banner format.`,
       size: "1536x1024",
       quality: "medium",
       n: 1,
