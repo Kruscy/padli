@@ -1,0 +1,46 @@
+services:
+
+  app:
+    build: .
+    ports:
+      - "${PORT:-3000}:3000"
+    env_file:
+      - .env
+    environment:
+      # Docker hálózaton a postgres service neve "db"
+      PGHOST: db
+    volumes:
+      # Feltöltött fájlok (profilképek, borítók)
+      - ./uploads:/app/uploads
+      # Generált blog HTML fájlok
+      - ./public/blog:/app/public/blog
+      # Logok
+      - ./logs:/app/logs
+      # Manga képek — a MANGA_ROOT env változóban beállított útvonal
+      # Fontos: a konténeren belül ugyanaz az útvonal legyen mint a hoszton
+      - ${MANGA_ROOT:-/mnt/manga}:${MANGA_ROOT:-/mnt/manga}:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB:       ${PGDATABASE:-padli}
+      POSTGRES_USER:     ${PGUSER:-padli}
+      POSTGRES_PASSWORD: ${PGPASSWORD:?Állítsd be a PGPASSWORD változót a .env fájlban}
+    volumes:
+      # Adatbázis adatok perzisztálása
+      - postgres_data:/var/lib/postgresql/data
+      # Séma automatikus betöltése első indításkor
+      - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PGUSER:-padli} -d ${PGDATABASE:-padli}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

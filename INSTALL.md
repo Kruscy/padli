@@ -1,6 +1,41 @@
 # Telepítési útmutató
 
-## Előfeltételek
+## Docker (legegyszerűbb)
+
+Ha Docker és Docker Compose telepítve van:
+
+```bash
+git clone https://github.com/Kruscy/padli.git
+cd padli
+cp .env.example .env
+# Szerkeszd a .env fájlt (legalább PGPASSWORD, SITE_URL, SESSION_SECRET, MAIL_* kötelező)
+nano .env
+
+docker compose up -d
+```
+
+Az első indításkor a `db` service automatikusan betölti a `schema.sql` sémát.
+
+Az oldal elérhető: `http://localhost:3000`
+
+Első admin beállítása:
+```bash
+docker compose exec db psql -U padli -d padli \
+  -c "UPDATE users SET role='admin' WHERE email='sajat@email.com';"
+```
+
+Leállítás / újraindítás:
+```bash
+docker compose down      # leállítás (adatok megmaradnak)
+docker compose restart   # újraindítás
+docker compose logs -f   # logok követése
+```
+
+---
+
+## Kézi telepítés
+
+### Előfeltételek
 
 | Szoftver | Minimális verzió |
 |----------|-----------------|
