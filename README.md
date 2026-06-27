@@ -52,9 +52,32 @@ PadlizsanFanSub is a full-stack web platform built for a Hungarian manga/manhwa 
 
 ## Self-hosting
 
-This project is tightly coupled to specific infrastructure (Kavita library paths, Cloudflare R2, Billingo HU, Patreon, Stripe). It is not designed as a general-purpose self-hostable reader, but the code is open for reference and learning.
+### Docker (recommended)
 
-Required environment variables: see `.env.example` (not included — contact the maintainer).
+```bash
+git clone https://github.com/Kruscy/padli.git
+cd padli
+cp .env.example .env
+# Fill in at minimum: PGPASSWORD, SITE_URL, SESSION_SECRET, MAIL_*
+nano .env
+
+docker compose up -d
+```
+
+The database schema is loaded automatically on first start. Set the first admin:
+
+```bash
+docker compose exec db psql -U padli -d padli \
+  -c "UPDATE users SET role='admin' WHERE email='your@email.com';"
+```
+
+### Manual install
+
+Requires Node.js 20+, PostgreSQL 15+. See [INSTALL.md](INSTALL.md) for the full step-by-step guide including systemd and nginx configuration.
+
+### Notes
+
+This project is tightly coupled to specific infrastructure (Kavita library paths, Cloudflare R2, Billingo HU, Patreon, Stripe). Many integrations are optional — the core reader works without them. See `.env.example` for all available options.
 
 ## License
 

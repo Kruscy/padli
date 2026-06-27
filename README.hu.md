@@ -52,9 +52,32 @@ A PadlizsanFanSub egy teljes körű webes platform, amelyet egy magyar manga/man
 
 ## Önálló üzemeltetés
 
-Ez a projekt szorosan kötődik specifikus infrastruktúrához (Kavita könyvtár útvonalak, Cloudflare R2, Billingo HU, Patreon, Stripe). Nem általános célú, önállóan üzemeltethető olvasónak terveztük, de a kód nyitott referenciaként és tanuláshoz.
+### Docker (ajánlott)
 
-Szükséges környezeti változók: lásd `.env.example` (nem szerepel a repóban — keresd a karbantartót).
+```bash
+git clone https://github.com/Kruscy/padli.git
+cd padli
+cp .env.example .env
+# Töltsd ki legalább: PGPASSWORD, SITE_URL, SESSION_SECRET, MAIL_*
+nano .env
+
+docker compose up -d
+```
+
+Az adatbázis séma automatikusan betöltődik az első indításkor. Az első admin beállítása:
+
+```bash
+docker compose exec db psql -U padli -d padli \
+  -c "UPDATE users SET role='admin' WHERE email='sajat@email.com';"
+```
+
+### Kézi telepítés
+
+Node.js 20+ és PostgreSQL 15+ szükséges. Részletes lépések — adatbázis létrehozástól az nginx konfigig — az [INSTALL.md](INSTALL.md) fájlban.
+
+### Megjegyzés
+
+Ez a projekt szorosan kötődik specifikus infrastruktúrához (Kavita könyvtár útvonalak, Cloudflare R2, Billingo HU, Patreon, Stripe). Az integrációk nagy része opcionális — az alap olvasó nélkülük is működik. Az összes beállítási lehetőséget a `.env.example` tartalmazza.
 
 ## Licenc
 
