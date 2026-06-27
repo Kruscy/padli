@@ -57,6 +57,27 @@ router.get("/", async (req, res) => {
   }
 });
 
+/* ── ADMIN: TÉMÁK LISTÁJA (/:slug elé kell kerülnie!) ───── */
+router.get("/auto-topics", requireAdmin, async (req, res) => {
+  try {
+    const { BLOG_TOPICS } = await import("../scripts/blog-auto-generator.js");
+    const { rows } = await pool.query(
+      "SELECT slug FROM blog_posts WHERE slug = ANY($1)",
+      [BLOG_TOPICS.map(t => t.slug)]
+    );
+    const existingSlugs = new Set(rows.map(r => r.slug));
+    res.json(BLOG_TOPICS.map((t, i) => ({
+      index: i,
+      slug: t.slug,
+      title: t.title,
+      category: t.category,
+      exists: existingSlugs.has(t.slug),
+    })));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 /* ── GET /api/blog/:slug – egyedi bejegyzés ────────────── */
 router.get("/:slug", async (req, res) => {
   try {
@@ -159,26 +180,6 @@ router.post("/auto-generate", requireAdmin, async (req, res) => {
   }
 });
 
-/* ── ADMIN: TÉMÁK LISTÁJA ───────────────────────────────── */
-router.get("/auto-topics", requireAdmin, async (req, res) => {
-  try {
-    const { BLOG_TOPICS } = await import("../scripts/blog-auto-generator.js");
-    const { rows } = await pool.query(
-      "SELECT slug FROM blog_posts WHERE slug = ANY($1)",
-      [BLOG_TOPICS.map(t => t.slug)]
-    );
-    const existingSlugs = new Set(rows.map(r => r.slug));
-    res.json(BLOG_TOPICS.map((t, i) => ({
-      index: i,
-      slug: t.slug,
-      title: t.title,
-      category: t.category,
-      exists: existingSlugs.has(t.slug),
-    })));
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
 
 /* ── ADMIN: ÖSSZES STATIKUS OLDAL ÚJRAGENERÁLÁSA ────────── */
 router.post("/regenerate-static", requireAdmin, async (req, res) => {
