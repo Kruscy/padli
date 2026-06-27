@@ -24,6 +24,7 @@ export const BLOG_TOPICS = [
   {
     slug: "manga-magyarul-hol-lehet-olvasni",
     title: "Manga magyarul – Hol lehet magyar mangát és manhwát online olvasni?",
+    imagePrompt: "anime girl sitting cross-legged, happily reading an open manga book, stack of manga volumes beside her",
     category: "ajanlo",
     tags: ["manga magyarul", "manhwa magyarul", "magyar manga", "magyar fansub"],
     keywords: ["manga magyarul", "manhwa magyarul", "magyar manga", "magyar manhwa", "magyar manga oldalak", "manga fansub", "online manga olvasás"],
@@ -55,6 +56,7 @@ Formázás: HTML (h2, h3, p, ul/li, strong tagek). Ne legyen benne html/body/hea
   {
     slug: "manhwa-magyarul-legjobb-koreai-webcomicok",
     title: "Manhwa magyarul – A legjobb koreai webcomicok magyar fordításban",
+    imagePrompt: "anime character scrolling through a webtoon on a smartphone, vertical comic panels visible on the screen, excited expression",
     category: "ajanlo",
     tags: ["manhwa magyarul", "magyar manhwa", "koreai manhwa", "webtoon"],
     keywords: ["manhwa magyarul", "magyar manhwa", "koreai webcomic", "manhwa olvasás"],
@@ -66,6 +68,7 @@ Formázás: HTML (h2, h3, p, ul/li). Legyen benne FAQ szekció 3-4 kérdéssel.`
   {
     slug: "mi-az-a-fansub-manga-forditas",
     title: "Mi az a fansub? – A manga és manhwa fordítás világa magyarul",
+    imagePrompt: "two anime characters working together at a desk, one translating text on paper, other editing manga panels on a monitor, translation work scene",
     category: "forditas",
     tags: ["fansub", "manga fordítás", "manhwa fordítás", "magyar fansub"],
     keywords: ["fansub", "manga fordítás", "magyar fansub", "manhwa fordítás"],
@@ -77,6 +80,7 @@ Formázás: HTML (h2, h3, p, ul/li). Legyen benne FAQ szekció.`
   {
     slug: "manga-vs-manhwa-vs-manhua-kulonbseg",
     title: "Manga, manhwa, manhua – Mi a különbség? Teljes útmutató",
+    imagePrompt: "three anime characters side by side each holding their country's comic book: Japanese manga (right to left), Korean manhwa (vertical scroll), Chinese manhua, comparison scene",
     category: "ajanlo",
     tags: ["manga", "manhwa", "manhua", "japán manga", "koreai manhwa", "kínai manhua"],
     keywords: ["manga vs manhwa", "manhwa különbség", "manhua magyarázat", "manga típusok"],
@@ -88,6 +92,7 @@ Formázás: HTML (h2, h3, p, ul/li, table).`
   {
     slug: "legjobb-isekai-manga-magyarul",
     title: "A legjobb isekai manga és manhwa magyarul – Top ajánló",
+    imagePrompt: "anime hero character falling through a glowing magical portal into a fantasy world, surprised expression, medieval fantasy landscape below",
     category: "ajanlo",
     tags: ["isekai", "manga ajánló", "manhwa ajánló", "fantasy manga"],
     keywords: ["isekai manga magyarul", "legjobb isekai", "fantasy manhwa", "manga ajánló"],
@@ -98,6 +103,7 @@ Formázás: HTML (h2, h3, p, ul/li). Legyen benne legalább 5 ajánlott cím rö
   {
     slug: "magyar-manga-kozosseg-discord",
     title: "Magyar manga közösség – Csatlakozz a Padlizsán Fansub Discord szerveréhez",
+    imagePrompt: "group of cheerful anime characters gathered together chatting, speech bubbles, community feel, friends discussing manga",
     category: "kozosseg",
     tags: ["manga közösség", "discord", "magyar manga rajongók", "fansub közösség"],
     keywords: ["magyar manga közösség", "manga discord", "magyar fansub közösség"],
@@ -108,6 +114,7 @@ Formázás: HTML (h2, h3, p, ul/li).`
   {
     slug: "fantasy-manhwa-ajanlok-magyarul",
     title: "Fantasy manhwa ajánlók – A legjobb koreai fantasy képregények magyarul",
+    imagePrompt: "powerful anime warrior character in detailed fantasy armor holding a sword, magical aura, epic pose, fantasy setting",
     category: "ajanlo",
     tags: ["fantasy manhwa", "manhwa ajánló", "koreai fantasy", "manhwa magyarul"],
     keywords: ["fantasy manhwa magyarul", "koreai fantasy képregény", "manhwa ajánló"],
@@ -118,6 +125,7 @@ Formázás: HTML (h2, h3, p, ul/li). Legalább 5-6 cím rövid leírással.`
   {
     slug: "manga-olvasas-kezdoknek-utmutato",
     title: "Manga olvasás kezdőknek – Teljes útmutató magyar olvasóknak",
+    imagePrompt: "confused but curious beginner anime character holding a manga upside down, arrows showing right-to-left reading direction, manga panels around them",
     category: "ajanlo",
     tags: ["manga kezdőknek", "manga olvasás", "manga útmutató", "manga magyarul"],
     keywords: ["manga olvasás kezdőknek", "manga útmutató", "hogyan olvassunk mangát"],
@@ -128,6 +136,7 @@ Formázás: HTML (h2, h3, p, ul/li). Legyen benne FAQ szekció.`
   {
     slug: "legjobb-isekai-manga-manhwa-magyarul",
     title: "A legjobb isekai manga és manhwa – Top 10 ajánló magyar olvasóknak",
+    imagePrompt: "anime protagonist reincarnated in a fantasy RPG world, stats window floating beside them, sword in hand, adventurer outfit, isekai scene",
     category: "ajanlo",
     tags: ["isekai manga", "isekai manhwa", "manga ajánló", "manhwa ajánló", "isekai magyarul"],
     keywords: ["legjobb isekai manga", "isekai manhwa magyarul", "top isekai ajánló"],
@@ -139,6 +148,7 @@ Formázás: HTML (h2, h3, p, ul/li, strong). Legyen benne egy "Mivel kezdjem?" a
   {
     slug: "dark-fantasy-manga-manhwa-ajanlok",
     title: "Dark fantasy manga és manhwa ajánlók – A legsötétebb, legjobb képregények",
+    imagePrompt: "dark hooded anime antihero surrounded by shadows and demons, ominous atmosphere, dramatic lighting with heavy crosshatch shading, gothic fantasy scene",
     category: "ajanlo",
     tags: ["dark fantasy manga", "dark fantasy manhwa", "sötét manga", "dark manga", "manga ajánló"],
     keywords: ["dark fantasy manga magyarul", "sötét manga ajánló", "dark manhwa", "legjobb dark fantasy manga"],
@@ -150,6 +160,7 @@ Formázás: HTML (h2, h3, p, ul/li, strong). Legyen benne figyelmeztetés hogy e
   {
     slug: "romantikus-manga-manhwa-ajanlok",
     title: "Romantikus manga és manhwa ajánlók – A legjobb szerelmes képregények",
+    imagePrompt: "two anime characters facing each other with a shy romantic moment, blushing expressions, floating hearts, shoujo manga style sparkles",
     category: "ajanlo",
     tags: ["romantikus manga", "romantikus manhwa", "shoujo manga", "romance manhwa", "szerelmes manga"],
     keywords: ["romantikus manga magyarul", "romance manhwa ajánló", "shoujo manga", "legjobb szerelmes manga"],
@@ -230,7 +241,7 @@ export async function generateBlogPost(topicIndex = null) {
   try {
     const imageResp = await openai.images.generate({
       model: "gpt-image-1",
-      prompt: `Black and white manga sketch illustration on white background. Clean confident pencil line art in anime and manga style. Multiple manga characters in various poses — reading, sitting, expressive faces. Loose but detailed sketchbook aesthetic: clear outlines, light hatching for shading, no color fill. Style like a manga artist practice sketchbook page. No color, no watermarks, no text, wide horizontal banner format.`,
+      prompt: `Black and white manga pencil sketch on white background. Clean confident line art, anime/manga style, sketchbook aesthetic with light hatching. No color, no text, no watermarks, wide horizontal banner. Subject: ${topic.imagePrompt || "anime characters reading manga books"}`,
       size: "1536x1024",
       quality: "medium",
       n: 1,
