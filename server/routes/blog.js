@@ -140,6 +140,46 @@ router.delete("/:slug", requireAdmin, async (req, res) => {
   }
 });
 
+/* ── ADMIN: AI BLOG POSZT GENERÁLÁS ─────────────────────── */
+// POST /api/blog/auto-generate          — következő téma automatikusan
+// POST /api/blog/auto-generate?topic=2  — adott index kézzel
+router.post("/auto-generate", requireAdmin, async (req, res) => {
+  try {
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(503).json({ error: "OPENAI_API_KEY nincs beállítva" });
+    }
+    const { generateBlogPost, BLOG_TOPICS } = await import("../scripts/blog-auto-generator.js");
+    const topicIdx = req.query.topic !== undefined ? parseInt(req.query.topic) : null;
+    res.json({ ok: true, message: "Generálás elindítva a háttérben..." });
+    generateBlogPost(topicIdx)
+      .then(post => post && console.log(`[BlogAdmin] Létrehozva: ${post.slug}`))
+      .catch(err => console.error("[BlogAdmin] Generálás hiba:", err.message));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ── ADMIN: TÉMÁK LISTÁJA ───────────────────────────────── */
+router.get("/auto-topics", requireAdmin, async (req, res) => {
+  try {
+    const { BLOG_TOPICS } = await import("../scripts/blog-auto-generator.js");
+    const { rows } = await pool.query(
+      "SELECT slug FROM blog_posts WHERE slug = ANY($1)",
+      [BLOG_TOPICS.map(t => t.slug)]
+    );
+    const existingSlugs = new Set(rows.map(r => r.slug));
+    res.json(BLOG_TOPICS.map((t, i) => ({
+      index: i,
+      slug: t.slug,
+      title: t.title,
+      category: t.category,
+      exists: existingSlugs.has(t.slug),
+    })));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 /* ── ADMIN: ÖSSZES STATIKUS OLDAL ÚJRAGENERÁLÁSA ────────── */
 router.post("/regenerate-static", requireAdmin, async (req, res) => {
   try {

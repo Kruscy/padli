@@ -1,0 +1,276 @@
+// server/scripts/blog-auto-generator.js
+// Automatikus blog poszt generátor — GPT-4o tartalom + DALL-E 3 borítókép
+// Hívható: node server/scripts/blog-auto-generator.js
+// Vagy cron-ból: import { generateBlogPost } from "./scripts/blog-auto-generator.js"
+
+import OpenAI from "openai";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { pool } from "../db.js";
+import { generateStaticPost } from "../blog-static-generator.js";
+import path from "path";
+import { fileURLToPath } from "url";
+import { config } from "dotenv";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+config({ path: path.join(__dirname, "../../.env") });
+
+const SITE_URL = process.env.SITE_URL || "http://localhost:3000";
+const CF_DOMAIN = process.env.CF_DOMAIN || SITE_URL;
+
+// ── TÉMÁK LISTÁJA ────────────────────────────────────────────────────────────
+// Az első mindig a legmagasabb prioritású SEO poszt, utána jönnek a heti poszt témák.
+// A generátor sorban halad — ha egy téma már létezik (slug collision), átugorja.
+export const BLOG_TOPICS = [
+  {
+    slug: "manga-magyarul-hol-lehet-olvasni",
+    title: "Manga magyarul – Hol lehet magyar mangát és manhwát online olvasni?",
+    category: "ajanlo",
+    tags: ["manga magyarul", "manhwa magyarul", "magyar manga", "magyar fansub"],
+    keywords: ["manga magyarul", "manhwa magyarul", "magyar manga", "magyar manhwa", "magyar manga oldalak", "manga fansub", "online manga olvasás"],
+    seoTitle: "Manga magyarul és manhwa magyarul – Magyar manga olvasás | Padlizsán Fansub",
+    seoDesc: "Manga magyarul és manhwa magyarul egy helyen. Fedezd fel a Padlizsán Fansub magyar fordításait, online manga és manhwa olvasási lehetőségekkel.",
+    prompt: `Írj egy 1400-1600 szavas, SEO-optimalizált magyar nyelvű blogbejegyzést a Padlizsán Fansub weboldalra.
+
+Cím: "Manga magyarul – Hol lehet magyar mangát és manhwát online olvasni?"
+
+Kötelező felépítés (H2/H3 szekciók):
+1. **Bevezető** (150-200 szó) — Ha manga magyarul vagy manhwa magyarul történeteket keresel, ma már több magyar fordítócsapat és fansub oldal is készít minőségi fordításokat. A Padlizsán Fansub célja, hogy a legjobb mangákat és manhwákat magyar nyelven olvashasd.
+2. **Mi a különbség a manga és a manhwa között?** (300-400 szó) — Részletes magyarázat, természetesen beleszőve: manga magyarul, manhwa magyarul, magyar manga, magyar manhwa
+3. **Hol lehet magyar mangát olvasni?** — online manga olvasás, magyar manga oldalak, magyar fansubok, magyar fordítások bemutatása
+4. **Mi az a fansub?** — magyar fansub, manga fansub, magyar manga fordítás, magyar manhwa fordítás magyarázata
+5. **Miért a Padlizsán Fansub?** — projektszám, frissítési sebesség, minőség, Discord közösség, ingyenesség
+6. **Gyakori kérdések (FAQ)** — legalább 5 kérdés-válasz:
+   - Hol lehet manga magyarul olvasni?
+   - Hol lehet manhwa magyarul olvasni?
+   - Melyek a legjobb magyar manga oldalak?
+   - Mi az a magyar fansub?
+   - Ingyenes a manga olvasás a Padlizsán Fansub-on?
+
+Fontos megjegyzés a szövegbe természetesen beleszőve: "Sokan Padlizsan, Padlizsan.hu vagy Padlizsán.hu névvel keresnek minket a Google-ben — bármelyik keresést használod, ugyanazt a magyar manga- és manhwa-fordításokat készítő közösséget találod."
+
+Kulcsszavak a szövegben természetesen, nem erőltetetten: manga magyarul, manhwa magyarul, magyar manga, magyar manhwa, magyar manga oldalak, manga fansub, online manga olvasás, magyar fansub.
+
+Formázás: HTML (h2, h3, p, ul/li, strong tagek). Ne legyen benne html/body/head wrapper, csak a tartalom.`
+  },
+  {
+    slug: "manhwa-magyarul-legjobb-koreai-webcomicok",
+    title: "Manhwa magyarul – A legjobb koreai webcomicok magyar fordításban",
+    category: "ajanlo",
+    tags: ["manhwa magyarul", "magyar manhwa", "koreai manhwa", "webtoon"],
+    keywords: ["manhwa magyarul", "magyar manhwa", "koreai webcomic", "manhwa olvasás"],
+    prompt: `Írj egy 1200-1500 szavas magyar nyelvű blogbejegyzést a Padlizsán Fansub weboldalra a koreai manhwákról magyarul.
+Téma: a manhwa műfaj bemutatása, miben különbözik a mangától, miért érdemes olvasni, milyen típusok léteznek (fantasy, romantika, akció, isekai), és hogyan olvasható magyarul a Padlizsán Fansub-on.
+Kulcsszavak természetesen: manhwa magyarul, magyar manhwa, koreai manhwa, webtoon magyarul.
+Formázás: HTML (h2, h3, p, ul/li). Legyen benne FAQ szekció 3-4 kérdéssel.`
+  },
+  {
+    slug: "mi-az-a-fansub-manga-forditas",
+    title: "Mi az a fansub? – A manga és manhwa fordítás világa magyarul",
+    category: "forditas",
+    tags: ["fansub", "manga fordítás", "manhwa fordítás", "magyar fansub"],
+    keywords: ["fansub", "manga fordítás", "magyar fansub", "manhwa fordítás"],
+    prompt: `Írj egy 1200-1400 szavas magyar nyelvű blogbejegyzést a Padlizsán Fansub weboldalra a fansub kultúráról.
+Téma: mi az a fansub, honnan ered a szó, hogyan működik egy fansub csapat (fordító, lektor, tipográfus), milyen kihívásokkal jár a manga fordítás, miért végzik önkéntesek.
+Mutasd be a Padlizsán Fansub munkáját és közösségét.
+Formázás: HTML (h2, h3, p, ul/li). Legyen benne FAQ szekció.`
+  },
+  {
+    slug: "manga-vs-manhwa-vs-manhua-kulonbseg",
+    title: "Manga, manhwa, manhua – Mi a különbség? Teljes útmutató",
+    category: "ajanlo",
+    tags: ["manga", "manhwa", "manhua", "japán manga", "koreai manhwa", "kínai manhua"],
+    keywords: ["manga vs manhwa", "manhwa különbség", "manhua magyarázat", "manga típusok"],
+    prompt: `Írj egy 1300-1500 szavas magyar nyelvű összehasonlító blogbejegyzést a Padlizsán Fansub weboldalra.
+Téma: a manga (japán), manhwa (koreai) és manhua (kínai) képregények összehasonlítása — olvasási irány, stílus, témák, platformok, tipikus műfajok.
+Legyen benne összehasonlító táblázat és FAQ szekció.
+Formázás: HTML (h2, h3, p, ul/li, table).`
+  },
+  {
+    slug: "legjobb-isekai-manga-magyarul",
+    title: "A legjobb isekai manga és manhwa magyarul – Top ajánló",
+    category: "ajanlo",
+    tags: ["isekai", "manga ajánló", "manhwa ajánló", "fantasy manga"],
+    keywords: ["isekai manga magyarul", "legjobb isekai", "fantasy manhwa", "manga ajánló"],
+    prompt: `Írj egy 1200-1400 szavas magyar nyelvű ajánló blogbejegyzést a Padlizsán Fansub weboldalra a legjobb isekai mangákról és manhwákról.
+Téma: mi az az isekai műfaj, miért olyan népszerű, top isekai ajánló (általánosan ismert címek), hogyan olvashatók magyarulon a Padlizsán Fansub-on.
+Formázás: HTML (h2, h3, p, ul/li). Legyen benne legalább 5 ajánlott cím rövid leírással.`
+  },
+  {
+    slug: "magyar-manga-kozosseg-discord",
+    title: "Magyar manga közösség – Csatlakozz a Padlizsán Fansub Discord szerveréhez",
+    category: "kozosseg",
+    tags: ["manga közösség", "discord", "magyar manga rajongók", "fansub közösség"],
+    keywords: ["magyar manga közösség", "manga discord", "magyar fansub közösség"],
+    prompt: `Írj egy 1000-1200 szavas magyar nyelvű blogbejegyzést a Padlizsán Fansub weboldalra a közösség fontosságáról.
+Téma: miért érdemes csatlakozni egy magyar manga közösséghez, mit kínál a Padlizsán Fansub Discord szervere (hírek, fordítás, viták, szavazások), hogyan lehet részt venni a fordítói munkában.
+Formázás: HTML (h2, h3, p, ul/li).`
+  },
+  {
+    slug: "fantasy-manhwa-ajanlok-magyarul",
+    title: "Fantasy manhwa ajánlók – A legjobb koreai fantasy képregények magyarul",
+    category: "ajanlo",
+    tags: ["fantasy manhwa", "manhwa ajánló", "koreai fantasy", "manhwa magyarul"],
+    keywords: ["fantasy manhwa magyarul", "koreai fantasy képregény", "manhwa ajánló"],
+    prompt: `Írj egy 1200-1400 szavas magyar nyelvű ajánló blogbejegyzést a Padlizsán Fansub weboldalra a legjobb fantasy manhwákról.
+Téma: a fantasy manhwa műfaj jellemzői, miért vonzó a koreai fantasy stílus, top ajánló általánosan ismert fantasy manhwa címekkel.
+Formázás: HTML (h2, h3, p, ul/li). Legalább 5-6 cím rövid leírással.`
+  },
+  {
+    slug: "manga-olvasas-kezdoknek-utmutato",
+    title: "Manga olvasás kezdőknek – Teljes útmutató magyar olvasóknak",
+    category: "ajanlo",
+    tags: ["manga kezdőknek", "manga olvasás", "manga útmutató", "manga magyarul"],
+    keywords: ["manga olvasás kezdőknek", "manga útmutató", "hogyan olvassunk mangát"],
+    prompt: `Írj egy 1300-1500 szavas magyar nyelvű kezdőknek szóló útmutató blogbejegyzést a Padlizsán Fansub weboldalra.
+Téma: hogyan kell mangát olvasni (jobbról balra), mi az a tankōbon, chapter, volume, panel, speech bubble, miféle műfajok léteznek, hol kezdje egy kezdő (javasolt első mangák/manhwák), hogyan működik a Padlizsán Fansub oldala.
+Formázás: HTML (h2, h3, p, ul/li). Legyen benne FAQ szekció.`
+  },
+];
+
+// ── R2 FELTÖLTÉS (blog borítóképekhez) ──────────────────────────────────────
+const r2Client = new S3Client({
+  region: "auto",
+  endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+  credentials: {
+    accessKeyId: process.env.R2_ACCESS_KEY_ID,
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+  },
+});
+
+async function uploadCoverToR2(slug, imageBuffer) {
+  const key = `blog-covers/${slug}.png`;
+  await r2Client.send(new PutObjectCommand({
+    Bucket: process.env.R2_BUCKET_NAME,
+    Key: key,
+    Body: imageBuffer,
+    ContentType: "image/png",
+    CacheControl: "public, max-age=31536000",
+  }));
+  return `${CF_DOMAIN}/blog-covers/${slug}.png`;
+}
+
+// ── SLUG SLUGIFY ─────────────────────────────────────────────────────────────
+function slugify(text) {
+  return text.toLowerCase()
+    .replace(/[áà]/g, "a").replace(/[éè]/g, "e").replace(/[íì]/g, "i")
+    .replace(/[óöőô]/g, "o").replace(/[úüűû]/g, "u")
+    .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
+// ── FŐ GENERÁTOR ─────────────────────────────────────────────────────────────
+export async function generateBlogPost(topicIndex = null) {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY nincs beállítva a .env fájlban");
+  }
+
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+  // Következő feldolgozatlan téma kiválasztása
+  let topic;
+  if (topicIndex !== null) {
+    topic = BLOG_TOPICS[topicIndex];
+  } else {
+    // Megnézzük melyik slug nem létezik még
+    const { rows: existing } = await pool.query(
+      "SELECT slug FROM blog_posts WHERE slug = ANY($1)",
+      [BLOG_TOPICS.map(t => t.slug)]
+    );
+    const existingSlugs = new Set(existing.map(r => r.slug));
+    topic = BLOG_TOPICS.find(t => !existingSlugs.has(t.slug));
+    if (!topic) {
+      console.log("Minden előre definiált téma már létezik a blogban.");
+      return null;
+    }
+  }
+
+  console.log(`[BlogGen] Generálás: "${topic.title}"`);
+
+  // 1. Tartalom generálás GPT-4o-val
+  const contentResp = await openai.chat.completions.create({
+    model: "gpt-4o",
+    messages: [
+      {
+        role: "system",
+        content: "Te egy SEO-specialista magyar szövegíró vagy. Manga és manhwa témában írsz blogbejegyzéseket a Padlizsán Fansub weboldalra. A szövegeid természetesek, információgazdagok, és jól optimalizáltak keresőmotorokra. Csak HTML tartalmat adj vissza (h2, h3, p, ul, li, strong tagek), wrapper nélkül."
+      },
+      { role: "user", content: topic.prompt }
+    ],
+    temperature: 0.7,
+    max_tokens: 3000,
+  });
+
+  const content = contentResp.choices[0].message.content;
+
+  // Excerpt kinyerése az első <p> tagből
+  const excerptMatch = content.match(/<p[^>]*>([\s\S]*?)<\/p>/);
+  const excerpt = excerptMatch
+    ? excerptMatch[1].replace(/<[^>]*>/g, "").slice(0, 200).trim()
+    : topic.title;
+
+  // 2. Borítókép generálás DALL-E 3-mal
+  let coverUrl = null;
+  try {
+    const imageResp = await openai.images.generate({
+      model: "gpt-image-1",
+      prompt: `Colorful manga/manhwa style blog cover illustration for an article about "${topic.title}".
+Anime art style, vibrant colors, manga panels composition, Japanese comic aesthetic.
+Include manga books, reading, colorful characters in manga style.
+Wide banner format, no text, no letters, no watermarks.`,
+      size: "1536x1024",
+      quality: "medium",
+      n: 1,
+    });
+
+    const imgData = imageResp.data[0];
+    const imgBuffer = imgData.b64_json
+      ? Buffer.from(imgData.b64_json, "base64")
+      : Buffer.from(await (await fetch(imgData.url)).arrayBuffer());
+    coverUrl = await uploadCoverToR2(topic.slug, imgBuffer);
+    console.log(`[BlogGen] Borítókép feltöltve: ${coverUrl}`);
+  } catch (err) {
+    console.warn(`[BlogGen] Borítókép generálás sikertelen (folytatás kép nélkül): ${err.message}`);
+  }
+
+  // 3. DB mentés
+  const { rows } = await pool.query(
+    `INSERT INTO blog_posts (slug, title, excerpt, content, cover_url, category, tags, author, published)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)
+     ON CONFLICT (slug) DO NOTHING
+     RETURNING *`,
+    [
+      topic.slug,
+      topic.title,
+      excerpt,
+      content,
+      coverUrl,
+      topic.category || "ajanlo",
+      topic.tags || [],
+      "Padlizsán Fansub",
+    ]
+  );
+
+  if (!rows.length) {
+    console.log(`[BlogGen] Slug már létezik, kihagyva: ${topic.slug}`);
+    return null;
+  }
+
+  // 4. Statikus HTML generálás
+  await generateStaticPost(topic.slug);
+  console.log(`[BlogGen] Kész: /blog/${topic.slug}.html`);
+
+  return rows[0];
+}
+
+// ── CLI MÓD: node server/scripts/blog-auto-generator.js ─────────────────────
+if (process.argv[1] && process.argv[1].endsWith("blog-auto-generator.js")) {
+  const idx = process.argv[2] ? parseInt(process.argv[2]) : null;
+  generateBlogPost(idx)
+    .then(post => {
+      if (post) console.log("Létrehozva:", post.slug);
+      process.exit(0);
+    })
+    .catch(err => {
+      console.error("Hiba:", err.message);
+      process.exit(1);
+    });
+}

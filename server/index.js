@@ -9,6 +9,8 @@ import routes from "./routes.js";
 import userRoutes from "./routes/user.js";
 import { activityTracker } from "./middleware/activity.js";
 import "./discord-bot.js";
+import cron from "node-cron";
+import { generateBlogPost } from "./scripts/blog-auto-generator.js";
 
 const PgSession = connectPgSimple(session);
 
@@ -158,6 +160,19 @@ app.get("/blog/:slug", (req, res) => {
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "../public/index.html"));
 });
+
+/* ===== BLOG AUTO-GENERÁTOR CRON (H/Sze/P 10:00) ===== */
+// Heti 3 poszt: hétfő, szerda, péntek reggel 10-kor
+cron.schedule("0 10 * * 1,3,5", async () => {
+  console.log("[BlogCron] Automatikus blog poszt generálás indítása...");
+  try {
+    const post = await generateBlogPost();
+    if (post) console.log(`[BlogCron] Létrehozva: ${post.slug}`);
+    else console.log("[BlogCron] Nincs új téma a listában.");
+  } catch (err) {
+    console.error("[BlogCron] Hiba:", err.message);
+  }
+}, { timezone: "Europe/Budapest" });
 
 /* ===== START SERVER ===== */
 app.listen(PORT, "0.0.0.0", () => {

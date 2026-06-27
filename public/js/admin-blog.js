@@ -73,6 +73,59 @@
     });
   }
 
+  /* ── AI BLOG GENERÁTOR ──────────────────────────────────── */
+  document.getElementById("blogAiGenBtn")?.addEventListener("click", async () => {
+    const btn = document.getElementById("blogAiGenBtn");
+
+    // Témák lekérése
+    btn.textContent = "⏳ Témák betöltése...";
+    btn.disabled = true;
+    try {
+      const topicsRes = await fetch("/api/blog/auto-topics");
+      const topics = await topicsRes.json();
+
+      const pending = topics.filter(t => !t.exists);
+      const done = topics.filter(t => t.exists);
+
+      const msg = pending.length
+        ? `📋 Elérhető témák (${pending.length} db):\n\n` +
+          pending.map(t => `[${t.index}] ${t.title}`).join("\n") +
+          (done.length ? `\n\n✅ Már létezik (${done.length} db):\n` + done.map(t => `• ${t.title}`).join("\n") : "") +
+          `\n\nGenerálod a következő témát? ("${pending[0].title}")`
+        : "Minden téma már létezik a blogban.";
+
+      if (!pending.length) {
+        alert(msg);
+        btn.textContent = "🤖 AI generálás";
+        btn.disabled = false;
+        return;
+      }
+
+      if (!confirm(msg)) {
+        btn.textContent = "🤖 AI generálás";
+        btn.disabled = false;
+        return;
+      }
+
+      btn.textContent = "⏳ Generálás folyamatban... (1-2 perc)";
+      const res = await fetch(`/api/blog/auto-generate?topic=${pending[0].index}`, { method: "POST" });
+      const data = await res.json();
+      if (data.ok) {
+        btn.textContent = "✅ Elindítva! Frissítsd az oldalt 1-2 perc múlva.";
+        setTimeout(() => {
+          btn.textContent = "🤖 AI generálás";
+          btn.disabled = false;
+          loadBlogPosts();
+        }, 8000);
+      } else {
+        throw new Error(data.error || "Ismeretlen hiba");
+      }
+    } catch (err) {
+      btn.textContent = "❌ Hiba: " + err.message;
+      setTimeout(() => { btn.textContent = "🤖 AI generálás"; btn.disabled = false; }, 4000);
+    }
+  });
+
   /* ── ÚJ BEJEGYZÉS ─────────────────────────────────────── */
   // Statikus oldalak újragenerálása
   document.getElementById("blogRegenBtn")?.addEventListener("click", async () => {
