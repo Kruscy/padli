@@ -197,10 +197,11 @@ export async function generateBlogPost(topicIndex = null) {
   try {
     const imageResp = await openai.images.generate({
       model: "gpt-image-1",
-      prompt: `Colorful manga/manhwa style blog cover illustration for an article about "${topic.title}".
-Anime art style, vibrant colors, manga panels composition, Japanese comic aesthetic.
-Include manga books, reading, colorful characters in manga style.
-Wide banner format, no text, no letters, no watermarks.`,
+      prompt: `Hand-drawn pencil sketch illustration for a blog article about "${topic.title}".
+Monochrome pencil drawing style, loose sketch lines, light shading with hatching.
+Manga and anime inspired pencil art, sketchbook aesthetic, slightly rough pencil strokes.
+Scene shows manga books, characters reading, Japanese comic panels.
+No color, no text, no watermarks, wide banner composition.`,
       size: "1536x1024",
       quality: "medium",
       n: 1,
