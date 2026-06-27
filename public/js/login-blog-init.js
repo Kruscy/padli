@@ -3,7 +3,7 @@
   const CAT_LABELS = { hir:"Hírek", ajanlo:"Ajánló", forditas:"Fordítás", kozosseg:"Közösség" };
   const CAT_ICONS  = { hir:"📰", ajanlo:"📚", forditas:"✍️", kozosseg:"💬" };
   try {
-    const res = await fetch("/api/blog?limit=6");
+    const res = await fetch("/api/blog?limit=21");
     const posts = res.ok ? await res.json() : [];
     if (!posts.length) {
       grid.innerHTML = '<p style="color:#555;font-size:.88rem">Hamarosan érkeznek bejegyzések!</p>';
