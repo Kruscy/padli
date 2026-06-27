@@ -233,21 +233,31 @@ export async function generateBlogPost(topicIndex = null) {
     ? excerptMatch[1].replace(/<[^>]*>/g, "").slice(0, 200).trim()
     : topic.title;
 
-  // 2. Képprompt összeállítása — ajánló posztoknál a tartalom stílusából
-  let imageSubject = topic.imagePrompt || "anime characters reading manga books";
-  if (topic.category === "ajanlo" && !topic.imagePrompt) {
-    // Ha nincs előre megadott imagePrompt, GPT-4o generálja a tartalom alapján
+  // 2. Képprompt összeállítása
+  let imagePromptFull;
+  if (topic.category === "ajanlo") {
+    // Ajánló poszt: GPT-4o kitalálja a stílust a cikkben szereplő mangák alapján, színesen
     const imgPromptResp = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: [
-        { role: "system", content: "You generate short image prompts for manga blog cover art. Reply with ONE English sentence describing a scene that visually matches the manga/manhwa art style of the titles mentioned. Focus on the visual mood and character archetypes of those specific titles. No color mentions — it will be a pencil sketch." },
-        { role: "user", content: `Blog post content (Hungarian):\n${content.slice(0, 1500)}\n\nDescribe a cover image scene matching the art style of the manga titles in this post.` }
+        {
+          role: "system",
+          content: "You write image generation prompts for manga blog covers. Given a blog post about specific manga/manhwa titles, write ONE detailed English prompt (3-5 sentences) for a wide banner illustration. The image must visually mirror the actual art style, color palette, and mood of the specific manga titles mentioned — use their characteristic visual elements (e.g. Solo Leveling's dark blue/purple shadows and glowing runes, shoujo romance's soft pastels and flower petals, dark fantasy's gritty desaturated tones, etc). No text, no watermarks, wide 3:2 landscape format."
+        },
+        {
+          role: "user",
+          content: `Blog post (Hungarian):\n${content.replace(/<[^>]*>/g, " ").slice(0, 2000)}\n\nWrite an image prompt that captures the visual style of the manga/manhwa titles discussed.`
+        }
       ],
-      temperature: 0.7,
-      max_tokens: 120,
+      temperature: 0.8,
+      max_tokens: 200,
     });
-    imageSubject = imgPromptResp.choices[0].message.content.trim();
-    console.log(`[BlogGen] Képprompt: ${imageSubject}`);
+    imagePromptFull = imgPromptResp.choices[0].message.content.trim();
+    console.log(`[BlogGen] Képprompt (színes): ${imagePromptFull}`);
+  } else {
+    // Nem ajánló: ceruzarajz stílus
+    const subject = topic.imagePrompt || "anime characters reading manga books";
+    imagePromptFull = `Black and white manga pencil sketch on white background. Clean confident line art, anime/manga style, sketchbook aesthetic with light hatching. No color, no text, no watermarks, wide horizontal banner. Subject: ${subject}`;
   }
 
   // 3. Borítókép generálás
@@ -255,7 +265,7 @@ export async function generateBlogPost(topicIndex = null) {
   try {
     const imageResp = await openai.images.generate({
       model: "gpt-image-1",
-      prompt: `Black and white manga pencil sketch on white background. Clean confident line art, anime/manga style, sketchbook aesthetic with light hatching. No color, no text, no watermarks, wide horizontal banner. Subject: ${imageSubject}`,
+      prompt: imagePromptFull,
       size: "1536x1024",
       quality: "medium",
       n: 1,
