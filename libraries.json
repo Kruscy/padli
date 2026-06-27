@@ -14,7 +14,8 @@
   { "id": "lib12", "name": "Fatal_Obsessed",      "path": "/mnt/manga/Kavita/Fatal_obsessed/New", "enabled": true },
   { "id": "lib13", "name": "Krityaa",             "path": "/mnt/manga/Kavita/Krityaa/New", "enabled": true },
   { "id": "lib14", "name": "Meriodasu",           "path": "/mnt/manga/Kavita/Meriodasu", "enabled": true },
-  { "id": "lib15", "name": "Dracu",             "path": "/mnt/manga2/padli_manga/Dracu", "enabled": true }
+  { "id": "lib15", "name": "Dracu",              "path": "/mnt/manga/Kavita/Dracu", "enabled": true },
+  { "id": "lib16", "name": "Tomasoo",            "path": "/mnt/manga/Kavita/Tomasoo", "enabled": true }
 
 
 

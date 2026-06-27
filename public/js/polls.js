@@ -31,8 +31,9 @@ async function renderPoll(pollId) {
 
   const poll = data.poll;
   const options = data.options;
+  const userVoteOptionId = data.userVoteOptionId;
 
-  const totalVotes = options.reduce((a,b)=>a+parseInt(b.votes),0);
+  const totalVotes = options.reduce((a, b) => a + parseInt(b.votes), 0);
 
   const card = document.createElement("div");
   card.className = "poll-card";
@@ -42,11 +43,21 @@ async function renderPoll(pollId) {
   title.textContent = poll.title;
   card.appendChild(title);
 
+  const endsAt = new Date(poll.ends_at);
+  const endsEl = document.createElement("div");
+  endsEl.className = "poll-ends-at";
+  endsEl.textContent = `Szavazás vége: ${endsAt.toLocaleDateString("hu-HU", {
+    year: "numeric", month: "long", day: "numeric",
+    hour: "2-digit", minute: "2-digit"
+  })}`;
+  card.appendChild(endsEl);
+
   for (const option of options) {
     const div = document.createElement("div");
     div.className = "poll-option";
+    if (option.id === userVoteOptionId) div.classList.add("voted");
 
-    div.onclick = () => vote(poll.id, option.id);
+    div.onclick = () => handleVote(poll.id, option.id, userVoteOptionId, card, pollId);
 
     const row = document.createElement("div");
     row.className = "option-row";
@@ -58,14 +69,20 @@ async function renderPoll(pollId) {
     }
 
     const text = document.createElement("div");
+    text.className = "option-text";
     text.textContent = option.title;
     row.appendChild(text);
 
+    if (option.id === userVoteOptionId) {
+      const badge = document.createElement("span");
+      badge.className = "voted-badge";
+      badge.textContent = "✔ Szavazatom";
+      row.appendChild(badge);
+    }
+
     div.appendChild(row);
 
-    const percent = totalVotes
-      ? Math.round((option.votes / totalVotes) * 100)
-      : 0;
+    const percent = totalVotes ? Math.round((option.votes / totalVotes) * 100) : 0;
 
     const bar = document.createElement("div");
     bar.className = "progress-bar";
@@ -73,29 +90,39 @@ async function renderPoll(pollId) {
     const fill = document.createElement("div");
     fill.className = "progress-fill";
     fill.style.width = percent + "%";
-
     bar.appendChild(fill);
-    div.appendChild(bar);
 
+    div.appendChild(bar);
     card.appendChild(div);
   }
 
   container.appendChild(card);
 }
 
-async function vote(pollId, optionId) {
-  const res = await fetch(`/api/polls/${pollId}/vote`, {
-    method: "POST",
-    headers: { "Content-Type":"application/json" },
-    body: JSON.stringify({ optionId })
-  });
+async function handleVote(pollId, optionId, currentVoteOptionId, card, cardPollId) {
+  if (optionId === currentVoteOptionId) return;
 
-  const data = await res.json();
+  if (currentVoteOptionId !== null) {
+    const confirmed = confirm("Biztos át akarod tenni a szavazatodat?");
+    if (!confirmed) return;
 
-  if (!res.ok) {
-    alert(data.error || "Hiba");
-    return;
+    const res = await fetch(`/api/polls/${pollId}/vote`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ optionId, changeVote: true })
+    });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || "Hiba"); return; }
+  } else {
+    const res = await fetch(`/api/polls/${pollId}/vote`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ optionId })
+    });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || "Hiba"); return; }
   }
 
-  loadPolls();
+  card.remove();
+  renderPoll(cardPollId);
 }

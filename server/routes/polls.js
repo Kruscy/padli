@@ -110,21 +110,16 @@ router.get("/closed", requireLogin, async (req, res) => {
     const { rows } = await pool.query(`
       SELECT
         p.id,
-        p.title,
+        p.title AS poll_title,
         p.ends_at,
         po.id AS option_id,
-        po.title,
+        po.title AS option_title,
         COUNT(v.id)::int AS votes
       FROM polls p
       JOIN poll_options po ON po.poll_id = p.id
       LEFT JOIN poll_votes v ON v.option_id = po.id
       WHERE p.ends_at <= NOW()
-      GROUP BY
-        p.id,
-        p.title,
-        p.ends_at,
-        po.id,
-        po.title
+      GROUP BY p.id, p.title, p.ends_at, po.id, po.title
       ORDER BY p.ends_at DESC
     `);
 
@@ -134,7 +129,7 @@ router.get("/closed", requireLogin, async (req, res) => {
       if (!polls[row.id]) {
         polls[row.id] = {
           id: row.id,
-          title: row.title,
+          title: row.poll_title,
           ends_at: row.ends_at,
           options: []
         };
@@ -142,7 +137,7 @@ router.get("/closed", requireLogin, async (req, res) => {
 
       polls[row.id].options.push({
         id: row.option_id,
-        title: row.title,
+        title: row.option_title,
         votes: row.votes
       });
     }
@@ -150,6 +145,20 @@ router.get("/closed", requireLogin, async (req, res) => {
     res.json(Object.values(polls));
   } catch (err) {
     console.error("CLOSED POLLS ERROR:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+/* =====================================================
+   WISHLIST POLL SZÁMLÁLÓ (create-poll.html-hez)
+===================================================== */
+router.get("/wishlist-count", requireLogin, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT COUNT(*)::int AS count FROM polls WHERE title ILIKE 'Kívánságlista%'`
+    );
+    res.json({ count: rows[0].count });
+  } catch (err) {
     res.status(500).json({ error: "Server error" });
   }
 });
@@ -173,8 +182,7 @@ router.get("/:id", requireLogin, async (req, res) => {
       return res.status(404).json({ error: "Not found" });
 
     const optionsRes = await pool.query(
-      `
-      SELECT
+      `SELECT
         po.id,
         po.title,
         po.image_url,
@@ -183,14 +191,20 @@ router.get("/:id", requireLogin, async (req, res) => {
       LEFT JOIN poll_votes pv ON pv.option_id = po.id
       WHERE po.poll_id=$1
       GROUP BY po.id
-      ORDER BY po.id
-    `,
+      ORDER BY po.id`,
       [pollId]
+    );
+
+    // A bejelentkezett user szavazata (ha van)
+    const voteRes = await pool.query(
+      `SELECT option_id FROM poll_votes WHERE poll_id=$1 AND user_id=$2`,
+      [pollId, req.session.user.id]
     );
 
     res.json({
       poll: pollRes.rows[0],
-      options: optionsRes.rows
+      options: optionsRes.rows,
+      userVoteOptionId: voteRes.rows[0]?.option_id ?? null
     });
   } catch (err) {
     console.error("GET POLL ERROR:", err);
@@ -199,28 +213,36 @@ router.get("/:id", requireLogin, async (req, res) => {
 });
 
 /* =====================================================
-   VOTE
+   VOTE (szavazat váltás is lehetséges)
 ===================================================== */
 router.post("/:id/vote", requireLogin, async (req, res) => {
   const pollId = Number(req.params.id);
-  const { optionId } = req.body;
+  const { optionId, changeVote } = req.body;
   const userId = req.session.user.id;
 
   try {
-    await pool.query(
-      `
-      INSERT INTO poll_votes (poll_id, option_id, user_id)
-      VALUES ($1,$2,$3)
-    `,
-      [pollId, optionId, userId]
-    );
+    if (changeVote) {
+      // Szavazat csere: frissítjük a meglévő sort
+      const result = await pool.query(
+        `UPDATE poll_votes SET option_id=$1, voted_at=now()
+         WHERE poll_id=$2 AND user_id=$3`,
+        [optionId, pollId, userId]
+      );
+      if (result.rowCount === 0) {
+        return res.status(400).json({ error: "Nem volt korábbi szavazat" });
+      }
+    } else {
+      await pool.query(
+        `INSERT INTO poll_votes (poll_id, option_id, user_id) VALUES ($1,$2,$3)`,
+        [pollId, optionId, userId]
+      );
+    }
 
     res.json({ ok: true });
   } catch (err) {
     if (err.code === "23505") {
       return res.status(400).json({ error: "Already voted" });
     }
-
     console.error("VOTE ERROR:", err);
     res.status(500).json({ error: "Server error" });
   }

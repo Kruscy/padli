@@ -38,7 +38,13 @@
 
 .poll-title {
   font-size: 20px;
-  margin-bottom: 15px;
+  margin-bottom: 8px;
+}
+
+.poll-ends-at {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-bottom: 16px;
 }
 
 .poll-option {
@@ -67,18 +73,46 @@
   align-items: center;
 }
 
+.poll-option.voted {
+  border: 2px solid #7c5cff;
+  background: #1a1f3a;
+}
+
+.option-text {
+  flex: 1;
+}
+
+.voted-badge {
+  font-size: 11px;
+  color: #a78bfa;
+  background: #2d1f6e;
+  padding: 2px 8px;
+  border-radius: 20px;
+  white-space: nowrap;
+  margin-left: 8px;
+}
+
 .progress-bar {
   height: 8px;
   background: #111827;
   border-radius: 5px;
   margin-top: 8px;
-  overflow: hidden;
+  overflow: visible;
+  position: relative;
 }
 
 .progress-fill {
   height: 100%;
   background: linear-gradient(135deg,#ff424d,#ff6b6b);
   transition: width .4s;
+  border-radius: 5px;
+}
+
+.progress-label {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-top: 3px;
+  display: block;
 }
 
 @media (max-width: 600px) {

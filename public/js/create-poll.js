@@ -51,86 +51,68 @@ addBtn.onclick = () => addOption();
 
 /* ================= WISHLIST AUTO-FILL ================= */
 
+async function getNextWishlistTitle() {
+  try {
+    const res = await fetch("/api/polls/wishlist-count");
+    if (!res.ok) return null;
+    const { count } = await res.json();
+    return `Kívánságlista ${count + 1}`;
+  } catch { return null; }
+}
+
+function fillOptions(items) {
+  const existingOptions = document.querySelectorAll(".option-box");
+  existingOptions.forEach((optionBox, index) => {
+    const item = items[index];
+    if (item) {
+      optionBox.querySelector(".option-title").value = item.title || "";
+      optionBox.querySelector(".option-image").value = item.cover_url || "";
+    }
+  });
+}
+
 // 🎲 Random nem claimbelt kívánságok
 fillUnclaimedBtn.onclick = async () => {
-  const existingOptions = document.querySelectorAll(".option-box");
-  const count = existingOptions.length;
+  const count = document.querySelectorAll(".option-box").length;
 
   try {
     const res = await fetch(`/api/wishlist/for-polls/unclaimed?limit=${count}`);
-    
-    if (!res.ok) {
-      const error = await res.json();
-      alert(error.error || "Hiba a kívánságok betöltésekor");
-      return;
-    }
+    if (!res.ok) { alert((await res.json()).error || "Hiba a kívánságok betöltésekor"); return; }
 
     const items = await res.json();
+    if (!items?.length) { alert("❌ Nincs nem claimbelt kívánság a listában!"); return; }
 
-    if (!items || items.length === 0) {
-      alert("❌ Nincs nem claimbelt kívánság a listában!");
-      return;
+    fillOptions(items);
+
+    const titleInput = document.getElementById("pollTitle");
+    if (!titleInput.value.trim()) {
+      const autoTitle = await getNextWishlistTitle();
+      if (autoTitle) titleInput.value = autoTitle;
     }
-
-    // Meglévő opciók kitöltése
-    existingOptions.forEach((optionBox, index) => {
-      const item = items[index];
-      if (item) {
-        const titleInput = optionBox.querySelector(".option-title");
-        const imageInput = optionBox.querySelector(".option-image");
-
-        titleInput.value = item.title || "";
-        imageInput.value = item.cover_url || "";
-      }
-    });
-
-    console.log(`✅ ${items.length} random kívánság betöltve`);
-    alert(`✅ ${items.length} random kívánság betöltve!`);
-
   } catch (err) {
-    console.error("Unclaimed wishlist load error:", err);
     alert("❌ Hiba a kívánságok betöltésekor: " + err.message);
   }
 };
 
 // 📋 Saját tervezett kívánságok
 fillMyPlannedBtn.onclick = async () => {
-  const existingOptions = document.querySelectorAll(".option-box");
-  const count = existingOptions.length;
+  const count = document.querySelectorAll(".option-box").length;
 
   try {
     const res = await fetch(`/api/wishlist/for-polls/my-planned?limit=${count}`);
-    
-    if (!res.ok) {
-      const error = await res.json();
-      alert(error.error || "Hiba a tervek betöltésekor");
-      return;
-    }
+    if (!res.ok) { alert((await res.json()).error || "Hiba a tervek betöltésekor"); return; }
 
     const items = await res.json();
+    if (!items?.length) { alert("❌ Nincs 'tervben van' státuszú kívánságod!"); return; }
 
-    if (!items || items.length === 0) {
-      alert("❌ Nincs 'tervben van' státuszú kívánságod!");
-      return;
+    fillOptions(items);
+
+    const titleInput = document.getElementById("pollTitle");
+    if (!titleInput.value.trim()) {
+      const autoTitle = await getNextWishlistTitle();
+      if (autoTitle) titleInput.value = autoTitle;
     }
-
-    // Meglévő opciók kitöltése
-    existingOptions.forEach((optionBox, index) => {
-      const item = items[index];
-      if (item) {
-        const titleInput = optionBox.querySelector(".option-title");
-        const imageInput = optionBox.querySelector(".option-image");
-
-        titleInput.value = item.title || "";
-        imageInput.value = item.cover_url || "";
-      }
-    });
-
-    console.log(`✅ ${items.length} saját terv betöltve`);
-    alert(`✅ ${items.length} saját terved betöltve!`);
-
   } catch (err) {
-    console.error("My planned wishlist load error:", err);
     alert("❌ Hiba a tervek betöltésekor: " + err.message);
   }
 };
