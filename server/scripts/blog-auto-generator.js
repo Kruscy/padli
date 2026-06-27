@@ -136,7 +136,6 @@ Formázás: HTML (h2, h3, p, ul/li). Legyen benne FAQ szekció.`
   {
     slug: "legjobb-isekai-manga-manhwa-magyarul",
     title: "A legjobb isekai manga és manhwa – Top 10 ajánló magyar olvasóknak",
-    imagePrompt: "anime protagonist reincarnated in a fantasy RPG world, stats window floating beside them, sword in hand, adventurer outfit, isekai scene",
     category: "ajanlo",
     tags: ["isekai manga", "isekai manhwa", "manga ajánló", "manhwa ajánló", "isekai magyarul"],
     keywords: ["legjobb isekai manga", "isekai manhwa magyarul", "top isekai ajánló"],
@@ -148,7 +147,6 @@ Formázás: HTML (h2, h3, p, ul/li, strong). Legyen benne egy "Mivel kezdjem?" a
   {
     slug: "dark-fantasy-manga-manhwa-ajanlok",
     title: "Dark fantasy manga és manhwa ajánlók – A legsötétebb, legjobb képregények",
-    imagePrompt: "dark hooded anime antihero surrounded by shadows and demons, ominous atmosphere, dramatic lighting with heavy crosshatch shading, gothic fantasy scene",
     category: "ajanlo",
     tags: ["dark fantasy manga", "dark fantasy manhwa", "sötét manga", "dark manga", "manga ajánló"],
     keywords: ["dark fantasy manga magyarul", "sötét manga ajánló", "dark manhwa", "legjobb dark fantasy manga"],
@@ -160,7 +158,6 @@ Formázás: HTML (h2, h3, p, ul/li, strong). Legyen benne figyelmeztetés hogy e
   {
     slug: "romantikus-manga-manhwa-ajanlok",
     title: "Romantikus manga és manhwa ajánlók – A legjobb szerelmes képregények",
-    imagePrompt: "two anime characters facing each other with a shy romantic moment, blushing expressions, floating hearts, shoujo manga style sparkles",
     category: "ajanlo",
     tags: ["romantikus manga", "romantikus manhwa", "shoujo manga", "romance manhwa", "szerelmes manga"],
     keywords: ["romantikus manga magyarul", "romance manhwa ajánló", "shoujo manga", "legjobb szerelmes manga"],
@@ -236,12 +233,29 @@ export async function generateBlogPost(topicIndex = null) {
     ? excerptMatch[1].replace(/<[^>]*>/g, "").slice(0, 200).trim()
     : topic.title;
 
-  // 2. Borítókép generálás DALL-E 3-mal
+  // 2. Képprompt összeállítása — ajánló posztoknál a tartalom stílusából
+  let imageSubject = topic.imagePrompt || "anime characters reading manga books";
+  if (topic.category === "ajanlo" && !topic.imagePrompt) {
+    // Ha nincs előre megadott imagePrompt, GPT-4o generálja a tartalom alapján
+    const imgPromptResp = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        { role: "system", content: "You generate short image prompts for manga blog cover art. Reply with ONE English sentence describing a scene that visually matches the manga/manhwa art style of the titles mentioned. Focus on the visual mood and character archetypes of those specific titles. No color mentions — it will be a pencil sketch." },
+        { role: "user", content: `Blog post content (Hungarian):\n${content.slice(0, 1500)}\n\nDescribe a cover image scene matching the art style of the manga titles in this post.` }
+      ],
+      temperature: 0.7,
+      max_tokens: 120,
+    });
+    imageSubject = imgPromptResp.choices[0].message.content.trim();
+    console.log(`[BlogGen] Képprompt: ${imageSubject}`);
+  }
+
+  // 3. Borítókép generálás
   let coverUrl = null;
   try {
     const imageResp = await openai.images.generate({
       model: "gpt-image-1",
-      prompt: `Black and white manga pencil sketch on white background. Clean confident line art, anime/manga style, sketchbook aesthetic with light hatching. No color, no text, no watermarks, wide horizontal banner. Subject: ${topic.imagePrompt || "anime characters reading manga books"}`,
+      prompt: `Black and white manga pencil sketch on white background. Clean confident line art, anime/manga style, sketchbook aesthetic with light hatching. No color, no text, no watermarks, wide horizontal banner. Subject: ${imageSubject}`,
       size: "1536x1024",
       quality: "medium",
       n: 1,
