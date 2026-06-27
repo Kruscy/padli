@@ -54,6 +54,8 @@ PadlizsanFanSub is a full-stack web platform built for a Hungarian manga/manhwa 
 
 ### Docker (recommended)
 
+Docker Hub: [`krusk/padlizsanfansub`](https://hub.docker.com/r/krusk/padlizsanfansub)
+
 ```bash
 git clone https://github.com/Kruscy/padli.git
 cd padli

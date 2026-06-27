@@ -54,6 +54,8 @@ A PadlizsanFanSub egy teljes körű webes platform, amelyet egy magyar manga/man
 
 ### Docker (ajánlott)
 
+Docker Hub: [`krusk/padlizsanfansub`](https://hub.docker.com/r/krusk/padlizsanfansub)
+
 ```bash
 git clone https://github.com/Kruscy/padli.git
 cd padli
