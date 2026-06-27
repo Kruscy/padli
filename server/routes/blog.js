@@ -161,6 +161,94 @@ router.delete("/:slug", requireAdmin, async (req, res) => {
   }
 });
 
+/* ── ADMIN: TÉMAJAVASLATOK (Google kulcsszavak alapján) ──── */
+router.get("/suggest-topics", requireAdmin, async (req, res) => {
+  try {
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(503).json({ error: "OPENAI_API_KEY nincs beállítva" });
+    }
+    const { rows: existing } = await pool.query("SELECT slug FROM blog_posts");
+    const existingSlugs = existing.map(r => r.slug);
+
+    const OpenAI = (await import("openai")).default;
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+    const resp = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "system",
+          content: `Te egy SEO-specialista vagy, aki egy magyar manga/manhwa fordítói platform (Padlizsán Fansub) blogját kezeli.
+Generálj pontosan 20 blogposzt-javaslatot JSON tömbként, a legjobb magyar Google keresési szándékok alapján.
+Minden elem tartalmazza:
+- title: vonzó magyar cím
+- slug: URL-barát slug (kisbetű, kötőjel)
+- primaryKeyword: a legfontosabb célzott kulcsszó
+- secondaryKeywords: 2-3 másodlagos kulcsszó tömbként
+- searchPriority: 1-5 skálán (5=legmagasabb keresési volumen)
+- category: "ajanlo" | "hir" | "forditas" | "kozosseg"
+- intent: rövid leírás miért keresnék erre (1 mondat)
+
+Priorizáld ezeket a magas keresési volumenű kulcsszavakat:
+manga magyarul, manhwa magyarul, magyar manga, magyar manhwa, manga olvasás, manhwa olvasás,
+manga hu, magyar fansub, manga fordítás, manhwa fordítás, manga online, ingyenes manga,
+isekai manga, shoujo manga, seinen manga, webtoon magyarul, manga ajánló, manhwa ajánló,
+manga kezdőknek, manga műfajok, legjobb manga, legjobb manhwa, manga sorozat, manhwa sorozat,
+akció manga, romantikus manga, fantasy manga, horror manga, dark fantasy manga
+
+Kerüld ezeket a már létező slugokat: ${existingSlugs.join(", ")}
+
+Válaszolj CSAK valid JSON tömbben, semmi más szöveg.`
+        },
+        {
+          role: "user",
+          content: "Generálj 20 SEO-optimalizált blogposzt-javaslatot a Padlizsán Fansub weboldalra, keresési volumen szerint csökkenő sorrendben."
+        }
+      ],
+      temperature: 0.7,
+      max_tokens: 3000,
+      response_format: { type: "json_object" },
+    });
+
+    const raw = resp.choices[0].message.content;
+    const parsed = JSON.parse(raw);
+    const suggestions = Array.isArray(parsed) ? parsed : parsed.topics || parsed.suggestions || Object.values(parsed)[0];
+    res.json(suggestions.slice(0, 20));
+  } catch (err) {
+    console.error("suggest-topics hiba:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ── ADMIN: AI BLOG POSZT GENERÁLÁS EGYEDI TÉMÁVAL ──────── */
+router.post("/auto-generate-custom", requireAdmin, async (req, res) => {
+  try {
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(503).json({ error: "OPENAI_API_KEY nincs beállítva" });
+    }
+    const { title, slug, primaryKeyword, secondaryKeywords, category } = req.body;
+    if (!title || !slug) return res.status(400).json({ error: "title és slug kötelező" });
+
+    res.json({ ok: true, message: "Generálás elindítva..." });
+
+    const { generateBlogPost } = await import("../scripts/blog-auto-generator.js");
+    const customTopic = {
+      slug, title, category: category || "ajanlo",
+      tags: [primaryKeyword, ...(secondaryKeywords || [])].filter(Boolean),
+      prompt: `Írj egy 1400-1600 szavas, SEO-optimalizált magyar nyelvű blogbejegyzést a Padlizsán Fansub weboldalra.
+Cím: "${title}"
+Elsődleges kulcsszó (természetesen szerepeljen többször): ${primaryKeyword}
+Másodlagos kulcsszavak: ${(secondaryKeywords || []).join(", ")}
+Formázás: HTML (h2, h3, p, ul/li, strong). Legyen benne FAQ szekció. Ne legyen html/body wrapper.`,
+    };
+    generateBlogPost(null, customTopic)
+      .then(post => post && console.log(`[BlogAdmin] Egyedi poszt létrehozva: ${post.slug}`))
+      .catch(err => console.error("[BlogAdmin] Egyedi generálás hiba:", err.message));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 /* ── ADMIN: AI BLOG POSZT GENERÁLÁS ─────────────────────── */
 // POST /api/blog/auto-generate          — következő téma automatikusan
 // POST /api/blog/auto-generate?topic=2  — adott index kézzel

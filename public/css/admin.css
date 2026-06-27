@@ -1406,3 +1406,25 @@
   .padli-alias-arrow-static { display: none; }
 }
 
+
+/* ── AI TÉMAVÁLASZTÓ MODAL ───────────────────────────────── */
+#aiTopicModal { position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center; }
+.ai-modal-backdrop { position:absolute;inset:0;background:rgba(0,0,0,.7); }
+.ai-modal-box { position:relative;background:#1a1a2e;border:1px solid #3a3a5e;border-radius:14px;width:min(900px,95vw);max-height:85vh;display:flex;flex-direction:column;overflow:hidden; }
+.ai-modal-header { display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #2a2a4e; }
+.ai-modal-header h3 { margin:0;font-size:1rem;color:#e2e8f0; }
+.ai-modal-close { background:none;border:none;color:#888;font-size:1.2rem;cursor:pointer;padding:4px 8px; }
+.ai-modal-close:hover { color:#fff; }
+.ai-modal-body { overflow-y:auto;padding:16px 20px; }
+.ai-topic-table { width:100%;border-collapse:collapse;font-size:.85rem; }
+.ai-topic-table th { text-align:left;padding:8px 10px;color:#888;border-bottom:1px solid #2a2a4e;font-weight:500; }
+.ai-topic-table td { padding:8px 10px;border-bottom:1px solid #1e1e3a;vertical-align:middle; }
+.ai-topic-row:hover td { background:#1e1e3a; }
+.ai-topic-done td { opacity:.45; }
+.ai-priority { color:#f59e0b;letter-spacing:-1px;font-size:.8rem; }
+.ai-topic-badge { font-size:.7rem;padding:2px 7px;border-radius:20px;font-weight:600; }
+.ai-badge-saved { background:#2a2a5e;color:#a78bfa; }
+.ai-done-tag { font-size:.7rem;color:#4ade80;margin-left:6px; }
+.ai-topic-table code { background:#0f0f1a;padding:2px 6px;border-radius:4px;font-size:.75rem;color:#7dd3fc; }
+.ai-gen-pick-btn { background:#2563eb;color:#fff;border:none;border-radius:6px;padding:5px 14px;font-size:.8rem;cursor:pointer;white-space:nowrap; }
+.ai-gen-pick-btn:hover { background:#1d4ed8; }

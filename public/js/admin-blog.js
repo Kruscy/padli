@@ -73,56 +73,123 @@
     });
   }
 
-  /* ── AI BLOG GENERÁTOR ──────────────────────────────────── */
-  document.getElementById("blogAiGenBtn")?.addEventListener("click", async () => {
-    const btn = document.getElementById("blogAiGenBtn");
+  /* ── AI BLOG GENERÁTOR MODAL ────────────────────────────── */
+  function closAiModal() {
+    document.getElementById("aiTopicModal")?.remove();
+  }
 
-    // Témák lekérése
-    btn.textContent = "⏳ Témák betöltése...";
+  async function startGenerate(payload, label) {
+    closAiModal();
+    const btn = document.getElementById("blogAiGenBtn");
+    btn.textContent = "⏳ Generálás...";
     btn.disabled = true;
     try {
-      const topicsRes = await fetch("/api/blog/auto-topics");
-      const topics = await topicsRes.json();
-
-      const pending = topics.filter(t => !t.exists);
-      const done = topics.filter(t => t.exists);
-
-      const msg = pending.length
-        ? `📋 Elérhető témák (${pending.length} db):\n\n` +
-          pending.map(t => `[${t.index}] ${t.title}`).join("\n") +
-          (done.length ? `\n\n✅ Már létezik (${done.length} db):\n` + done.map(t => `• ${t.title}`).join("\n") : "") +
-          `\n\nGenerálod a következő témát? ("${pending[0].title}")`
-        : "Minden téma már létezik a blogban.";
-
-      if (!pending.length) {
-        alert(msg);
-        btn.textContent = "🤖 AI generálás";
-        btn.disabled = false;
-        return;
+      let url, body;
+      if (payload.type === "predefined") {
+        url = `/api/blog/auto-generate?topic=${payload.index}`;
+        body = undefined;
+      } else {
+        url = "/api/blog/auto-generate-custom";
+        body = JSON.stringify(payload);
       }
-
-      if (!confirm(msg)) {
-        btn.textContent = "🤖 AI generálás";
-        btn.disabled = false;
-        return;
-      }
-
-      btn.textContent = "⏳ Generálás folyamatban... (1-2 perc)";
-      const res = await fetch(`/api/blog/auto-generate?topic=${pending[0].index}`, { method: "POST" });
+      const res = await fetch(url, {
+        method: "POST",
+        headers: body ? { "Content-Type": "application/json" } : {},
+        body,
+      });
       const data = await res.json();
       if (data.ok) {
-        btn.textContent = "✅ Elindítva! Frissítsd az oldalt 1-2 perc múlva.";
-        setTimeout(() => {
-          btn.textContent = "🤖 AI generálás";
-          btn.disabled = false;
-          loadBlogPosts();
-        }, 8000);
-      } else {
-        throw new Error(data.error || "Ismeretlen hiba");
-      }
+        btn.textContent = "✅ Elindítva!";
+        setTimeout(() => { btn.textContent = "🤖 AI generálás"; btn.disabled = false; loadBlogPosts(); }, 10000);
+      } else throw new Error(data.error || "Hiba");
     } catch (err) {
-      btn.textContent = "❌ Hiba: " + err.message;
+      btn.textContent = "❌ " + err.message;
       setTimeout(() => { btn.textContent = "🤖 AI generálás"; btn.disabled = false; }, 4000);
+    }
+  }
+
+  function renderAiModal(predefined, suggestions) {
+    const existing = new Set(predefined.filter(t => t.exists).map(t => t.slug));
+    const stars = n => "★".repeat(n) + "☆".repeat(5 - n);
+
+    const predRows = predefined.filter(t => !t.exists).map(t => `
+      <tr class="ai-topic-row" data-type="predefined" data-index="${t.index}" data-title="${t.title}">
+        <td><span class="ai-topic-badge ai-badge-saved">Előre definiált</span></td>
+        <td>${t.title}</td>
+        <td>—</td>
+        <td><button class="ai-gen-pick-btn">Generálás</button></td>
+      </tr>`).join("");
+
+    const sugRows = suggestions.map((s, i) => {
+      const isDone = existing.has(s.slug);
+      return `<tr class="ai-topic-row${isDone ? " ai-topic-done" : ""}" data-type="custom"
+        data-title="${s.title}" data-slug="${s.slug}"
+        data-primary="${s.primaryKeyword || ""}"
+        data-secondary='${JSON.stringify(s.secondaryKeywords || [])}'
+        data-category="${s.category || "ajanlo"}">
+        <td><span class="ai-priority">${stars(s.searchPriority || 3)}</span></td>
+        <td>${s.title}${isDone ? ' <span class="ai-done-tag">✓ kész</span>' : ""}</td>
+        <td><code>${s.primaryKeyword || ""}</code></td>
+        <td>${isDone ? "—" : `<button class="ai-gen-pick-btn">Generálás</button>`}</td>
+      </tr>`;
+    }).join("");
+
+    const modal = document.createElement("div");
+    modal.id = "aiTopicModal";
+    modal.innerHTML = `
+      <div class="ai-modal-backdrop"></div>
+      <div class="ai-modal-box">
+        <div class="ai-modal-header">
+          <h3>🤖 AI Blog Generátor – Témaválasztó</h3>
+          <button class="ai-modal-close">✕</button>
+        </div>
+        <div class="ai-modal-body">
+          <table class="ai-topic-table">
+            <thead><tr><th>Prioritás</th><th>Cím</th><th>Fő kulcsszó</th><th></th></tr></thead>
+            <tbody>${predRows}${sugRows}</tbody>
+          </table>
+        </div>
+      </div>`;
+
+    modal.querySelector(".ai-modal-backdrop").onclick = closAiModal;
+    modal.querySelector(".ai-modal-close").onclick = closAiModal;
+    modal.querySelectorAll(".ai-gen-pick-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const row = btn.closest(".ai-topic-row");
+        const type = row.dataset.type;
+        if (type === "predefined") {
+          startGenerate({ type: "predefined", index: parseInt(row.dataset.index) }, row.dataset.title);
+        } else {
+          startGenerate({
+            type: "custom",
+            title: row.dataset.title,
+            slug: row.dataset.slug,
+            primaryKeyword: row.dataset.primary,
+            secondaryKeywords: JSON.parse(row.dataset.secondary),
+            category: row.dataset.category,
+          }, row.dataset.title);
+        }
+      });
+    });
+
+    document.body.appendChild(modal);
+  }
+
+  document.getElementById("blogAiGenBtn")?.addEventListener("click", async () => {
+    const btn = document.getElementById("blogAiGenBtn");
+    btn.textContent = "⏳ Betöltés...";
+    btn.disabled = true;
+    try {
+      const [predRes, sugRes] = await Promise.all([
+        fetch("/api/blog/auto-topics").then(r => r.json()),
+        fetch("/api/blog/suggest-topics").then(r => r.json()),
+      ]);
+      renderAiModal(predRes, sugRes);
+    } catch (err) {
+      alert("Hiba: " + err.message);
+    } finally {
+      btn.textContent = "🤖 AI generálás";
+      btn.disabled = false;
     }
   });
 

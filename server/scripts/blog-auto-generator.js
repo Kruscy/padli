@@ -184,7 +184,7 @@ function slugify(text) {
 }
 
 // ── FŐ GENERÁTOR ─────────────────────────────────────────────────────────────
-export async function generateBlogPost(topicIndex = null) {
+export async function generateBlogPost(topicIndex = null, customTopic = null) {
   if (!process.env.OPENAI_API_KEY) {
     throw new Error("OPENAI_API_KEY nincs beállítva a .env fájlban");
   }
@@ -193,7 +193,9 @@ export async function generateBlogPost(topicIndex = null) {
 
   // Következő feldolgozatlan téma kiválasztása
   let topic;
-  if (topicIndex !== null) {
+  if (customTopic) {
+    topic = customTopic;
+  } else if (topicIndex !== null) {
     topic = BLOG_TOPICS[topicIndex];
   } else {
     // Megnézzük melyik slug nem létezik még
