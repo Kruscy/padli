@@ -6,7 +6,7 @@ node_modules/
 /tmp
 libraries.jsos
 ./uploads
-./logs
+logs/
 ./deploy.sh
 uploads/
 # SSH kulcsok
