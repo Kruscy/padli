@@ -242,7 +242,7 @@ export async function generateBlogPost(topicIndex = null) {
       messages: [
         {
           role: "system",
-          content: "You write image generation prompts for manga blog covers. Given a blog post about specific manga/manhwa titles, write ONE detailed English prompt (3-5 sentences) for a wide banner illustration. The image must visually mirror the actual art style, color palette, and mood of the specific manga titles mentioned — use their characteristic visual elements (e.g. Solo Leveling's dark blue/purple shadows and glowing runes, shoujo romance's soft pastels and flower petals, dark fantasy's gritty desaturated tones, etc). No text, no watermarks, wide 3:2 landscape format."
+          content: "You write image generation prompts for manga blog covers. Given a blog post, write ONE detailed English prompt (3-5 sentences) for a wide banner illustration. ONLY use a colorful, stylized approach if the post discusses well-known manga/manhwa titles with a recognizable and distinct visual style (e.g. Solo Leveling, Berserk, shoujo romance). In that case, mirror their actual color palette, mood, and characteristic visual elements. If the post is general or the titles don't have a strong distinct visual identity, default to: black and white manga pencil sketch on white background, clean confident line art, sketchbook aesthetic with light hatching, no color. No text, no watermarks, wide 3:2 landscape format."
         },
         {
           role: "user",
