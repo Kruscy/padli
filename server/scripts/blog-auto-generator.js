@@ -125,6 +125,39 @@ Formázás: HTML (h2, h3, p, ul/li). Legalább 5-6 cím rövid leírással.`
 Téma: hogyan kell mangát olvasni (jobbról balra), mi az a tankōbon, chapter, volume, panel, speech bubble, miféle műfajok léteznek, hol kezdje egy kezdő (javasolt első mangák/manhwák), hogyan működik a Padlizsán Fansub oldala.
 Formázás: HTML (h2, h3, p, ul/li). Legyen benne FAQ szekció.`
   },
+  {
+    slug: "legjobb-isekai-manga-manhwa-magyarul",
+    title: "A legjobb isekai manga és manhwa – Top 10 ajánló magyar olvasóknak",
+    category: "ajanlo",
+    tags: ["isekai manga", "isekai manhwa", "manga ajánló", "manhwa ajánló", "isekai magyarul"],
+    keywords: ["legjobb isekai manga", "isekai manhwa magyarul", "top isekai ajánló"],
+    prompt: `Írj egy 1400-1600 szavas magyar nyelvű ajánló blogbejegyzést a Padlizsán Fansub weboldalra a legjobb isekai manga és manhwa címekről.
+Téma: mi az az isekai műfaj és miért ilyen népszerű, a legjobb isekai mangák és manhwák részletes bemutatása (legalább 8-10 cím rövid leírással, miért érdemes olvasni, miben egyedi), az isekai különböző típusai (fantasy világ, játék világ, reinkarnáció, iskolaváltás).
+A bemutatott títusok legyenek széles körben ismertek, ne csak egyet-kettőt emelj ki.
+Formázás: HTML (h2, h3, p, ul/li, strong). Legyen benne egy "Mivel kezdjem?" ajánló és FAQ szekció.`
+  },
+  {
+    slug: "dark-fantasy-manga-manhwa-ajanlok",
+    title: "Dark fantasy manga és manhwa ajánlók – A legsötétebb, legjobb képregények",
+    category: "ajanlo",
+    tags: ["dark fantasy manga", "dark fantasy manhwa", "sötét manga", "dark manga", "manga ajánló"],
+    keywords: ["dark fantasy manga magyarul", "sötét manga ajánló", "dark manhwa", "legjobb dark fantasy manga"],
+    prompt: `Írj egy 1400-1600 szavas magyar nyelvű ajánló blogbejegyzést a Padlizsán Fansub weboldalra a legjobb dark fantasy manga és manhwa címekről.
+Téma: mi a dark fantasy műfaj (horror elemek, sötét világ, antihős főszereplők, erőszak, morális dilemmák), miért vonzó ez a stílus, top ajánló legalább 8-10 cím részletes bemutatásával (miért sötét, mi teszi különlegessé). Különbség a sima fantasy és a dark fantasy között.
+Megemlítendő típusok: dämon vadász, apokaliptikus világ, sötét isekai, horror elemekkel teli fantasy.
+Formázás: HTML (h2, h3, p, ul/li, strong). Legyen benne figyelmeztetés hogy ez nem kezdőknek szóló stílus, és FAQ szekció.`
+  },
+  {
+    slug: "romantikus-manga-manhwa-ajanlok",
+    title: "Romantikus manga és manhwa ajánlók – A legjobb szerelmes képregények",
+    category: "ajanlo",
+    tags: ["romantikus manga", "romantikus manhwa", "shoujo manga", "romance manhwa", "szerelmes manga"],
+    keywords: ["romantikus manga magyarul", "romance manhwa ajánló", "shoujo manga", "legjobb szerelmes manga"],
+    prompt: `Írj egy 1400-1600 szavas magyar nyelvű ajánló blogbejegyzést a Padlizsán Fansub weboldalra a legjobb romantikus manga és manhwa címekről.
+Téma: a romantikus manga/manhwa műfaj bemutatása, különböző altípusok (shoujo, josei, romance-fantasy, school romance, office romance), miért annyira népszerű a manga romantika a nyugati romantikus könyvekhez képest. Top ajánló legalább 8-10 cím részletes bemutatásával.
+Legyen szó a klasszikus shoujo mangákról és a modern koreai romance manhwákról is, és arról hogyan fejlődött a műfaj.
+Formázás: HTML (h2, h3, p, ul/li, strong). Legyen benne "Neked való ez a műfaj?" szekció és FAQ.`
+  },
 ];
 
 // ── BORÍTÓKÉP MENTÉS (uploads/blog-covers/ — statikusan tálalt Express által) ─
@@ -197,11 +230,7 @@ export async function generateBlogPost(topicIndex = null) {
   try {
     const imageResp = await openai.images.generate({
       model: "gpt-image-1",
-      prompt: `Hand-drawn pencil sketch illustration for a blog article about "${topic.title}".
-Monochrome pencil drawing style, loose sketch lines, light shading with hatching.
-Manga and anime inspired pencil art, sketchbook aesthetic, slightly rough pencil strokes.
-Scene shows manga books, characters reading, Japanese comic panels.
-No color, no text, no watermarks, wide banner composition.`,
+      prompt: `Minimal pencil sketch, just a few simple lines. Very sparse, almost empty composition. One or two manga book outlines drawn with a single thin pencil line. Minimalist illustration, lots of white space, barely-there sketch marks. No shading, no color, no fill, no text, no watermarks.`,
       size: "1536x1024",
       quality: "medium",
       n: 1,
