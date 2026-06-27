@@ -83,7 +83,7 @@ export async function createInvoice({ email, name, items, paymentMethod = "onlin
         unit:            "db",
         vat:             "AAM",
       })),
-      settings: { should_send_emails: true },
+      settings: { should_send_email: true },
     });
 
     console.log(`[Billingo] ✅ Számla kiállítva: ${invoice.invoice_number} (id: ${invoice.id})`);

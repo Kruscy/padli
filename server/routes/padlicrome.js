@@ -12,6 +12,7 @@ import sharp    from "sharp";
 import fs       from "fs";
 import path     from "path";
 import { pool } from "../db.js";
+import { localPathToR2Key, listFiles } from "../r2.js";
 
 const router = express.Router();
 
@@ -664,7 +665,7 @@ router.post("/import-bug-image", requireAuth, async (req, res) => {
     if (localMatch) {
       // Direkt fájlrendszer olvasás a DB-ből
       const [, library, slug, chapterFolder, file] = localMatch;
-      const decodedFile = decodeURIComponent(file);
+      const decodedFile = decodeURIComponent(file).split("?")[0];
       // URL-ből auto-kitöltés ha a body-ból hiányzik
       if (!mangaSlug) mangaSlug = slug;
       if (!chapter) chapter = chapterFolder;
@@ -681,8 +682,15 @@ router.post("/import-bug-image", requireAuth, async (req, res) => {
       if (!rows.length) return res.status(404).json({ error: "Kép nem található az adatbázisban" });
       const { library_path, manga_folder } = rows[0];
       const imgPath = path.resolve(path.join(library_path, manga_folder, chapterFolder, decodedFile));
-      if (!fs.existsSync(imgPath)) return res.status(404).json({ error: "Képfájl nem található: " + imgPath });
-      const buf = fs.readFileSync(imgPath);
+      let buf;
+      if (fs.existsSync(imgPath)) {
+        buf = fs.readFileSync(imgPath);
+      } else {
+        // Nincs lokálisan → R2-ről töltjük le
+        const r2Key = localPathToR2Key(imgPath);
+        const R2_PUBLIC = process.env.R2_PUBLIC_URL;
+        buf = await downloadImage(`${R2_PUBLIC}/${r2Key}`);
+      }
       jpgBuf = await sharp(buf).jpeg({ quality: 92 }).toBuffer();
     } else {
       // Abszolút URL — HTTP letöltés
@@ -718,7 +726,7 @@ router.post("/import-bug-image", requireAuth, async (req, res) => {
 router.post("/import-chapter", requireAuth, async (req, res) => {
   try {
     const userId = req.authUser.id;
-    const { mangaSlug, chapter } = req.body;
+    const { mangaSlug, chapter, chapterBugId } = req.body;
     if (!mangaSlug || !chapter) return res.status(400).json({ error: "mangaSlug és chapter kötelező" });
 
     ensureUserDirs(userId);
@@ -732,13 +740,27 @@ router.post("/import-chapter", requireAuth, async (req, res) => {
     const { library_name, library_path, manga_folder } = rows[0];
 
     const chapterDir = path.join(library_path, manga_folder, chapter);
-    if (!fs.existsSync(chapterDir)) return res.status(404).json({ error: "Fejezet mappa nem található" });
-
     const IMAGE_EXTS = new Set([".jpg", ".jpeg", ".png", ".webp", ".avif", ".gif"]);
-    const files = fs.readdirSync(chapterDir)
-      .filter(f => IMAGE_EXTS.has(path.extname(f).toLowerCase()))
-      .sort();
 
+    let files = [];
+    let useR2 = false;
+
+    if (fs.existsSync(chapterDir)) {
+      files = fs.readdirSync(chapterDir)
+        .filter(f => IMAGE_EXTS.has(path.extname(f).toLowerCase()))
+        .sort();
+    } else {
+      // Lokális könyvtár nincs → R2-ből listázzuk
+      const prefix = localPathToR2Key(chapterDir + "/");
+      files = (await listFiles(prefix))
+        .filter(f => IMAGE_EXTS.has(path.extname(f).toLowerCase()))
+        .sort();
+      useR2 = true;
+    }
+
+    if (!files.length) return res.status(404).json({ error: "Fejezet képek nem találhatók (sem lokálisan, sem R2-n)" });
+
+    const R2_PUBLIC = process.env.R2_PUBLIC_URL;
     const project = readProject(userId) || { images: [], createdAt: new Date().toISOString(), status: "ready" };
 
     let added = 0, skipped = 0;
@@ -750,7 +772,13 @@ router.post("/import-chapter", requireAuth, async (req, res) => {
         img.bugFix?.chapter === chapter
       )) { skipped++; continue; }
 
-      const buf = fs.readFileSync(path.join(chapterDir, file));
+      let buf;
+      if (useR2) {
+        const r2Key = localPathToR2Key(path.join(chapterDir, file));
+        buf = await downloadImage(`${R2_PUBLIC}/${r2Key}`);
+      } else {
+        buf = fs.readFileSync(path.join(chapterDir, file));
+      }
       const jpgBuf = await sharp(buf).jpeg({ quality: 92 }).toBuffer();
       const id = `${Date.now()}_${i}_ch`;
       const filename = id + ".jpg";
@@ -760,7 +788,7 @@ router.post("/import-chapter", requireAuth, async (req, res) => {
         id, filename,
         name: `${mangaSlug} ${chapter} #${i + 1}`,
         active: true, translated: false, merged: false,
-        bugFix: { reportId: "", mangaSlug, chapter, imageIndex: i, imageFile: file, mangaTitle: null, library: library_name },
+        bugFix: { reportId: "", chapterBugId: chapterBugId || null, mangaSlug, chapter, imageIndex: i, imageFile: file, mangaTitle: null, library: library_name },
       });
       added++;
     }
@@ -790,7 +818,7 @@ router.post("/submit-bug-fix", requireAuth, async (req, res) => {
     if (!img) return res.status(404).json({ error: "Kép nem található a projektben" });
     if (!img.bugFix) return res.status(400).json({ error: "Ez a kép nem bugfix kép" });
 
-    const { mangaSlug, chapter, imageIndex, imageFile, library } = img.bugFix;
+    const { mangaSlug, chapter, imageIndex, imageFile, library, chapterBugId } = img.bugFix;
     const provider = library || "unknown";
 
     // Fordított verzió preferált, ha nincs akkor az eredeti
@@ -801,13 +829,14 @@ router.post("/submit-bug-fix", requireAuth, async (req, res) => {
 
     let fixId = null;
     let fixedImageUrl = null;
+    let chapterBugClosed = false;
 
     if (mangaSlug && chapter) {
       // Cél: uploads/bugs/javitott/{mangaSlug}/{chapter}/
       const fixedDir = path.join(process.cwd(), "uploads", "bugs", "javitott", mangaSlug, chapter);
       fs.mkdirSync(fixedDir, { recursive: true });
 
-      const targetFilename = imageFile || img.filename;
+      const targetFilename = (imageFile || img.filename).split("?")[0];
       const destPath = path.join(fixedDir, targetFilename);
       fs.copyFileSync(srcPath, destPath);
 
@@ -825,12 +854,24 @@ router.post("/submit-bug-fix", requireAuth, async (req, res) => {
         RETURNING id
       `, [provider, mangaSlug, chapter, imgIdx, imgFile, fixedImageUrl, userId, username]);
       fixId = fixRows[0]?.id;
+
+      // Ha egész fejezet importból jött (chapterBugId) → lezárjuk a chapter_bug_reports bejegyzést
+      if (chapterBugId) {
+        const cbId = parseInt(chapterBugId);
+        if (cbId) {
+          await pool.query(
+            `UPDATE chapter_bug_reports SET is_fixed = true, fixed_by = $1, fixed_at = NOW() WHERE id = $2 AND is_fixed = false`,
+            [userId, cbId]
+          );
+          chapterBugClosed = true;
+        }
+      }
     }
 
     img.submittedAsFix = true;
     writeProject(userId, project);
 
-    res.json({ ok: true, fixId, fixedImageUrl, noMeta: !mangaSlug || !chapter });
+    res.json({ ok: true, fixId, fixedImageUrl, chapterBugClosed, noMeta: !mangaSlug || !chapter });
   } catch (err) {
     console.error("[PADLICROME] submit-bug-fix:", err);
     res.status(500).json({ error: "Szerver hiba: " + err.message });

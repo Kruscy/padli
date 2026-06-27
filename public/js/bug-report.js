@@ -262,7 +262,7 @@ function renderChapterBugCard(r, isAdmin) {
     : `<span class="status open">⚠️ Nyitott</span>`;
 
   const padliBtn = window.currentUser && !r.is_fixed ? `
-    <button onclick="sendChapterToPadlicrome('${escapeHtml(r.manga_slug)}','${escapeHtml(r.chapter)}',this)"
+    <button onclick="sendChapterToPadlicrome('${escapeHtml(r.manga_slug)}','${escapeHtml(r.chapter)}',${r.id},this)"
       class="btn-fix" style="background:#4f46e5;margin-top:8px;">🔮 Egész fejezet Padlicrome-ba</button>
   ` : '';
 
@@ -880,14 +880,14 @@ window.openBugReportById = function(id) {
 };
 
 /* ── Admin javítás korrekció ─────────────────────────────── */
-window.sendChapterToPadlicrome = async function(mangaSlug, chapter, btnEl) {
+window.sendChapterToPadlicrome = async function(mangaSlug, chapter, chapterBugId, btnEl) {
   if (btnEl) { btnEl.disabled = true; btnEl.textContent = '⏳ Importálás...'; }
   try {
     const res = await fetch('/api/padlicrome/import-chapter', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ mangaSlug, chapter }),
+      body: JSON.stringify({ mangaSlug, chapter, chapterBugId }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Hiba');
