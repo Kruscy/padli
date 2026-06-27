@@ -9,7 +9,7 @@ import sharp from "sharp";
 
 const PUBLIC_DIR  = path.join(process.cwd(), "public");
 const BLOG_DIR    = path.join(PUBLIC_DIR, "blog");
-const SITE_URL    = "https://padlizsanfansub.hu";
+const SITE_URL    = process.env.SITE_URL || "http://localhost:3000";
 
 const CAT_LABELS = {
   hir:      "Hírek",

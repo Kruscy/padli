@@ -42,7 +42,7 @@ const router = express.Router();
 function verificationEmailHtml(username, link) {
   return `
   <div style="font-family:sans-serif;max-width:520px;margin:0 auto;background:#1a1a2e;color:#e0e0e0;border-radius:12px;padding:32px 28px">
-    <img src="https://padlizsanfansub.hu/assets/logo.png" style="height:48px;margin-bottom:20px" alt="PadlizsanFanSub">
+    <img src="${process.env.SITE_URL || ""}/assets/logo.png" style="height:48px;margin-bottom:20px" alt="${process.env.SITE_NAME || "PadlizsanFanSub"}">
     <h2 style="color:#a78bfa;margin:0 0 12px">Erősítsd meg az email címed!</h2>
     <p style="color:#bbb;line-height:1.7">Szia <strong style="color:#fff">${username || "Felhasználó"}</strong>! Köszönjük a regisztrációt a PadlizsanFanSub oldalon.</p>
     <p style="color:#bbb;line-height:1.7">Kattints az alábbi gombra az email cím megerősítéséhez:</p>
@@ -51,7 +51,7 @@ function verificationEmailHtml(username, link) {
     </a>
     <p style="color:#888;font-size:0.82rem;margin-top:20px">A link 24 óráig érvényes. Ha nem te regisztráltál, hagyd figyelmen kívül ezt az emailt.</p>
     <hr style="border-color:#2a2a3a;margin:20px 0">
-    <p style="color:#555;font-size:0.78rem">PadlizsanFanSub · padlizsanfansub.hu</p>
+    <p style="color:#555;font-size:0.78rem">${process.env.SITE_NAME || "PadlizsanFanSub"} · ${(process.env.SITE_URL || "").replace(/^https?:\/\//, "")}</p>
   </div>`;
 }
 
@@ -105,7 +105,7 @@ router.post("/auth/register", async (req, res) => {
       [username, email, passwordHash, hashedToken]
     );
 
-    const verifyLink = `${process.env.BASE_URL || "https://padlizsanfansub.hu"}/verify-email.html?token=${rawToken}`;
+    const verifyLink = `${process.env.BASE_URL || process.env.SITE_URL || "http://localhost:3000"}/verify-email.html?token=${rawToken}`;
     await sendMail({
       to: email,
       subject: "✉️ Erősítsd meg az email címed – PadlizsanFanSub",
@@ -145,7 +145,7 @@ router.post("/auth/forgot-password", async (req, res) => {
     }
 
     const resetLink =
-      `https://padlizsanfansub.hu/reset-password.html?token=${token}`;
+      `${process.env.BASE_URL || process.env.SITE_URL || "http://localhost:3000"}/reset-password.html?token=${token}`;
 
     await sendMail({
       to: email,
@@ -290,7 +290,7 @@ router.post("/auth/resend-verification", async (req, res) => {
       [hashedToken, rows[0].id]
     );
 
-    const verifyLink = `${process.env.BASE_URL || "https://padlizsanfansub.hu"}/verify-email.html?token=${rawToken}`;
+    const verifyLink = `${process.env.BASE_URL || process.env.SITE_URL || "http://localhost:3000"}/verify-email.html?token=${rawToken}`;
     await sendMail({
       to: email,
       subject: "✉️ Email megerősítése – PadlizsanFanSub",

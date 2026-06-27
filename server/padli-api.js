@@ -21,10 +21,10 @@ const SECRET_KEY = process.env.PADLI_SECRET_KEY || 'CHANGE_THIS_TO_RANDOM_STRING
 const API_KEY = process.env.PADLI_API_KEY || null;
 
 const APP_VERSION = '1.0.0'; // ← FRISSÍTSD MINDEN VERZIÓVAL!
-const DOWNLOAD_URL = 'https://padlizsanfansub.hu/downloads/Padli-Keposszefu.exe';
+const DOWNLOAD_URL = process.env.PADLI_DOWNLOAD_URL || `${process.env.SITE_URL || 'http://localhost:3000'}/downloads/Padli-Keposszefu.exe`;
 
 // ── Logging Konfiguráció ────────────────────────────────────────────────────
-const LOG_DIR = '/opt/padli/logs/padli-api';
+const LOG_DIR = path.join(process.cwd(), 'logs', 'padli-api');
 const MAX_LOG_SIZE = 10 * 1024 * 1024;  // 10 MB
 const MAX_TOTAL_SIZE = 1024 * 1024 * 1024; // 1 GB
 

@@ -361,7 +361,7 @@ scan()
       }
     }
     console.log(`📢 Sending ${newChaptersResult.length} new manga to Discord...`);
-    const siteUrl = process.env.SITE_URL || "https://padlizsanfansub.hu";
+    const siteUrl = process.env.SITE_URL || "http://localhost:3000";
     const discordBot = new Client({ intents: [GatewayIntentBits.Guilds] });
     try {
       await discordBot.login(process.env.DISCORD_BOT_TOKEN);

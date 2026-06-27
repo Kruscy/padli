@@ -12,7 +12,7 @@ const router = express.Router();
 
 const stripe          = new Stripe(process.env.STRIPE_SECRET_KEY);
 const WEBHOOK_SECRET  = process.env.STRIPE_WEBHOOK_SECRET;
-const SITE_URL        = process.env.SITE_URL || "https://padlizsanfansub.hu";
+const SITE_URL        = process.env.SITE_URL || "http://localhost:3000";
 
 /* ── PONT CSOMAGOK ───────────────────────────────────────── */
 const PACKAGES = {

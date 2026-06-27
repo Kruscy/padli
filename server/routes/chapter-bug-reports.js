@@ -180,7 +180,7 @@ async function reuploadChapterToR2(mangaSlug, chapter) {
 async function purgeChapterCache(mangaSlug, chapter) {
   const CF_ZONE   = process.env.CF_ZONE_ID;
   const CF_TOKEN  = process.env.CF_API_TOKEN;
-  const CF_DOMAIN = process.env.CF_DOMAIN || "https://padlizsanfansub.hu";
+  const CF_DOMAIN = process.env.CF_DOMAIN || "http://localhost:3000";
   const R2_PUBLIC = process.env.R2_PUBLIC_URL;
 
   if (!CF_ZONE || !CF_TOKEN) return { skipped: true, reason: "Nincs CF konfig" };

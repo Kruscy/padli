@@ -598,7 +598,7 @@ router.post("/send-verification-emails", async (req, res) => {
 
     if (!users.length) return res.json({ ok: true, sent: 0, message: "Nincs verifikálandó felhasználó." });
 
-    const BASE_URL = process.env.BASE_URL || "https://padlizsanfansub.hu";
+    const BASE_URL = process.env.BASE_URL || process.env.SITE_URL || "http://localhost:3000";
     const deadline = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000); // 14 nap
 
     let sent = 0, failed = 0;
@@ -629,7 +629,7 @@ router.post("/send-verification-emails", async (req, res) => {
             </a>
             <p style="color:#888;font-size:0.82rem;margin-top:20px">A link 15 napig érvényes.</p>
             <hr style="border-color:#2a2a3a;margin:20px 0">
-            <p style="color:#555;font-size:0.78rem">PadlizsanFanSub · padlizsanfansub.hu</p>
+            <p style="color:#555;font-size:0.78rem">${process.env.SITE_NAME || "PadlizsanFanSub"} · ${(process.env.SITE_URL || "").replace(/^https?:\/\//, "")}</p>
           </div>`;
 
         await sendMail({ to: user.email, subject: "✉️ Erősítsd meg az email címed – PadlizsanFanSub", html });
