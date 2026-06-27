@@ -4,10 +4,10 @@
 // Vagy cron-ból: import { generateBlogPost } from "./scripts/blog-auto-generator.js"
 
 import OpenAI from "openai";
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { pool } from "../db.js";
 import { generateStaticPost } from "../blog-static-generator.js";
 import path from "path";
+import fs from "fs";
 import { fileURLToPath } from "url";
 import { config } from "dotenv";
 
@@ -15,7 +15,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 config({ path: path.join(__dirname, "../../.env") });
 
 const SITE_URL = process.env.SITE_URL || "http://localhost:3000";
-const CF_DOMAIN = process.env.CF_DOMAIN || SITE_URL;
+const COVERS_DIR = path.join(__dirname, "../../uploads/blog-covers");
 
 // ── TÉMÁK LISTÁJA ────────────────────────────────────────────────────────────
 // Az első mindig a legmagasabb prioritású SEO poszt, utána jönnek a heti poszt témák.
@@ -127,26 +127,11 @@ Formázás: HTML (h2, h3, p, ul/li). Legyen benne FAQ szekció.`
   },
 ];
 
-// ── R2 FELTÖLTÉS (blog borítóképekhez) ──────────────────────────────────────
-const r2Client = new S3Client({
-  region: "auto",
-  endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-  credentials: {
-    accessKeyId: process.env.R2_ACCESS_KEY_ID,
-    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
-  },
-});
-
-async function uploadCoverToR2(slug, imageBuffer) {
-  const key = `blog-covers/${slug}.png`;
-  await r2Client.send(new PutObjectCommand({
-    Bucket: process.env.R2_BUCKET_NAME,
-    Key: key,
-    Body: imageBuffer,
-    ContentType: "image/png",
-    CacheControl: "public, max-age=31536000",
-  }));
-  return `${CF_DOMAIN}/blog-covers/${slug}.png`;
+// ── BORÍTÓKÉP MENTÉS (uploads/blog-covers/ — statikusan tálalt Express által) ─
+function saveCoverLocally(slug, imageBuffer) {
+  if (!fs.existsSync(COVERS_DIR)) fs.mkdirSync(COVERS_DIR, { recursive: true });
+  fs.writeFileSync(path.join(COVERS_DIR, `${slug}.png`), imageBuffer);
+  return `/uploads/blog-covers/${slug}.png`;
 }
 
 // ── SLUG SLUGIFY ─────────────────────────────────────────────────────────────
@@ -225,7 +210,7 @@ Wide banner format, no text, no letters, no watermarks.`,
     const imgBuffer = imgData.b64_json
       ? Buffer.from(imgData.b64_json, "base64")
       : Buffer.from(await (await fetch(imgData.url)).arrayBuffer());
-    coverUrl = await uploadCoverToR2(topic.slug, imgBuffer);
+    coverUrl = saveCoverLocally(topic.slug, imgBuffer);
     console.log(`[BlogGen] Borítókép feltöltve: ${coverUrl}`);
   } catch (err) {
     console.warn(`[BlogGen] Borítókép generálás sikertelen (folytatás kép nélkül): ${err.message}`);
