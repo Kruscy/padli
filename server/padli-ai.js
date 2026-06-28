@@ -1208,7 +1208,7 @@ async function generateReply(question, conversationHistory, userKey) {
 }
 
 /* ── UZENET KULDES ──────────────────────────────────────── */
-export async function sendPadliMessage(reply, broadcastFn) {
+async function sendPadliMessage(reply, broadcastFn) {
   if (!reply) return;
   reply = applyLLMSafety(reply);
   if (!reply) return;

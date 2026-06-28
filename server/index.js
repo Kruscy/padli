@@ -12,8 +12,6 @@ import "./discord-bot.js";
 import cron from "node-cron";
 import { generateBlogPost } from "./scripts/blog-auto-generator.js";
 import { generateSitemap } from "./sitemap-generator.js";
-import { sendPadliMessage } from "./padli-ai.js";
-import { broadcast } from "./discord-bot.js";
 
 const PgSession = connectPgSimple(session);
 
@@ -186,5 +184,4 @@ cron.schedule("0 10 * * 1,3,5", async () => {
 app.listen(PORT, "0.0.0.0", async () => {
   console.log(`🍆 PadlizsanFanSub running on port ${PORT}`);
   try { await generateSitemap(); } catch (e) { console.error("[Sitemap] Indulási hiba:", e.message); }
-  setTimeout(() => sendPadliMessage("Visszatértem nyehehe", broadcast).catch(() => {}), 3000);
 });
