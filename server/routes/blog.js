@@ -2,6 +2,7 @@
 import express from "express";
 import { pool } from "../db.js";
 import { generateStaticPost, regenerateIndex } from "../blog-static-generator.js";
+import { generateSitemap } from "../sitemap-generator.js";
 
 const router = express.Router();
 
@@ -169,7 +170,10 @@ router.post("/", requireAdmin, async (req, res) => {
     const post = rows[0];
     res.status(201).json(post);
     // Statikus HTML generálás közzétételkor
-    if (post.published) generateStaticPost(post.slug).catch(console.error);
+    if (post.published) {
+      generateStaticPost(post.slug).catch(console.error);
+      generateSitemap().catch(console.error);
+    }
   } catch (err) {
     if (err.code === "23505") return res.status(409).json({ error: "Ez a slug már létezik" });
     console.error("Blog create error:", err);
@@ -198,6 +202,7 @@ router.put("/:slug", requireAdmin, async (req, res) => {
     res.json(updated);
     // Statikus HTML újragenerálás – közzétett vagy visszavont poszt esetén is
     generateStaticPost(updated.slug).catch(console.error);
+    generateSitemap().catch(console.error);
   } catch (err) {
     console.error("Blog update error:", err);
     res.status(500).json({ error: "Szerver hiba" });
