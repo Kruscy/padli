@@ -41,10 +41,11 @@ bot.on("messageCreate", async msg => {
   if (msg.channelId !== CHANNEL_ID) return;
   if (msg.author.bot) return;
 
+  const displayName = msg.member?.displayName || msg.author.globalName || msg.author.username;
   await pool.query(
-    `INSERT INTO chat_messages (source, author, avatar, content)
-     VALUES ('discord', $1, $2, $3)`,
-    [msg.author.username, msg.author.displayAvatarURL({ size: 32 }), msg.content]
+    `INSERT INTO chat_messages (source, author, display_name, avatar, content)
+     VALUES ('discord', $1, $2, $3, $4)`,
+    [msg.author.username, displayName, msg.author.displayAvatarURL({ size: 32 }), msg.content]
   );
 
   broadcast({
