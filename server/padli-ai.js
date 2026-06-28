@@ -209,6 +209,9 @@ function applyLLMSafety(reply) {
   if (!reply || !config.features.enableLLMSafety) return reply;
   const s = config.llmSafety;
   let r = reply;
+  // qwen3/deepseek thinking blokk eltávolítása
+  r = r.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+  r = r.replace(/^[\s\S]*?<\/think>/i, "").trim();
   if (s.stripSelfName)  r = r.replace(/^Padli[!,]?\s*/i, "").trim();
   if (s.stripNewlines)  r = r.replace(/\n{2,}/g, " ").replace(/\n/g, " ").trim();
   if (s.maxResponseChars && r.length > s.maxResponseChars) {
@@ -858,24 +861,32 @@ function extractSearchTerm(question) {
 function buildContext(local, anilist, jikan, mangadex, kitsu, shikimori) {
   let ctx = "";
   if (local) {
-    const chaps = local.chapter_count > 0 ? local.chapter_count + " fejezet olvasható nálunk" : "nincs feltöltve fejezet";
-    const score = local.average_score ? " | " + (local.average_score / 10).toFixed(1) + "/10" : "";
-    ctx += "\n[PadliDB (SAJÁT OLDALUNK): \"" + local.title + "\" MEGVAN – " + chaps + " | " + (local.status || "") + score + "]";
+    const chaps = local.chapter_count > 0
+      ? local.chapter_count + " fejezet olvasható nálunk"
+      : "szerepel nálunk de nincs feltöltött fejezet";
+    const score = local.average_score ? " | értékelés: " + (local.average_score / 10).toFixed(1) + "/10" : "";
+    ctx += "\n[FONTOS – PadliDB (SAJÁT OLDALUNK): \"" + local.title + "\" MEGVAN – " + chaps + score + "]";
   }
   const aniItem = anilist?.anime || anilist?.manga;
   if (aniItem) {
     const type = anilist?.anime ? "anime" : "manga";
     const title = aniItem.title?.english || aniItem.title?.romaji;
-    const score = aniItem.averageScore ? (aniItem.averageScore / 10).toFixed(1) + "/10" : "N/A";
+    const score = aniItem.averageScore ? (aniItem.averageScore / 10).toFixed(1) + "/10" : "ismeretlen";
     const format = aniItem.format ? " [" + aniItem.format + "]" : "";
-    const count = aniItem.episodes ? aniItem.episodes + " ep" : aniItem.chapters ? aniItem.chapters + " fejezet" : "";
-    const desc = (aniItem.description || "").substring(0, 120);
-    ctx += "\n[AniList: " + type + format + " – \"" + title + "\" | " + score + " | " + count + " | " + aniItem.status + " | " + (aniItem.genres || []).slice(0, 3).join(", ") + " | " + desc + "...]";
+    const count = aniItem.episodes
+      ? "Epizódok száma: " + aniItem.episodes
+      : aniItem.chapters
+        ? "Fejezetek száma: " + aniItem.chapters
+        : "fejezetek száma ismeretlen";
+    const status = aniItem.status === "FINISHED" ? "befejezett" : aniItem.status === "RELEASING" ? "folyamatban" : (aniItem.status || "");
+    const genres = (aniItem.genres || []).slice(0, 4).join(", ");
+    const desc = (aniItem.description || "").replace(/<[^>]*>/g, "").substring(0, 150);
+    ctx += "\n[AniList: " + type + format + " – \"" + title + "\" | Pontszám: " + score + " | " + count + " | Állapot: " + status + " | Műfaj: " + genres + " | " + desc + "]";
   }
-  if (jikan)     ctx += "\n[MAL: " + jikan.type + " – \"" + jikan.title + "\" | " + jikan.score + " | " + jikan.count + " | " + jikan.status + "]";
-  if (mangadex)  ctx += "\n[MangaDex: \"" + mangadex.title + "\" | " + mangadex.status + " | " + mangadex.chap + "]";
-  if (kitsu)     ctx += "\n[Kitsu: \"" + kitsu.title + "\" | " + kitsu.score + " | " + kitsu.count + "]";
-  if (shikimori) ctx += "\n[Shikimori: \"" + shikimori.title + "\" | " + shikimori.score + " | " + shikimori.count + "]";
+  if (jikan)     ctx += "\n[MAL: " + jikan.type + " – \"" + jikan.title + "\" | Pontszám: " + jikan.score + " | " + jikan.count + " | " + jikan.status + "]";
+  if (mangadex)  ctx += "\n[MangaDex: \"" + mangadex.title + "\" | " + mangadex.status + " | " + mangadex.chap + " | Műfaj: " + mangadex.genres + "]";
+  if (kitsu)     ctx += "\n[Kitsu: \"" + kitsu.title + "\" | Pontszám: " + kitsu.score + " | " + kitsu.count + "]";
+  if (shikimori) ctx += "\n[Shikimori: \"" + shikimori.title + "\" | Pontszám: " + shikimori.score + " | " + shikimori.count + "]";
   return ctx;
 }
 
@@ -1185,8 +1196,11 @@ async function generateReply(question, conversationHistory, userKey) {
 
   const history = buildHistory(conversationHistory, searchTerm);
   const msgs = [{ role: "system", content: getSystemPrompt() }, ...history];
-  // NE ismételje vissza az eredeti kérdést – csak a kontextust és egy semleges kérést küldünk
-  const cleanQ = "Válaszolj magyarul, 1-2 mondatban." + contextStr;
+  // Az adatokat expliciten adjuk meg, ne találjon ki semmit
+  const cleanQ = "Az alábbi adatok alapján válaszolj magyarul, maximum 2 rövid mondatban. " +
+    "Csak a megadott adatokat használd, ne találj ki semmit. " +
+    "Ha PadliDB adat van, emeld ki hogy nálunk megvan." +
+    contextStr;
   if (msgs[msgs.length - 1]?.role === "user") msgs[msgs.length - 1].content = cleanQ;
   else msgs.push({ role: "user", content: cleanQ });
 
