@@ -224,9 +224,9 @@ const config = {
   ],
 
   patreonTriggers: {
-    keywords:  ["patreon","elofizetes","elofizet","tamogat","premium","premiam"],
-    priceWith: ["kerul","jon","lakat","fejezet","resz"],
-    lockWith:  ["fizet","eltun","ar","nyit"],
+    keywords:  ["patreon","elofizetes","elofizet","tamogat","premium","premiam","tagsag","tag legyek","tag leszek","tagdij","tagkartya","vip","supporter","patreon tag"],
+    priceWith: ["kerul","jon","lakat","fejezet","resz","mennyibe","forint","ft"],
+    lockWith:  ["fizet","eltun","ar","nyit","lezart","lakat","megveszem","megvesszuk"],
   },
 
   adultTriggers: ["hentai","18+","ecchi","felnott tartalom","adult content","nsfw"],
