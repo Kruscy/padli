@@ -1,4 +1,4 @@
-import pool from "./db.js";
+import { pool } from "./db.js";
 import { writeFile } from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
