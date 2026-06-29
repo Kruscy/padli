@@ -1,7 +1,16 @@
 import express from "express";
+import rateLimit from "express-rate-limit";
 import { requireAdmin } from "../middleware/auth.js";
 
 const router = express.Router();
+
+const invoiceRateLimit = rateLimit({
+  windowMs: 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Túl sok próbálkozás, próbáld újra 1 perc múlva." },
+});
 
 const PATREON_PARTNER = {
   name: "Patreon Ireland Limited, German Branch",
@@ -43,7 +52,7 @@ async function findOrCreatePatreonPartner() {
 /* POST /api/patreon-invoice
    Body: { password, amount, description? }
    Csak admin + helyes jelszó esetén működik */
-router.post("/", requireAdmin, async (req, res) => {
+router.post("/", invoiceRateLimit, requireAdmin, async (req, res) => {
   const { password, amount, description } = req.body;
 
   if (!password || password !== process.env.SERVER_ADMIN_PASSWORD) {
