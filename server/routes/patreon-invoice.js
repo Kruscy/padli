@@ -46,7 +46,7 @@ async function findOrCreatePatreonPartner() {
 router.post("/", requireAdmin, async (req, res) => {
   const { password, amount, description } = req.body;
 
-  if (!password || password !== process.env.PATREON_INVOICE_PASSWORD) {
+  if (!password || password !== process.env.SERVER_ADMIN_PASSWORD) {
     return res.status(403).json({ error: "Helytelen jelszó" });
   }
 
