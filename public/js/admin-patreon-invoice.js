@@ -90,13 +90,6 @@
     });
   }
 
-  // Tab váltáskor inicializálás (ha a panel rejtett volt betöltéskor)
-  document.addEventListener("click", e => {
-    if (e.target.dataset.tab === "tab-patreon-invoice") {
-      setTimeout(initPatreonInvoice, 50);
-    }
-  });
-
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", initPatreonInvoice);
   } else {
