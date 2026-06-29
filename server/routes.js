@@ -34,6 +34,7 @@ import ocrRoutes from "./routes/ocr.js";
 import pointsRoutes from "./routes/points.js";
 import padlicromeRoutes from "./routes/padlicrome.js";
 import gdprRoutes from "./routes/gdpr.js";
+import patreonInvoiceRoutes from "./routes/patreon-invoice.js";
 
 
 const router = express.Router();
@@ -448,6 +449,7 @@ router.use("/ocr", ocrRoutes);
 router.use("/points", pointsRoutes);
 router.use("/padlicrome", padlicromeRoutes);
 router.use("/gdpr", gdprRoutes);
+router.use("/patreon-invoice", patreonInvoiceRoutes);
 // router.use("/admin/fansub", fansubAdminRoutes); // FansubÉlet letiltva
 
 export default router;
