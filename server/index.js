@@ -41,6 +41,7 @@ app.use(helmet({
       scriptSrc:       ["'self'",
                         "'sha256-KbDJwwq2mVzpJQquothLjsd2EGAi2C42lhXRTSlCHJ8='",
                         "'sha256-uWTbFw+oMWAOmFt0aWbGK/DHjclUg7piNA/N+aXguMg='",
+                        "'sha256-SN6gRQ39qgoFcepC8OZB+rrT0j5FXFctW1bmQUQqC/I='",
                         "https://mamato.csimota.duckdns.org",
                         ...(process.env.PADLI_API_ORIGIN ? [process.env.PADLI_API_ORIGIN] : [])],
       scriptSrcAttr:   ["'unsafe-inline'"],
