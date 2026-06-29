@@ -66,7 +66,7 @@ router.post("/", requireAdmin, async (req, res) => {
       type:             "invoice",
       fulfillment_date: today,
       due_date:         today,
-      payment_method:   "eloreut",
+      payment_method:   "wire_transfer",
       electronic:       true,
       paid:             true,
       currency:         "HUF",
