@@ -751,8 +751,10 @@ const RECIPE_KEYWORDS = [
   "recept","főzz","főzzek","főzzünk","főzni","főztem","főzzél","sütni","süssek",
   "étel","ételek","kalória","kcal","vega","vegetáriánus","desszert","sütemény",
   "leves","mit főzzek","mit süssek","hozzávalók","hozzávalókból","kamrafy",
-  "befőzés","tepsis","gyors vacsora","gyors ebéd","vacsorát","ebédet főz",
-  "reggeli ötlet","krumpliból","csirkéből","marhából","tojásból","tejfölből",
+  "befőzés","tepsis","krumpliból","csirkéből","marhából","tojásból","tejfölből",
+  "reggelire","reggeli ötlet","reggelit","vacsorára","vacsorát","ebédre","ebédet",
+  "enni","ennivaló","mit egyek","mit együnk","mit quyek","főételt","főétel",
+  "gyors vacsora","gyors ebéd","ebéd ötlet","vacsora ötlet",
 ];
 
 function isRecipeQuestion(text) {
@@ -1161,7 +1163,7 @@ async function generateReply(question, conversationHistory, userKey) {
     return fillTemplate(tpl, { term: searchTerm }) || "Sajnos a \"" + searchTerm + "\" nincs meg nalunk.";
   }
 
-  if (intent === "recommendation") {
+  if (intent === "recommendation" && !isRecipeQuestion(question)) {
     const genres = extractGenreTags(question);
     plog("RECOMMEND", "genre-k: [" + (genres.join(",") || "nincs") + "]");
     padliLog({ event: "recommendation_question", query: question, genres });
