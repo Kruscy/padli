@@ -797,6 +797,18 @@ function parseKamrafyRequest(question) {
   return body;
 }
 
+async function kamrafyApiCall(body) {
+  const res = await fetch(KAMRAFY_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Api-Key": KAMRAFY_KEY },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data?.recipes || [];
+}
+
 async function searchKamrafy(question) {
   if (!KAMRAFY_KEY) return null;
   const cacheKey = "kamrafy:" + question.slice(0, 60);
@@ -805,15 +817,27 @@ async function searchKamrafy(question) {
   try {
     const body = parseKamrafyRequest(question);
     plog("KAMRAFY", "keres: " + JSON.stringify(body).slice(0, 120));
-    const res = await fetch(KAMRAFY_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Api-Key": KAMRAFY_KEY },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!res.ok) { plog("KAMRAFY", "hiba: " + res.status); return null; }
-    const data = await res.json();
-    const recipes = data?.recipes || [];
+
+    // 1. Próbálkozás az eredeti body-val
+    let recipes = await kamrafyApiCall(body);
+
+    // 2. Ha 0 találat: Ollama generál jobb keresőkifejezést
+    if (!recipes.length) {
+      plog("KAMRAFY", "0 talalat, Ollama query-t general...");
+      const ollamaQuery = await askOllama([
+        { role: "system", content: "Te egy receptkereső asszisztens vagy. A feladatod: a felhasználó kérdéséből kinyerni 1-2 konkrét ételnevet vagy alapanyagnevet magyarul, amelyre egy receptadatbázisban keresni lehet. Csak az ételnevet/alapanyagot írd, semmi mást! Pl: 'tojás', 'palacsinta', 'csirkemell'" },
+        { role: "user", content: question.replace(/padli[,!]?\s*/gi, "").trim() }
+      ]);
+      if (ollamaQuery && ollamaQuery.trim().length > 1) {
+        const terms = ollamaQuery.split(/[,;\/\n]/).map(s => s.trim()).filter(s => s.length > 1 && s.length < 40);
+        for (const term of terms.slice(0, 3)) {
+          plog("KAMRAFY", "fallback query: " + term);
+          recipes = await kamrafyApiCall({ query: term, limit: 5 });
+          if (recipes.length) break;
+        }
+      }
+    }
+
     if (!recipes.length) return null;
     cacheSet(cacheKey, recipes);
     return recipes;
