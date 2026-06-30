@@ -209,6 +209,8 @@ function checkEdgeCase(str) {
 
 function applyLLMSafety(reply) {
   if (!reply || !config.features.enableLLMSafety) return reply;
+  // Kamrafy recept válasz: ne szűrjük, megőrizzük a linkeket és sortöréseket
+  if (reply.includes("kamrafy.hu")) return reply;
   const s = config.llmSafety;
   let r = reply;
   // qwen3/deepseek thinking blokk eltávolítása
@@ -1112,19 +1114,18 @@ async function generateReply(question, conversationHistory, userKey) {
     plog("KAMRAFY", "recept kérdés: " + question.slice(0, 60));
     const recipes = await searchKamrafy(question);
     if (recipes && recipes.length) {
-      const recipeCtx = recipes.slice(0, 5).map((r, i) => {
-        const time  = r.total_time ? r.total_time + " perc" : (r.prep_time || r.cook_time ? ((r.prep_time||0)+(r.cook_time||0)) + " perc" : "");
-        const kcal  = r.calories_per_serving ? r.calories_per_serving + " kcal/adag" : "";
-        const diff  = r.difficulty || "";
-        const parts = [r.title, time, kcal, diff, r.url].filter(Boolean);
-        return (i+1) + ". " + parts.join(" | ");
-      }).join("\n");
-      return await askOllama([
-        { role: "system", content: "Te Padli vagy, a PadlizsanFanSub manga/anime közösségi bot. Ha valaki ételt vagy receptet kér, segítesz a Kamrafy.hu alapján. Ajánlj recepteket barátságosan, magyarul, max 4-5 mondatban. Mindig add meg a linket is." },
-        { role: "user", content: "A felhasználó ezt kérdezte: \"" + question.replace(/padli[,!]?\s*/gi,"").trim() + "\"\n\nA Kamrafy.hu adatbázisából ezek a receptek jönnek szóba:\n" + recipeCtx + "\n\nAjánlj közülük 3-5-öt röviden, add meg a linket is minden receptnél!" }
-      ]);
+      const lines = recipes.slice(0, 5).map((r, i) => {
+        const meta = [];
+        const time = r.total_time ? r.total_time + " perc" : (r.prep_time || r.cook_time ? ((r.prep_time||0)+(r.cook_time||0)) + " perc" : null);
+        if (time) meta.push(time);
+        if (r.calories_per_serving) meta.push(r.calories_per_serving + " kcal");
+        if (r.difficulty) meta.push(r.difficulty);
+        const metaStr = meta.length ? " (" + meta.join(", ") + ")" : "";
+        return (i+1) + ". " + r.title + metaStr + " → " + r.url;
+      });
+      return "Íme néhány recept a Kamrafy.hu-ról 🍳\n" + lines.join("\n");
     }
-    return "Sajnos most nem találok megfelelő receptet a Kamrafy.hu adatbázisában, próbálj pontosabban fogalmazni (pl. írd le mi van otthon, vagy milyen ételt szeretnél)!";
+    return "Sajnos most nem találok megfelelő receptet a Kamrafy.hu adatbázisában – próbálj pontosabban fogalmazni (pl. írd le mi van otthon, vagy milyen ételt szeretnél)!";
   }
 
   if (availabilityQ && searchTerm) {
