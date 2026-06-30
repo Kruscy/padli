@@ -1114,16 +1114,33 @@ async function generateReply(question, conversationHistory, userKey) {
     plog("KAMRAFY", "recept kérdés: " + question.slice(0, 60));
     const recipes = await searchKamrafy(question);
     if (recipes && recipes.length) {
-      const lines = recipes.slice(0, 5).map((r, i) => {
-        const meta = [];
+      const top = recipes.slice(0, 2);
+      const recipeCtx = top.map((r, i) => {
         const time = r.total_time ? r.total_time + " perc" : (r.prep_time || r.cook_time ? ((r.prep_time||0)+(r.cook_time||0)) + " perc" : null);
-        if (time) meta.push(time);
-        if (r.calories_per_serving) meta.push(r.calories_per_serving + " kcal");
-        if (r.difficulty) meta.push(r.difficulty);
-        const metaStr = meta.length ? " (" + meta.join(", ") + ")" : "";
-        return (i+1) + ". " + r.title + metaStr + " → " + r.url;
+        const parts = [
+          "Cím: " + r.title,
+          time ? "Idő: " + time : null,
+          r.calories_per_serving ? "Kalória: " + r.calories_per_serving + " kcal/adag" : null,
+          r.difficulty ? "Nehézség: " + r.difficulty : null,
+          r.description ? "Leírás: " + r.description.slice(0, 100) : null,
+          "Link: " + r.url,
+        ].filter(Boolean);
+        return (i+1) + ". recept:\n" + parts.join("\n");
+      }).join("\n\n");
+
+      const ollamaReply = await askOllama([
+        { role: "system", content: "Te Padli vagy, a PadlizsanFanSub manga/anime közösségi bot. Ha receptet kérnek, ajánlasz 1-2 ételt a Kamrafy.hu-ról barátságosan, magyarul. Az ajánlásban mindig szerepeljen a recept neve és a kamrafy.hu link." },
+        { role: "user", content: "A kérdés: \"" + question.replace(/padli[,!]?\s*/gi,"").trim() + "\"\n\nEzek a Kamrafy.hu receptjei:\n" + recipeCtx + "\n\nAjánld be őket 2-4 mondatban, és minden receptnél add meg a linket!" }
+      ]);
+
+      // Garantáljuk hogy a linkek benne vannak, ha Ollama kihagyta
+      let reply = ollamaReply || "";
+      top.forEach(r => {
+        if (r.url && !reply.includes(r.url)) {
+          reply += "\n" + r.title + ": " + r.url;
+        }
       });
-      return "Íme néhány recept a Kamrafy.hu-ról 🍳\n" + lines.join("\n");
+      return reply;
     }
     return "Sajnos most nem találok megfelelő receptet a Kamrafy.hu adatbázisában – próbálj pontosabban fogalmazni (pl. írd le mi van otthon, vagy milyen ételt szeretnél)!";
   }
