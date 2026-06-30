@@ -8,6 +8,8 @@ import config from "./padli-config.js";
 const OLLAMA_URL    = config.general.ollamaUrl;
 const OLLAMA_MODEL  = config.general.ollamaModel;
 const ANILIST_URL   = "https://graphql.anilist.co";
+const KAMRAFY_URL   = "https://kamrafy.hu/api/v1/recommend";
+const KAMRAFY_KEY   = process.env.KAMRAFY_API_KEY || "";
 const JIKAN_URL     = "https://api.jikan.moe/v4";
 const MANGADEX_URL  = "https://api.mangadex.org";
 const KITSU_URL     = "https://kitsu.io/api/edge";
@@ -742,6 +744,81 @@ async function searchShikimori(searchTerm) {
   } catch (err) { console.error(LOG + " Shikimori error: " + err.message); return null; }
 }
 
+/* ── KAMRAFY RECEPT API ─────────────────────────────────── */
+const RECIPE_KEYWORDS = [
+  "recept","főzz","főzzek","főzzünk","főzni","főztem","főzzél","sütni","süssek",
+  "étel","ételek","kalória","kcal","vega","vegetáriánus","desszert","sütemény",
+  "leves","mit főzzek","mit süssek","hozzávalók","hozzávalókból","kamrafy",
+  "befőzés","tepsis","gyors vacsora","gyors ebéd","vacsorát","ebédet főz",
+  "reggeli ötlet","krumpliból","csirkéből","marhából","tojásból","tejfölből",
+];
+
+function isRecipeQuestion(text) {
+  const l = text.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  return RECIPE_KEYWORDS.some(k =>
+    l.includes(k.normalize("NFD").replace(/[̀-ͯ]/g, ""))
+  );
+}
+
+function parseKamrafyRequest(question) {
+  const l = question.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  const body = {};
+
+  // Hozzávalók kinyerése: "van krumpli tojás tejföl" / "krumpliból és tojásból"
+  const ingMatch = question.match(/(?:van\s+otthon|van\s+|otthon\s+van|hozzávalók?[:\s]+)([^.?!]{5,60})/i);
+  if (ingMatch) {
+    const rawIngs = ingMatch[1].replace(/\b(és|meg|valamint|is)\b/gi, ",").split(/[,;]/);
+    const cleaned = rawIngs.map(s => s.replace(/\b(ból|ből|ból|ből|t|k)\b/g, "").trim()).filter(s => s.length > 2);
+    if (cleaned.length) body.ingredients = cleaned;
+  }
+
+  // Nehézség
+  if (l.includes("konnyu") || l.includes("egyszeru") || l.includes("gyors")) body.filters = { ...(body.filters||{}), difficulty: "könnyű" };
+  else if (l.includes("nehez") || l.includes("bonyolult")) body.filters = { ...(body.filters||{}), difficulty: "nehéz" };
+
+  // Időkorlát
+  const timeMatch = l.match(/(\d+)\s*perc/);
+  if (timeMatch) body.filters = { ...(body.filters||{}), max_total_time: parseInt(timeMatch[1]) };
+  else if (l.includes("gyors")) body.filters = { ...(body.filters||{}), max_total_time: 30 };
+
+  // Kategória
+  const cats = { leves: "leves", desszert: "desszert", sutes: "sütemény", tepi: "tepsis", befoz: "befőzés" };
+  for (const [k, v] of Object.entries(cats)) {
+    if (l.includes(k)) { body.filters = { ...(body.filters||{}), category: v }; break; }
+  }
+
+  // Query – eredeti kérdés padli nélkül
+  body.query = question.replace(/padli[,!]?\s*/gi, "").trim().slice(0, 200);
+  body.limit = 5;
+  return body;
+}
+
+async function searchKamrafy(question) {
+  if (!KAMRAFY_KEY) return null;
+  const cacheKey = "kamrafy:" + question.slice(0, 60);
+  const cached = cacheGet(cacheKey);
+  if (cached !== null) return cached;
+  try {
+    const body = parseKamrafyRequest(question);
+    plog("KAMRAFY", "keres: " + JSON.stringify(body).slice(0, 120));
+    const res = await fetch(KAMRAFY_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Api-Key": KAMRAFY_KEY },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) { plog("KAMRAFY", "hiba: " + res.status); return null; }
+    const data = await res.json();
+    const recipes = data?.recipes || [];
+    if (!recipes.length) return null;
+    cacheSet(cacheKey, recipes);
+    return recipes;
+  } catch (err) {
+    console.error(LOG + " Kamrafy error: " + err.message);
+    return null;
+  }
+}
+
 /* ── OLLAMA ─────────────────────────────────────────────── */
 async function askOllama(messages) {
   try {
@@ -1029,6 +1106,26 @@ async function generateReply(question, conversationHistory, userKey) {
   plog("SEARCH", "\"" + searchTerm + "\" | tipus: " + mediaType + " | intent: " + (intent || "search"));
   padliLog({ event: "search_start", query: question, searchTerm, mediaType, intent: intent || "search" });
   if (searchTerm) { trackAnalytics("query", searchTerm); setTopicMemory(userKey, searchTerm); }
+
+  // ── KAMRAFY RECEPT ──────────────────────────────────────
+  if (isRecipeQuestion(question)) {
+    plog("KAMRAFY", "recept kérdés: " + question.slice(0, 60));
+    const recipes = await searchKamrafy(question);
+    if (recipes && recipes.length) {
+      const recipeCtx = recipes.slice(0, 5).map((r, i) => {
+        const time  = r.total_time ? r.total_time + " perc" : (r.prep_time || r.cook_time ? ((r.prep_time||0)+(r.cook_time||0)) + " perc" : "");
+        const kcal  = r.calories_per_serving ? r.calories_per_serving + " kcal/adag" : "";
+        const diff  = r.difficulty || "";
+        const parts = [r.title, time, kcal, diff, r.url].filter(Boolean);
+        return (i+1) + ". " + parts.join(" | ");
+      }).join("\n");
+      return await askOllama([
+        { role: "system", content: "Te Padli vagy, a PadlizsanFanSub manga/anime közösségi bot. Ha valaki ételt vagy receptet kér, segítesz a Kamrafy.hu alapján. Ajánlj recepteket barátságosan, magyarul, max 4-5 mondatban. Mindig add meg a linket is." },
+        { role: "user", content: "A felhasználó ezt kérdezte: \"" + question.replace(/padli[,!]?\s*/gi,"").trim() + "\"\n\nA Kamrafy.hu adatbázisából ezek a receptek jönnek szóba:\n" + recipeCtx + "\n\nAjánlj közülük 3-5-öt röviden, add meg a linket is minden receptnél!" }
+      ]);
+    }
+    return "Sajnos most nem találok megfelelő receptet a Kamrafy.hu adatbázisában, próbálj pontosabban fogalmazni (pl. írd le mi van otthon, vagy milyen ételt szeretnél)!";
+  }
 
   if (availabilityQ && searchTerm) {
     plog("AVAILABILITY", "\"" + searchTerm + "\"");
