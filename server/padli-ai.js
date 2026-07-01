@@ -821,16 +821,27 @@ async function searchKamrafy(question) {
     // 1. Próbálkozás az eredeti body-val
     let recipes = await kamrafyApiCall(body);
 
-    // 2. Ha 0 találat: Ollama generál jobb keresőkifejezést
+    // 2. Ha 0 találat: Ollama generál konkrét keresőkifejezést
     if (!recipes.length) {
       plog("KAMRAFY", "0 talalat, Ollama query-t general...");
-      const ollamaQuery = await askOllama([
-        { role: "system", content: "Te egy receptkereső asszisztens vagy. A feladatod: a felhasználó kérdéséből kinyerni 1-2 konkrét ételnevet vagy alapanyagnevet magyarul, amelyre egy receptadatbázisban keresni lehet. Csak az ételnevet/alapanyagot írd, semmi mást! Pl: 'tojás', 'palacsinta', 'csirkemell'" },
-        { role: "user", content: question.replace(/padli[,!]?\s*/gi, "").trim() }
+      const ollamaRaw = await askOllama([
+        { role: "system", content: "Felad: a kérdésből kinyerni 1-3 rövid magyar ételnevet vagy alapanyagnevet, vesszővel elválasztva. CSAK az étel/alapanyag nevét írjuk, semmi egyebet! Példák: 'tojás, kenyér', 'csirkemell', 'leves, zöldség'. NE írjunk mondatot, NE adjunk magyarázatot." },
+        { role: "user", content: question.replace(/padli[,!]?\s*/gi, "").trim().slice(0, 100) }
       ]);
-      if (ollamaQuery && ollamaQuery.trim().length > 1) {
-        const terms = ollamaQuery.split(/[,;\/\n]/).map(s => s.trim()).filter(s => s.length > 1 && s.length < 40);
-        for (const term of terms.slice(0, 3)) {
+      if (ollamaRaw) {
+        // Csak rövid, reálisan étel-szerű szavakat fogadunk el
+        const raw = ollamaRaw.replace(/[^a-záéíóöőúüűA-ZÁÉÍÓÖŐÚÜŰ0-9,; -]/g, "");
+        const terms = raw
+          .split(/[,;\/\n]/)
+          .map(s => s.trim())
+          .filter(s => s.length >= 3 && s.length <= 15);
+        // Minden termnél próbáljuk az eredeti szót ÉS az első szótagot is
+        const toTry = [];
+        for (const t of terms.slice(0, 3)) {
+          toTry.push(t);
+          if (t.includes(" ")) toTry.push(t.split(" ")[0]); // "csirke mell" → "csirke"
+        }
+        for (const term of toTry.slice(0, 5)) {
           plog("KAMRAFY", "fallback query: " + term);
           recipes = await kamrafyApiCall({ query: term, limit: 5 });
           if (recipes.length) break;
@@ -880,7 +891,7 @@ function extractGenreTags(question) {
 
 // 1. Statikus config genre-k - de ha van DB override, azt használja
   const found = config.genres.filter(({ genre, words }) => {
-    const activeWords = dbGenreWords[genre] || words; // DB felülírja ha van
+    const activeWords = dbGenreWords[genre] ? [...words, ...dbGenreWords[genre]] : words;
     return activeWords.some(w => l.includes(w));
   }).map(({ genre }) => genre);
   // 2. DB tag szavak – ha a user szava egyezik a tag szó listájával
