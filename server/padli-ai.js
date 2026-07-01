@@ -768,31 +768,41 @@ function parseKamrafyRequest(question) {
   const l = question.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
   const body = {};
 
-  // Hozzávalók kinyerése: "van krumpli tojás tejföl" / "krumpliból és tojásból"
+  // Hozzávalók kinyerése
   const ingMatch = question.match(/(?:van\s+otthon|van\s+|otthon\s+van|hozzávalók?[:\s]+)([^.?!]{5,60})/i);
   if (ingMatch) {
     const rawIngs = ingMatch[1].replace(/\b(és|meg|valamint|is)\b/gi, ",").split(/[,;]/);
-    const cleaned = rawIngs.map(s => s.replace(/\b(ból|ből|ból|ből|t|k)\b/g, "").trim()).filter(s => s.length > 2);
+    const cleaned = rawIngs.map(s => s.replace(/\b(ból|ből|t|k)\b/g, "").trim()).filter(s => s.length > 2);
     if (cleaned.length) body.ingredients = cleaned;
   }
 
   // Nehézség
-  if (l.includes("konnyu") || l.includes("egyszeru") || l.includes("gyors")) body.filters = { ...(body.filters||{}), difficulty: "könnyű" };
-  else if (l.includes("nehez") || l.includes("bonyolult")) body.filters = { ...(body.filters||{}), difficulty: "nehéz" };
+  if (l.includes("konnyu") || l.includes("egyszeru") || l.includes("gyors")) body.filters = { difficulty: "könnyű" };
+  else if (l.includes("nehez") || l.includes("bonyolult")) body.filters = { difficulty: "nehéz" };
 
   // Időkorlát
   const timeMatch = l.match(/(\d+)\s*perc/);
   if (timeMatch) body.filters = { ...(body.filters||{}), max_total_time: parseInt(timeMatch[1]) };
   else if (l.includes("gyors")) body.filters = { ...(body.filters||{}), max_total_time: 30 };
 
-  // Kategória
-  const cats = { leves: "leves", desszert: "desszert", sutes: "sütemény", tepi: "tepsis", befoz: "befőzés" };
-  for (const [k, v] of Object.entries(cats)) {
-    if (l.includes(k)) { body.filters = { ...(body.filters||{}), category: v }; break; }
+  // Meal type filter (új API feature)
+  const mealTypes = { reggeli: "reggeli", desszert: "desszert", sutes: "sütemény" };
+  for (const [k, v] of Object.entries(mealTypes)) {
+    if (l.includes(k)) { body.filters = { ...(body.filters||{}), meal_type: v }; break; }
   }
 
-  // Query – eredeti kérdés padli nélkül
-  body.query = question.replace(/padli[,!]?\s*/gi, "").trim().slice(0, 200);
+  // Query: az ételre utaló kulcsszó kinyerése a kérdésből
+  const foodWords = ["reggeli","leves","desszert","sütemény","palacsinta","gulyás","rántotta",
+    "csirke","marhahús","sertés","tészta","rizs","pizza","saláta","lencse","gomba","hal"];
+  const foundFood = foodWords.find(w => l.includes(w.normalize("NFD").replace(/[̀-ͯ]/g,"")));
+  if (foundFood) {
+    body.query = foundFood;
+  } else if (body.ingredients?.length) {
+    body.query = body.ingredients[0];
+  } else {
+    body.query = question.replace(/padli[,!]?\s*/gi,"").replace(/[?!]/g,"").trim().slice(0, 60);
+  }
+
   body.limit = 5;
   return body;
 }
@@ -821,34 +831,16 @@ async function searchKamrafy(question) {
     // 1. Próbálkozás az eredeti body-val
     let recipes = await kamrafyApiCall(body);
 
-    // 2. Ha 0 találat: statikus étkezés-típus fallback, majd hozzávaló kinyerés
-    if (!recipes.length) {
-      const lq = question.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+    // 2. Ha 0 találat: category filterrel próbáljuk
+    if (!recipes.length && body.filters?.meal_type) {
+      plog("KAMRAFY", "fallback category: " + body.filters.meal_type);
+      recipes = await kamrafyApiCall({ filters: { category: body.filters.meal_type }, limit: 5 });
+    }
 
-      // Statikus étkezés-típus → próbálja ezeket sorban
-      const mealFallbacks = {
-        reggeli:  ["tojás", "kenyér", "zabkása", "joghurt", "muesli"],
-        desszert: ["torta", "muffin", "keksz", "piskóta", "brownie"],
-        leves:    ["leves", "gulyás", "húsleves", "zöldségleves"],
-        sutes:    ["keksz", "piskóta", "muffin", "rétes"],
-        vega:     ["zöldség", "saláta", "lencse", "tofu"],
-      };
-      let fallbackTerms = [];
-      for (const [key, terms] of Object.entries(mealFallbacks)) {
-        if (lq.includes(key)) { fallbackTerms = terms; break; }
-      }
-
-      // Ha nincs étkezés típus egyezés → kinyerjük a hozzávalókat a kérdésből
-      if (!fallbackTerms.length && body.ingredients?.length) {
-        fallbackTerms = body.ingredients.slice(0, 3);
-      }
-
-      // Próbáljuk sorban
-      for (const term of fallbackTerms.slice(0, 5)) {
-        plog("KAMRAFY", "fallback query: " + term);
-        recipes = await kamrafyApiCall({ query: term, limit: 5 });
-        if (recipes.length) break;
-      }
+    // 3. Ha még mindig 0: csak a query-vel próbáljuk filter nélkül
+    if (!recipes.length && body.query) {
+      plog("KAMRAFY", "fallback query only: " + body.query);
+      recipes = await kamrafyApiCall({ query: body.query, limit: 5 });
     }
 
     if (!recipes.length) return null;
