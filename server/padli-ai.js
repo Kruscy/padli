@@ -821,31 +821,33 @@ async function searchKamrafy(question) {
     // 1. Próbálkozás az eredeti body-val
     let recipes = await kamrafyApiCall(body);
 
-    // 2. Ha 0 találat: Ollama generál konkrét keresőkifejezést
+    // 2. Ha 0 találat: statikus étkezés-típus fallback, majd hozzávaló kinyerés
     if (!recipes.length) {
-      plog("KAMRAFY", "0 talalat, Ollama query-t general...");
-      const ollamaRaw = await askOllama([
-        { role: "system", content: "Felad: a kérdésből kinyerni 1-3 rövid magyar ételnevet vagy alapanyagnevet, vesszővel elválasztva. CSAK az étel/alapanyag nevét írjuk, semmi egyebet! Példák: 'tojás, kenyér', 'csirkemell', 'leves, zöldség'. NE írjunk mondatot, NE adjunk magyarázatot." },
-        { role: "user", content: question.replace(/padli[,!]?\s*/gi, "").trim().slice(0, 100) }
-      ]);
-      if (ollamaRaw) {
-        // Csak rövid, reálisan étel-szerű szavakat fogadunk el
-        const raw = ollamaRaw.replace(/[^a-záéíóöőúüűA-ZÁÉÍÓÖŐÚÜŰ0-9,; -]/g, "");
-        const terms = raw
-          .split(/[,;\/\n]/)
-          .map(s => s.trim())
-          .filter(s => s.length >= 3 && s.length <= 15);
-        // Minden termnél próbáljuk az eredeti szót ÉS az első szótagot is
-        const toTry = [];
-        for (const t of terms.slice(0, 3)) {
-          toTry.push(t);
-          if (t.includes(" ")) toTry.push(t.split(" ")[0]); // "csirke mell" → "csirke"
-        }
-        for (const term of toTry.slice(0, 5)) {
-          plog("KAMRAFY", "fallback query: " + term);
-          recipes = await kamrafyApiCall({ query: term, limit: 5 });
-          if (recipes.length) break;
-        }
+      const lq = question.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+
+      // Statikus étkezés-típus → próbálja ezeket sorban
+      const mealFallbacks = {
+        reggeli:  ["tojás", "kenyér", "zabkása", "joghurt", "muesli"],
+        desszert: ["torta", "muffin", "keksz", "piskóta", "brownie"],
+        leves:    ["leves", "gulyás", "húsleves", "zöldségleves"],
+        sutes:    ["keksz", "piskóta", "muffin", "rétes"],
+        vega:     ["zöldség", "saláta", "lencse", "tofu"],
+      };
+      let fallbackTerms = [];
+      for (const [key, terms] of Object.entries(mealFallbacks)) {
+        if (lq.includes(key)) { fallbackTerms = terms; break; }
+      }
+
+      // Ha nincs étkezés típus egyezés → kinyerjük a hozzávalókat a kérdésből
+      if (!fallbackTerms.length && body.ingredients?.length) {
+        fallbackTerms = body.ingredients.slice(0, 3);
+      }
+
+      // Próbáljuk sorban
+      for (const term of fallbackTerms.slice(0, 5)) {
+        plog("KAMRAFY", "fallback query: " + term);
+        recipes = await kamrafyApiCall({ query: term, limit: 5 });
+        if (recipes.length) break;
       }
     }
 
