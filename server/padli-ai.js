@@ -1153,35 +1153,33 @@ async function generateReply(question, conversationHistory, userKey) {
     plog("KAMRAFY", "recept kérdés: " + question.slice(0, 60));
     const recipes = await searchKamrafy(question);
     if (recipes && recipes.length) {
-      const top = recipes.slice(0, 2);
-      const recipeCtx = top.map((r, i) => {
-        const time = r.total_time ? r.total_time + " perc" : (r.prep_time || r.cook_time ? ((r.prep_time||0)+(r.cook_time||0)) + " perc" : null);
-        const parts = [
-          "Cím: " + r.title,
-          time ? "Idő: " + time : null,
-          r.calories_per_serving ? "Kalória: " + r.calories_per_serving + " kcal/adag" : null,
-          r.difficulty ? "Nehézség: " + r.difficulty : null,
-          r.description ? "Leírás: " + r.description.slice(0, 100) : null,
-          "Link: " + r.url,
-        ].filter(Boolean);
-        return (i+1) + ". recept:\n" + parts.join("\n");
-      }).join("\n\n");
+      const pick = recipes[0];
+      const time = pick.total_time ? pick.total_time + " perc" : (pick.prep_time || pick.cook_time ? ((pick.prep_time||0)+(pick.cook_time||0)) + " perc" : null);
+      const recipeCtx = [
+        "Cím: " + pick.title,
+        time ? "Elkészítési idő: " + time : null,
+        pick.calories_per_serving ? "Kalória: " + pick.calories_per_serving + " kcal/adag" : null,
+        pick.difficulty ? "Nehézség: " + pick.difficulty : null,
+        pick.description ? "Rövid leírás: " + pick.description.slice(0, 120) : null,
+        "Link: " + pick.url,
+      ].filter(Boolean).join("\n");
 
       const ollamaReply = await askOllama([
-        { role: "system", content: "Te Padli vagy, a PadlizsanFanSub manga/anime közösségi bot. Ha receptet kérnek, ajánlasz 1-2 ételt a Kamrafy.hu-ról barátságosan, magyarul. Az ajánlásban mindig szerepeljen a recept neve és a kamrafy.hu link." },
-        { role: "user", content: "A kérdés: \"" + question.replace(/padli[,!]?\s*/gi,"").trim() + "\"\n\nEzek a Kamrafy.hu receptjei:\n" + recipeCtx + "\n\nAjánld be őket 2-4 mondatban, és minden receptnél add meg a linket!" }
+        { role: "system", content: "Te Padli vagy, a PadlizsanFanSub manga/anime közösségi bot. Ha receptet kérnek, 1 ételt ajánlasz a Kamrafy.hu-ról, lazán és röviden, magyarul. Az ajánlásban mindig szerepeljen a recept pontos neve és a kamrafy.hu link." },
+        { role: "user", content: "Kérdés: \"" + question.replace(/padli[,!]?\s*/gi,"").trim() + "\"\n\nEz a recept illik hozzá:\n" + recipeCtx + "\n\nAjánld be 1-2 mondatban, add meg a linket!" }
       ]);
 
-      // Garantáljuk hogy a linkek benne vannak, ha Ollama kihagyta
       let reply = ollamaReply || "";
-      top.forEach(r => {
-        if (r.url && !reply.includes(r.url)) {
-          reply += "\n" + r.title + ": " + r.url;
-        }
-      });
+      if (pick.url && !reply.includes(pick.url)) {
+        reply += "\n" + pick.title + ": " + pick.url;
+      }
       return reply;
     }
-    return "Sajnos most nem találok megfelelő receptet a Kamrafy.hu adatbázisában – próbálj pontosabban fogalmazni (pl. írd le mi van otthon, vagy milyen ételt szeretnél)!";
+    // Ha tényleg semmi nem jön: kérdezzen vissza, ne tagadjon meg mindent
+    return await askOllama([
+      { role: "system", content: "Te Padli vagy, a PadlizsanFanSub manga/anime bot. Ha valaki ételt kér és nincs találat, kérdezz vissza kedvesen hogy mi van otthon vagy milyen ételt szeretne. 1 mondat." },
+      { role: "user", content: question.replace(/padli[,!]?\s*/gi,"").trim() }
+    ]) || "Mondd meg mi van otthon és megpróbálok ajánlani valamit a Kamrafy.hu-ról!";
   }
 
   if (availabilityQ && searchTerm) {
