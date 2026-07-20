@@ -46,7 +46,7 @@ function parseChapterNumber(str) {
         row.classList.add("locked");
         row.addEventListener("click", (e) => { e.preventDefault(); showLockedModal(); });
       } else {
-        row.href = `/reader.html?slug=${slug}&chapter=${encodeURIComponent(ch.folder)}`;
+        row.href = `/reader.html?slug=${encodeURIComponent(slug)}&chapter=${encodeURIComponent(ch.folder)}`;
       }
       const read = progress && progress.chapter === ch.folder;
       const status = document.createElement("span");

@@ -6,6 +6,7 @@ let allBugReports = [];
 let allChapterBugs = [];
 window.currentUser = window.currentUser || null;
 let activeTab = 'open';
+let activeTypeFilter = '';
 let expandedManga = {};
 let expandedChapterBugs = {};
 let expandedReports = {};
@@ -129,7 +130,7 @@ async function loadChapterBugs() {
     const res = await fetch('/api/chapter-bugs');
     if (res.ok) allChapterBugs = await res.json();
     updateBadges();
-    if (activeTab === 'chapter') renderBugReports();
+    if (activeTab === 'chapter' || activeTab === 'fixed') renderBugReports();
   } catch (err) {
     console.error('Load chapter bugs error:', err);
   }
@@ -151,11 +152,20 @@ function updateBadges() {
 }
 
 function filterByTab(reports) {
-  if (activeTab === 'open')   return reports.filter(r => !r.is_closed && !(r.fixes?.length > 0));
-  if (activeTab === 'fixed')  return reports.filter(r => !r.is_closed &&  (r.fixes?.length > 0));
-  if (activeTab === 'closed') return reports.filter(r =>  r.is_closed);
-  return reports;
+  let filtered = reports;
+  if (activeTab === 'open')   filtered = filtered.filter(r => !r.is_closed && !(r.fixes?.length > 0));
+  if (activeTab === 'fixed')  filtered = filtered.filter(r => !r.is_closed &&  (r.fixes?.length > 0));
+  if (activeTab === 'closed') filtered = filtered.filter(r =>  r.is_closed);
+  if (activeTypeFilter) filtered = filtered.filter(r => (r.type || 'other') === activeTypeFilter);
+  return filtered;
 }
+
+window.setTypeFilter = function(value) {
+  activeTypeFilter = value;
+  const sel = document.getElementById('typeFilterSelect');
+  if (sel) sel.value = value;
+  renderBugReports();
+};
 
 /* ──────────────────────────────────────────────────────────
    CSOPORTOSÍTÁS
@@ -185,14 +195,24 @@ function renderBugReports() {
 
   const filtered = filterByTab(allBugReports);
 
-  if (filtered.length === 0) {
-    container.innerHTML = `<div class="empty"><div class="empty-icon">📭</div><p>Nincs hibajegy ebben a kategóriában</p></div>`;
-    return;
-  }
-
   const grouped = groupReports(filtered);
   let html = '';
   Object.entries(grouped).forEach(([slug, data]) => { html += renderMangaGroup(slug, data); });
+
+  if (activeTab === 'fixed') {
+    const isAdmin = window.currentUser?.role === 'admin';
+    let chapterFixed = allChapterBugs.filter(r => !r.is_fixed && (r.fixes || []).length > 0);
+    if (activeTypeFilter) chapterFixed = chapterFixed.filter(r => (r.type || 'other') === activeTypeFilter);
+    if (chapterFixed.length) {
+      html += `<div class="section-header" style="margin:20px 0 10px;color:#a78bfa;font-size:.9rem;">📕 Egész rész javítások (jóváhagyásra várnak)</div>`;
+      chapterFixed.forEach(r => { html += renderChapterBugCard(r, isAdmin, true); });
+    }
+  }
+
+  if (!html) {
+    container.innerHTML = `<div class="empty"><div class="empty-icon">📭</div><p>Nincs hibajegy ebben a kategóriában</p></div>`;
+    return;
+  }
   container.innerHTML = html;
 }
 
@@ -207,7 +227,8 @@ const CHAPTER_TYPE_LABELS = {
 
 function renderChapterBugReports(container) {
   const isAdmin = window.currentUser?.role === 'admin';
-  const all = allChapterBugs.filter(r => !r.is_fixed);
+  let all = allChapterBugs.filter(r => !r.is_fixed);
+  if (activeTypeFilter) all = all.filter(r => (r.type || 'other') === activeTypeFilter);
 
   if (!all.length) {
     container.innerHTML = `<div class="empty"><div class="empty-icon">📭</div><p>Nincs rész szintű hibajegy</p></div>`;
@@ -255,21 +276,42 @@ function renderChapterBugChapters(slug, chapters, isAdmin) {
   return html;
 }
 
-function renderChapterBugCard(r, isAdmin) {
+function renderChapterBugCard(r, isAdmin, showTitle) {
   const typeLabel = CHAPTER_TYPE_LABELS[r.type] || r.type;
+  const titleLine = showTitle ? `
+    <div style="padding:10px 16px 0;color:#c4b5fd;font-weight:700;font-size:.9rem;">📖 ${escapeHtml(r.manga_title || r.manga_slug)} · ${escapeHtml(r.chapter)}</div>
+  ` : '';
   const statusBadge = r.is_fixed
     ? `<span class="status closed-fixed">✅ Javítva</span>`
     : `<span class="status open">⚠️ Nyitott</span>`;
+  const countBadge = (r.report_count || 1) > 1
+    ? `<span class="status open" style="background:#7c2d12;color:#fdba74">👥 ${r.report_count}x bejelentve</span>`
+    : '';
+
+  const fixedCount = (r.fixes || []).length;
+  const progressBadge = fixedCount > 0
+    ? `<span class="status closed-fixed" style="background:#14532d;color:#86efac">🔧 ${fixedCount} kép lefordítva (vár jóváhagyásra)</span>`
+    : '';
+
+  const previewUrl = `/reader.html?slug=${encodeURIComponent(r.manga_slug)}&chapter=${encodeURIComponent(r.chapter)}`;
+  const previewBtn = !r.is_fixed ? `
+    <a href="${previewUrl}" target="_blank" rel="noopener"
+      class="btn-fix" style="background:#334155;margin-top:8px;display:inline-block;text-decoration:none">👁 Beleolvasok</a>
+  ` : '';
+
+  const compareBtn = fixedCount > 0 ? `
+    <button onclick="openChapterCompare(${r.id})" class="btn-fix" style="background:#0f766e;margin-top:8px;">🔍 Előtte / Utána (${fixedCount})</button>
+  ` : '';
 
   const padliBtn = window.currentUser && !r.is_fixed ? `
-    <button onclick="sendChapterToPadlicrome('${escapeHtml(r.manga_slug)}','${escapeHtml(r.chapter)}',${r.id},this)"
+    <button onclick="sendChapterToPadlicrome('${escapeHtml(r.manga_slug)}','${escapeHtml(r.chapter)}',this)"
       class="btn-fix" style="background:#4f46e5;margin-top:8px;">🔮 Egész fejezet Padlicrome-ba</button>
   ` : '';
 
-  const adminBar = isAdmin && !r.is_fixed ? `
+  const adminBar = isAdmin ? `
     <div class="admin-bar" style="margin-top:10px;">
-      <button onclick="markChapterBugFixed(${r.id})" class="btn-apply">✅ Javítva (+ CF cache frissítés)</button>
-      <button onclick="purgeChapterCache('${escapeHtml(r.manga_slug)}','${escapeHtml(r.chapter)}','${escapeHtml(r.provider||'')}',${r.id},this)" class="btn-fix" style="background:#1e40af;">🔄 Csak CF cache frissítés</button>
+      ${!r.is_fixed ? `<button onclick="markChapterBugFixed(${r.id})" class="btn-apply">✅ Javítva (+ CF cache frissítés)</button>` : ''}
+      ${!r.is_fixed ? `<button onclick="purgeChapterCache('${escapeHtml(r.manga_slug)}','${escapeHtml(r.chapter)}','${escapeHtml(r.provider||'')}',${r.id},this)" class="btn-fix" style="background:#1e40af;">🔄 Csak CF cache frissítés</button>` : ''}
       <button onclick="deleteChapterBug(${r.id})" class="btn-delete">🗑️ Törlés</button>
     </div>
   ` : '';
@@ -280,21 +322,132 @@ function renderChapterBugCard(r, isAdmin) {
 
   return `
     <div class="report-card" style="margin-bottom:10px;">
+      ${titleLine}
       <div class="report-header" style="cursor:default;">
         <div class="report-info" style="gap:8px;flex-wrap:wrap;">
           <span class="chapter-bug-type-badge">${typeLabel}</span>
           ${statusBadge}
+          ${countBadge}
+          ${progressBadge}
           <span style="color:#888;font-size:.8rem;">👤 ${escapeHtml(r.reported_by_name || 'Ismeretlen')}</span>
           <span style="color:#666;font-size:.78rem;">📅 ${formatDate(r.created_at)}</span>
         </div>
       </div>
       ${r.description ? `<div style="padding:8px 16px;color:#ccc;font-size:.85rem;">💬 ${escapeHtml(r.description)}</div>` : ''}
       ${fixedInfo}
+      ${previewBtn}
+      ${compareBtn}
       ${padliBtn}
       ${adminBar}
     </div>
   `;
 }
+
+/* ──────────────────────────────────────────────────────────
+   ELŐTTE / UTÁNA ÖSSZEHASONLÍTÁS (egész rész javításokhoz)
+   ────────────────────────────────────────────────────────── */
+function openChapterCompare(id) {
+  const r = allChapterBugs.find(c => c.id === id);
+  if (!r) return;
+
+  let overlay = document.getElementById('chapterCompareOverlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'chapterCompareOverlay';
+    overlay.style.cssText = `
+      position:fixed;inset:0;z-index:10002;
+      background:rgba(0,0,0,.92);
+      display:flex;justify-content:center;
+      overflow-y:auto;
+      padding:24px 12px 40px;
+    `;
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.style.display = 'none'; });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && overlay.style.display === 'flex') overlay.style.display = 'none'; });
+    document.body.appendChild(overlay);
+  }
+
+  const fixes = [...(r.fixes || [])].sort((a, b) => a.image_index - b.image_index);
+  const rows = fixes.map(f => {
+    const origUrl = r.library_name
+      ? `/api/image/${encodeURIComponent(r.library_name)}/${encodeURIComponent(r.manga_slug)}/${encodeURIComponent(r.chapter)}/${encodeURIComponent(f.image_file)}`
+      : '';
+    const statusTxt = f.is_applied
+      ? `<span style="color:#86efac">✅ élesítve</span>`
+      : `<span style="color:#fbbf24">⏳ vár jóváhagyásra</span>`;
+    const actionBtns = !f.is_applied ? `
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <button onclick="approveChapterFix(${f.id},${id})" class="btn-apply" style="font-size:.78rem;padding:5px 12px;">✅ Jóváhagyás</button>
+        <button onclick="rejectChapterFix(${f.id},${id})" class="btn-delete" style="font-size:.78rem;padding:5px 12px;">❌ Nem felel meg</button>
+      </div>
+    ` : '';
+    return `
+      <div id="cmpRow_${f.id}" style="background:#120d20;border:1px solid #3b2f6e;border-radius:8px;padding:10px;">
+        <div style="font-size:.8rem;color:#aaa;margin-bottom:6px;">#${f.image_index + 1} · ${escapeHtml(f.image_file)} · ${escapeHtml(f.fixed_by_name || '')} · ${statusTxt}</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <div style="flex:1;min-width:160px;">
+            <div style="font-size:.7rem;color:#888;margin-bottom:4px;">Eredeti</div>
+            ${origUrl ? `<img src="${origUrl}" style="max-width:100%;border-radius:6px;cursor:zoom-in;" onclick="openImageLightbox('${origUrl}','Eredeti · #${f.image_index + 1}')">` : '<div style="color:#666;font-size:.75rem;">nincs elérhető</div>'}
+          </div>
+          <div style="flex:1;min-width:160px;">
+            <div style="font-size:.7rem;color:#888;margin-bottom:4px;">Javított</div>
+            <img src="${f.fixed_image_url}" style="max-width:100%;border-radius:6px;cursor:zoom-in;" onclick="openImageLightbox('${f.fixed_image_url}','Javított · #${f.image_index + 1}')">
+          </div>
+        </div>
+        <div id="cmpStatus_${f.id}" style="font-size:.75rem;color:#888;margin-top:6px;"></div>
+        ${actionBtns}
+      </div>
+    `;
+  }).join('');
+
+  overlay.innerHTML = `
+    <div style="width:min(98vw,900px);cursor:default;">
+      <div style="display:flex;justify-content:space-between;align-items:center;color:#ccc;padding:0 0 12px 2px;">
+        <div style="font-size:.95rem;font-weight:700;">${escapeHtml(r.manga_title || r.manga_slug)} · ${escapeHtml(r.chapter)} — ${fixes.length} kép</div>
+        <button onclick="document.getElementById('chapterCompareOverlay').style.display='none'"
+          style="background:rgba(0,0,0,.7);border:1px solid rgba(255,255,255,.2);color:#ccc;padding:6px 12px;border-radius:8px;cursor:pointer;font-weight:700;">✕</button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;">${rows || '<div style="color:#888;">Nincs javítás.</div>'}</div>
+    </div>
+  `;
+  overlay.style.display = 'flex';
+  overlay.scrollTop = 0;
+}
+window.openChapterCompare = openChapterCompare;
+
+async function approveChapterFix(fixId, chapterBugId) {
+  const st = document.getElementById(`cmpStatus_${fixId}`);
+  if (st) st.textContent = '⏳ Jóváhagyás...';
+  try {
+    const res = await fetch(`/api/chapter-bugs/fix/${fixId}/approve`, { method: 'POST', credentials: 'include' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Hiba');
+    const row = document.getElementById(`cmpRow_${fixId}`);
+    if (row) row.remove();
+    await loadChapterBugs();
+    renderBugReports();
+  } catch (err) {
+    if (st) st.textContent = '❌ ' + err.message;
+  }
+}
+window.approveChapterFix = approveChapterFix;
+
+async function rejectChapterFix(fixId, chapterBugId) {
+  if (!confirm('Biztosan visszadobod ezt a képet? A fordító pontja (ha volt) visszavonódik, és a kép egyedi hibajegyként kerül vissza a Javítani való fülre.')) return;
+  const st = document.getElementById(`cmpStatus_${fixId}`);
+  if (st) st.textContent = '⏳ Visszadobás...';
+  try {
+    const res = await fetch(`/api/chapter-bugs/fix/${fixId}/reject`, { method: 'POST', credentials: 'include' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Hiba');
+    const row = document.getElementById(`cmpRow_${fixId}`);
+    if (row) row.remove();
+    await Promise.all([loadChapterBugs(), loadBugReports()]);
+    renderBugReports();
+  } catch (err) {
+    if (st) st.textContent = '❌ ' + err.message;
+  }
+}
+window.rejectChapterFix = rejectChapterFix;
 
 function toggleChapterGroup(slug) {
   expandedChapterBugs[slug] = !expandedChapterBugs[slug];
@@ -880,14 +1033,14 @@ window.openBugReportById = function(id) {
 };
 
 /* ── Admin javítás korrekció ─────────────────────────────── */
-window.sendChapterToPadlicrome = async function(mangaSlug, chapter, chapterBugId, btnEl) {
+window.sendChapterToPadlicrome = async function(mangaSlug, chapter, btnEl) {
   if (btnEl) { btnEl.disabled = true; btnEl.textContent = '⏳ Importálás...'; }
   try {
     const res = await fetch('/api/padlicrome/import-chapter', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ mangaSlug, chapter, chapterBugId }),
+      body: JSON.stringify({ mangaSlug, chapter }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Hiba');

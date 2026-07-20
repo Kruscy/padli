@@ -5,11 +5,10 @@
 const config = {
 
   general: {
-    ollamaUrl:       "http://192.168.0.90:11434/api/chat",
-    ollamaModel:     "qwen2.5:7b",
+    geminiModel:     "gemini-3.1-flash-lite",
+    geminiTimeoutMs: 45000,
     maxTokens:       200,
     temperature:     0.7,
-    ollamaTimeoutMs: 45000,
   },
 
   log: {
@@ -20,7 +19,7 @@ const config = {
 
   bot: {
     triggerNames:     ["padli"],
-    patreonUrl:       "https://www.patreon.com/Padlizsanfansub.hu",
+    patreonUrl:       "https://www.patreon.com/Padlizsanfansub",
     patreonPriceText: "500 Ft-tól 2000 Ft-ig",
   },
 
@@ -38,7 +37,7 @@ const config = {
     enableAvoidRepeats:       true,
   },
 
-  intentPriority: ["adult","patreon","availability","dbInfo","recommendation","search"],
+  intentPriority: ["adult","patreon","dbInfo","availability","recommendation","search"],
 
   intentScoring: {
     adult:           5.0,

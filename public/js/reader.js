@@ -50,8 +50,10 @@ function getCurrentPage() {
   if (readMode === "book") return bookPageIndex + 1;
 
   // Wrap diveket használunk (nem img-et): a hidden képek rect.top=0, ami
-  // félreviszi a számolást töltés közben — a wrap mindig layoutban van
-  const wraps = [...document.querySelectorAll("#pages [data-index]")];
+  // félreviszi a számolást töltés közben — a wrap mindig layoutban van.
+  // Csak a közvetlen gyerekeket kérdezzük le (>), mert a benne lévő <img>-en
+  // is data-index van — descendant szelektorral duplán számolna.
+  const wraps = [...document.querySelectorAll("#pages > [data-index]")];
   let current = 1;
   const mid = window.innerHeight / 2;
 
@@ -172,22 +174,71 @@ async function showLockPage(targetSlug) {
   document.body.appendChild(modal);
 }
 
+/* ── HIBAOLDAL (fejezet nem található / szerverhiba) ──────── */
+function showErrorPage(message) {
+  const existing = document.getElementById("readerLockModal");
+  if (existing) existing.remove();
+
+  const modal = document.createElement("div");
+  modal.id = "readerLockModal";
+  modal.className = "locked-modal";
+  modal.innerHTML = `
+    <div class="locked-backdrop"></div>
+    <div class="locked-box">
+      <p>${message}</p>
+      <button class="lock-close" onclick="location.href='/chapters.html?slug=${slug}'">
+        ← Vissza a fejezetlistához
+      </button>
+    </div>
+  `;
+  document.body.appendChild(modal);
+}
+
 /* ── KÉPEK BETÖLTÉSE (prioritásos, szekvenciális) ─────────── */
 async function loadPages() {
-  const res = await fetch(`/api/pages/${slug}/${chapter}`);
+  let res;
+  try {
+    res = await fetch(`/api/pages/${slug}/${chapter}`);
+  } catch {
+    showErrorPage("Hálózati hiba történt a fejezet betöltése közben. Próbáld újra később.");
+    return false;
+  }
 
   if (res.status === 403) {
     await showLockPage(slug);
     return false;
   }
 
-  const data = await res.json();
-  allFiles = data.pages;
+  if (!res.ok) {
+    showErrorPage("A fejezet nem található. Lehet, hogy törölve vagy átnevezve lett.");
+    return false;
+  }
+
+  let data;
+  try {
+    data = await res.json();
+  } catch {
+    showErrorPage("Hibás válasz érkezett a szervertől. Próbáld újra később.");
+    return false;
+  }
+
+  allFiles = Array.isArray(data.pages) ? data.pages : [];
   currentLibrary = data.library;
   fixVersions = data.fixVersions || {};
   chapterVersion = data.chapterVersion || null;
 
-  if (!allFiles.length) return true;
+  if (!allFiles.length) {
+    showErrorPage("Ehhez a fejezethez jelenleg nincsenek elérhető oldalak.");
+    return false;
+  }
+
+  // A mentett/URL-ben kapott oldalszám nagyobb is lehet, mint a fejezet
+  // jelenlegi oldalszáma (pl. újraszkennelt, rövidebb verzió, vagy a
+  // duplikátum-javítás miatt egy másik változat töltődött be) — enélkül
+  // egy nem létező indexre hivatkozva a lapépítés elszáll.
+  if (startPage > allFiles.length) {
+    startPage = allFiles.length;
+  }
 
   if (readMode === "book") {
     buildBookPages();
@@ -636,11 +687,16 @@ function bugReportClick() {
 
 /* ── INIT ────────────────────────────────────────────────── */
 (async () => {
-  await loadProgress();
-  const ok = await loadPages();
-  if (ok) await loadNav();
+  try {
+    await loadProgress();
+    const ok = await loadPages();
+    if (ok) await loadNav();
 
-  setMode(readMode);
+    setMode(readMode);
+  } catch (err) {
+    console.error("[reader] init hiba:", err);
+    showErrorPage("Váratlan hiba történt az oldal betöltése közben. Próbáld újra később.");
+  }
 
   // Fullscreen mindig kikapcsolt állapotban indul
 })();

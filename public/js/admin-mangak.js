@@ -24,17 +24,22 @@ document.addEventListener("DOMContentLoaded", async () => {
       const image_url = document.getElementById("annImage").value.trim();
       const days = document.getElementById("annDays").value;
 
-      const res = await fetch("/api/announcements", {
-        method: "POST",
+      const url = editingAnnId ? `/api/announcements/${editingAnnId}` : "/api/announcements";
+      const method = editingAnnId ? "PUT" : "POST";
+
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title, body, image_url, days })
       });
 
       if (res.ok) {
-        e.target.reset();
+        cancelAnnEdit();
         loadAnnouncements();
       }
     });
+
+    document.getElementById("annCancelEdit").addEventListener("click", cancelAnnEdit);
 
   } catch (err) {
     console.error(err);
@@ -51,6 +56,7 @@ function initTabs() {
       document.getElementById(btn.dataset.tab).classList.add("active");
       if (btn.dataset.tab === "tab-libraries") loadUploaderRoots();
       if (btn.dataset.tab === "tab-gifts") loadGifts();
+      if (btn.dataset.tab === "tab-api-usage") loadApiUsage();
     });
   });
 }
@@ -252,9 +258,13 @@ async function loadUsers() {
 }
 
 /* ===== KIÍRÁSOK ===== */
+let editingAnnId = null;
+let annItemsCache = [];
+
 async function loadAnnouncements() {
   const res = await fetch("/api/announcements");
   const items = await res.json();
+  annItemsCache = items;
   const list = document.getElementById("annList");
   list.innerHTML = "";
 
@@ -272,11 +282,40 @@ async function loadAnnouncements() {
         <p>${escHtml(a.body?.slice(0, 100))}${a.body?.length > 100 ? "…" : ""}</p>
         <p>Lejár: ${new Date(a.expires_at).toLocaleDateString("hu-HU")}</p>
       </div>
-      <button class="ann-delete" data-id="${a.id}">Törlés</button>
+      <div class="ann-item-actions">
+        <button class="ann-edit" data-id="${a.id}">✏️ Szerkesztés</button>
+        <button class="ann-delete" data-id="${a.id}">Törlés</button>
+      </div>
     `;
+    div.querySelector(".ann-edit").addEventListener("click", () => startAnnEdit(a.id));
     div.querySelector(".ann-delete").addEventListener("click", function() { deleteAnn(a.id, this); });
     list.appendChild(div);
   });
+}
+
+function startAnnEdit(id) {
+  const a = annItemsCache.find(x => x.id === id);
+  if (!a) return;
+
+  editingAnnId = id;
+  document.getElementById("annTitle").value = a.title || "";
+  document.getElementById("annBody").value = a.body || "";
+  document.getElementById("annImage").value = a.image_url || "";
+  // A napok számát nem tároljuk közvetlenül, csak a lejárati dátumot —
+  // a hátralévő napok számát ajánljuk fel alapértékként.
+  const remainingDays = Math.max(1, Math.ceil((new Date(a.expires_at) - Date.now()) / 86400000));
+  document.getElementById("annDays").value = remainingDays;
+
+  document.querySelector("#annForm button[type=submit]").textContent = "💾 Mentés";
+  document.getElementById("annCancelEdit").style.display = "inline-block";
+  document.getElementById("annForm").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function cancelAnnEdit() {
+  editingAnnId = null;
+  document.getElementById("annForm").reset();
+  document.querySelector("#annForm button[type=submit]").textContent = "➕ Kiírás hozzáadása";
+  document.getElementById("annCancelEdit").style.display = "none";
 }
 
 async function deleteAnn(id, btn) {
@@ -286,13 +325,34 @@ async function deleteAnn(id, btn) {
 }
 
 /* ===== MANGÁK ===== */
+let allMangas = [];
+
 async function loadMangas() {
   const res = await fetch("/api/admin/mangas");
-  const mangas = await res.json();
+  allMangas = await res.json();
+
+  const searchInput = document.getElementById("mangaSearchInput");
+  if (searchInput && !searchInput.dataset.bound) {
+    searchInput.dataset.bound = "1";
+    searchInput.addEventListener("input", () => renderMangaList(searchInput.value));
+  }
+
+  renderMangaList(searchInput ? searchInput.value : "");
+}
+
+function renderMangaList(query) {
+  const q = (query || "").trim().toLowerCase();
+  const filtered = q ? allMangas.filter(m => m.title.toLowerCase().includes(q)) : allMangas;
+
   const container = document.getElementById("mangaAdminList");
   container.innerHTML = "";
 
-  mangas.forEach(m => {
+  if (!filtered.length) {
+    container.innerHTML = "<p style='color:#aaa; padding:1rem;'>Nincs találat.</p>";
+    return;
+  }
+
+  filtered.forEach(m => {
     const block = document.createElement("div");
     block.className = "manga-admin-block";
     block.innerHTML = `
@@ -401,11 +461,131 @@ async function adjustUnlock(chapterId, hours, slug) {
 }
 
 async function deleteChapter(chapterId, slug) {
-  if (!confirm("Biztosan törlöd ezt a fejezetet a DB-ből?")) return;
+  if (!confirm("Biztosan törlöd ezt a fejezetet? Ez a DB-ből és R2-ről (ha fel van töltve) is véglegesen törli a képeket.")) return;
   await fetch(`/api/admin/chapter/${chapterId}`, { method: "DELETE" });
   const header = document.querySelector(`#chapters-${slug}`).previousElementSibling;
   await toggleManga(slug, header);
   await toggleManga(slug, header);
+}
+
+/* ===== API KULCSOK ===== */
+async function loadApiUsage() {
+  const listEl = document.getElementById("apiUsageList");
+  if (!listEl) return;
+  listEl.innerHTML = "<p style='color:#888'>Betöltés...</p>";
+
+  const [usageRes, keysRes] = await Promise.all([
+    fetch("/api/admin/api-usage"),
+    fetch("/api/admin/gemini-keys"),
+  ]);
+  if (!usageRes.ok || !keysRes.ok) { listEl.innerHTML = "<p style='color:#ef4444'>Betöltési hiba</p>"; return; }
+  const data = await usageRes.json();
+  const keys = await keysRes.json();
+
+  const cardStyle = "background:#0f172a;border-radius:10px;padding:14px 18px;margin-bottom:10px;max-width:560px";
+
+  const GEMINI_DAILY_LIMIT = 500; // napi ingyenes limit kulcsonként (gemini-3.1-flash-lite) — NEM havi
+
+  const geminiCards = keys.map(k => {
+    const usage = data.gemini.find(g => g.label === k.label);
+    const exhausted = usage?.exhausted;
+    const today = usage?.today ?? 0;
+    const todayPct = Math.min(100, Math.round((today / GEMINI_DAILY_LIMIT) * 100));
+    const barColor = todayPct >= 90 ? "#ef4444" : todayPct >= 70 ? "#f59e0b" : "#22c55e";
+    const badge = exhausted
+      ? `<span style="background:#7f1d1d33;color:#f87171;padding:2px 10px;border-radius:20px;font-size:.75rem;font-weight:700">⚠️ Kimerült ma</span>`
+      : `<span style="background:#14532d33;color:#86efac;padding:2px 10px;border-radius:20px;font-size:.75rem;font-weight:700">✅ OK</span>`;
+    return `<div style="${cardStyle}">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <strong style="color:#e2e8f0">${escHtml(k.label)}</strong>
+        <div style="display:flex;align-items:center;gap:8px">
+          ${badge}
+          <button onclick="deleteGeminiKey(${k.id}, '${escHtml(k.label).replace(/'/g, "\\'")}')" title="Kulcs törlése"
+            style="background:#1e293b;color:#f87171;border:1px solid #334155;padding:3px 8px;border-radius:6px;cursor:pointer;font-size:.75rem">🗑</button>
+        </div>
+      </div>
+      <div style="color:#64748b;font-size:.78rem;font-family:monospace;margin-bottom:6px">${escHtml(k.keyMasked)}</div>
+      <div style="background:#1e293b;border-radius:6px;height:6px;overflow:hidden;margin-bottom:6px">
+        <div style="background:${barColor};height:100%;width:${todayPct}%"></div>
+      </div>
+      <div style="color:#94a3b8;font-size:.85rem">
+        Ma: <strong style="color:#e2e8f0">${today}</strong> / ${GEMINI_DAILY_LIMIT} kérés <span style="color:#64748b">(napi limit)</span> &nbsp;•&nbsp;
+        E hónapban összesen: <strong style="color:#e2e8f0">${usage?.thisMonth ?? 0}</strong> kérés
+        ${usage?.thisMonthFailures > 0 ? ` (<span style="color:#f87171">${usage.thisMonthFailures} hiba</span>)` : ""}
+      </div>
+    </div>`;
+  }).join("") || `<p style="color:#64748b;font-size:.85rem">Nincs beállítva Gemini kulcs.</p>`;
+
+  const addKeyForm = `<div style="${cardStyle};border:1px dashed #334155">
+    <strong style="color:#e2e8f0;display:block;margin-bottom:8px">➕ Új Gemini kulcs hozzáadása</strong>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <input id="newGeminiKeyLabel" placeholder="Címke (opcionális)" style="flex:1;min-width:120px;background:#1e293b;border:1px solid #334155;border-radius:6px;padding:6px 10px;color:#e2e8f0;font-size:.85rem">
+      <input id="newGeminiKeyValue" placeholder="API kulcs" style="flex:2;min-width:200px;background:#1e293b;border:1px solid #334155;border-radius:6px;padding:6px 10px;color:#e2e8f0;font-size:.85rem">
+      <button onclick="addGeminiKey()" style="background:#7c3aed;color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:.85rem;font-weight:700">Hozzáadás</button>
+    </div>
+    <div id="newGeminiKeyStatus" style="font-size:.8rem;margin-top:6px"></div>
+  </div>`;
+
+  const d = data.deepl;
+  const hasUsage = d.characterCount != null && d.characterLimit != null;
+  const pct = hasUsage ? Math.round((d.characterCount / d.characterLimit) * 100) : null;
+  const barColor = pct == null ? "#334155" : pct >= 90 ? "#ef4444" : pct >= 70 ? "#f59e0b" : "#22c55e";
+  const deeplCard = `<div style="${cardStyle}">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <strong style="color:#e2e8f0">DeepL</strong>
+      ${pct != null && pct >= 90
+        ? `<span style="background:#7f1d1d33;color:#f87171;padding:2px 10px;border-radius:20px;font-size:.75rem;font-weight:700">⚠️ Majdnem elfogyott</span>`
+        : `<span style="background:#14532d33;color:#86efac;padding:2px 10px;border-radius:20px;font-size:.75rem;font-weight:700">✅ OK</span>`}
+    </div>
+    ${hasUsage ? `
+      <div style="background:#1e293b;border-radius:6px;height:8px;overflow:hidden;margin-bottom:6px">
+        <div style="background:${barColor};height:100%;width:${pct}%"></div>
+      </div>
+      <div style="color:#94a3b8;font-size:.85rem">
+        ${d.characterCount.toLocaleString("hu-HU")} / ${d.characterLimit.toLocaleString("hu-HU")} karakter ebben a hónapban (${pct}%)
+      </div>
+    ` : `<div style="color:#64748b;font-size:.85rem">A karakter-kvóta lekérdezése nem sikerült.</div>`}
+    <div style="color:#94a3b8;font-size:.85rem;margin-top:4px">
+      E hónapban: <strong style="color:#e2e8f0">${d.thisMonthRequests}</strong> kérés
+      ${d.thisMonthFailures > 0 ? ` (<span style="color:#f87171">${d.thisMonthFailures} hiba</span>)` : ""}
+    </div>
+  </div>`;
+
+  listEl.innerHTML = `
+    <h3 style="color:#a78bfa;font-size:.95rem;margin:0 0 10px">Gemini (automatikus rotáció a kulcsok között)</h3>
+    ${geminiCards}
+    ${addKeyForm}
+    <h3 style="color:#a78bfa;font-size:.95rem;margin:20px 0 10px">DeepL (leírás-fordítás elsődleges motorja)</h3>
+    ${deeplCard}
+  `;
+}
+
+async function addGeminiKey() {
+  const labelEl = document.getElementById("newGeminiKeyLabel");
+  const valueEl = document.getElementById("newGeminiKeyValue");
+  const statusEl = document.getElementById("newGeminiKeyStatus");
+  const apiKey = valueEl.value.trim();
+  if (!apiKey) { statusEl.innerHTML = `<span style="color:#f87171">Add meg az API kulcsot</span>`; return; }
+
+  statusEl.innerHTML = `<span style="color:#94a3b8">Ellenőrzés...</span>`;
+  const res = await fetch("/api/admin/gemini-keys", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ label: labelEl.value.trim(), apiKey }),
+  });
+  const data = await res.json();
+  if (!res.ok) { statusEl.innerHTML = `<span style="color:#f87171">${escHtml(data.error || "Hiba")}</span>`; return; }
+
+  labelEl.value = "";
+  valueEl.value = "";
+  loadApiUsage();
+}
+
+async function deleteGeminiKey(id, label) {
+  if (!confirm(`Biztosan törlöd a(z) "${label}" kulcsot?`)) return;
+  const res = await fetch(`/api/admin/gemini-keys/${id}`, { method: "DELETE" });
+  if (!res.ok) { alert("Törlés sikertelen"); return; }
+  loadApiUsage();
 }
 
 /* ===== PATREON GIFT ===== */

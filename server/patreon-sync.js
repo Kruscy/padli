@@ -1,9 +1,10 @@
 import dotenv from 'dotenv';
-dotenv.config({ path: '/opt/padli/.env' });
 import fetch from 'node-fetch';
 import { pool } from './db.js';
+// Env betöltés csak CLI-módban kell (lásd fájl vége) — ha a szerver importálja
+// (pl. webhook-trigger), a db.js már betöltötte a saját (élő/dev) .env-jét,
+// nem szabad itt egy hardcode-olt élő .env-vel felülírni/kevert env-et okozni.
 
-console.log("ENV TEST:", process.env.PATREON_CAMPAIGN_ID);
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function fetchAllMembers() {
@@ -38,7 +39,7 @@ async function fetchAllMembers() {
   return members;
 }
 
-async function syncPatreon() {
+export async function syncPatreon() {
   console.log("Patreon sync started");
 const TIER_MAP = {
   "26103300": "Booster",
@@ -72,13 +73,39 @@ if (!statusRes.rows.length) {
     );
     if (emailMatch.rows.length) {
       const matchedUserId = emailMatch.rows[0].id;
-      await pool.query(
-        `INSERT INTO patreon_status (patreon_user_id, user_id, active, tier, payment_source, last_sync)
-         VALUES ($1, $2, false, NULL, 'patreon', NOW())
-         ON CONFLICT (patreon_user_id) DO NOTHING`,
-        [patreonUserId, matchedUserId]
+
+      // A site-fióknak lehet már van patreon_status sora egy MÁSIK
+      // patreon_user_id-vel (pl. a felhasználó új Patreon-fiókkal vagy
+      // újra-regisztrálva csatlakozott). Mivel user_id egyedi kulcs,
+      // sima INSERT itt mindig ütközne — ezért előbb ezt kezeljük.
+      const existingByUser = await pool.query(
+        `SELECT patreon_user_id, payment_source FROM patreon_status WHERE user_id = $1`,
+        [matchedUserId]
       );
-      console.log(`Auto-linked Patreon ${patreonUserId} (${memberEmail}) → user ${matchedUserId}`);
+
+      if (existingByUser.rows.length) {
+        if (existingByUser.rows[0].payment_source === "stripe") {
+          // Stripe-fizetőt nem érintünk, a hozzáférését a Stripe vezérli.
+          console.log(`Kihagyva (Stripe-fizető): user ${matchedUserId} másik Patreon-fiókkal (${patreonUserId}) is rendelkezik`);
+        } else {
+          // Régi sor frissítése az új Patreon-azonosítóra, hogy a lenti
+          // active/tier UPDATE már ezt a sort találja meg.
+          await pool.query(
+            `UPDATE patreon_status SET patreon_user_id = $1, last_sync = NOW() WHERE user_id = $2`,
+            [patreonUserId, matchedUserId]
+          );
+          console.log(`Re-linked Patreon ${patreonUserId} (${memberEmail}) → user ${matchedUserId} (régi patreon_user_id: ${existingByUser.rows[0].patreon_user_id})`);
+        }
+      } else {
+        await pool.query(
+          `INSERT INTO patreon_status (patreon_user_id, user_id, active, tier, payment_source, last_sync)
+           VALUES ($1, $2, false, NULL, 'patreon', NOW())
+           ON CONFLICT (patreon_user_id) DO NOTHING`,
+          [patreonUserId, matchedUserId]
+        );
+        console.log(`Auto-linked Patreon ${patreonUserId} (${memberEmail}) → user ${matchedUserId}`);
+      }
+
       statusRes = await pool.query(
         `SELECT user_id FROM patreon_status WHERE patreon_user_id = $1`,
         [patreonUserId]
@@ -173,10 +200,15 @@ await pool.query(`
   console.log("Patreon sync finished");
 }
 
-// futtatás
-syncPatreon()
-  .then(() => process.exit(0))
-  .catch((err) => {
-    console.error("FATAL ERROR:", err);
-    process.exit(1);
-  });
+// ── CLI MÓD: node server/patreon-sync.js (pl. cron) ──────────────────────
+// Ha más modul importálja (pl. a webhook-trigger a routes/patreon.js-ből),
+// ne fusson le automatikusan és ne állítsa le a teljes szerver processzt.
+if (process.argv[1] && process.argv[1].endsWith("patreon-sync.js")) {
+  dotenv.config({ path: '/opt/padli/.env' });
+  syncPatreon()
+    .then(() => process.exit(0))
+    .catch((err) => {
+      console.error("FATAL ERROR:", err);
+      process.exit(1);
+    });
+}

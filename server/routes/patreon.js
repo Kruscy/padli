@@ -2,8 +2,34 @@ import express from "express";
 import fetch from "node-fetch";
 import crypto from "crypto";
 import { pool } from "../db.js";
+import { syncPatreon } from "../patreon-sync.js";
 
 const router = express.Router();
+
+// Debounce a webhook-triggerelt szinkronra — a Patreon egy eseményre több
+// hívást is küldhet rövid időn belül (láttuk: 3x "pledges:update" ~8mp alatt),
+// ezért ne fusson párhuzamosan/feleslegesen sokszor a teljes tagság-lekérdezés.
+let webhookSyncInFlight = false;
+let webhookSyncQueued = false;
+
+async function triggerWebhookSync() {
+  if (webhookSyncInFlight) {
+    webhookSyncQueued = true;
+    return;
+  }
+  webhookSyncInFlight = true;
+  try {
+    await syncPatreon();
+  } catch (err) {
+    console.error("Patreon webhook-triggerelt sync hiba:", err);
+  } finally {
+    webhookSyncInFlight = false;
+    if (webhookSyncQueued) {
+      webhookSyncQueued = false;
+      triggerWebhookSync();
+    }
+  }
+}
 
 const TIER_MAP = {
   "26103300": "Booster",
@@ -237,31 +263,32 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
     if (sig !== expected) return res.status(401).end();
   }
 
+  // A Patreon a "Send test" gombbal (és néha éles eseményeknél is) a régi,
+  // deprecated "pledges:*" formátumot küldi az újabb "members:pledge:*"
+  // helyett/mellett — a payload mezői is eltérnek a két formátum közt
+  // (pl. relationships.user vs relationships.patron, nincs patron_status
+  // a régi formátumban). Ahelyett hogy mindkét payload-alakot próbálnánk
+  // értelmezni, a webhookot csak jelzésként használjuk: ha releváns esemény
+  // jött, lefuttatjuk a már megbízható teljes szinkront (syncPatreon),
+  // ami a Patreon API-ból friss, hiteles adatot kér le mindenkire.
+  const RELEVANT_EVENTS = [
+    "members:pledge:create", "members:pledge:update", "members:pledge:delete",
+    "pledges:create", "pledges:update", "pledges:delete",
+  ];
+
   try {
     const event = req.headers["x-patreon-event"];
-    const body = JSON.parse(req.body.toString());
 
-    if (!["members:pledge:create","members:pledge:update","members:pledge:delete"].includes(event)) {
+    if (!RELEVANT_EVENTS.includes(event)) {
       return res.status(200).end();
     }
 
-    const patreonUserId = body.data?.relationships?.user?.data?.id;
-    if (!patreonUserId) return res.status(200).end();
-
-    const patronStatus = body.data?.attributes?.patron_status;
-    const tierId = body.data?.relationships?.currently_entitled_tiers?.data?.[0]?.id;
-
-    const active = patronStatus === "active_patron";
-    const tier = (active && tierId) ? (TIER_MAP[tierId] || null) : null;
-
-    await pool.query(
-      `UPDATE patreon_status SET active = $1, tier = $2, last_sync = NOW()
-       WHERE patreon_user_id = $3`,
-      [active, tier, String(patreonUserId)]
-    );
-
-    console.log(`Patreon webhook [${event}] user=${patreonUserId} active=${active} tier=${tier}`);
+    console.log(`Patreon webhook [${event}] — teljes szinkron triggerelve`);
     res.status(200).end();
+
+    // A válasz után indítjuk, hogy a Patreon gyorsan 200-at kapjon,
+    // ne várjon a (több másodperces) teljes tagság-lekérdezésre.
+    triggerWebhookSync();
   } catch (err) {
     console.error("Patreon webhook hiba:", err);
     res.status(500).end();

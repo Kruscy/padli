@@ -12,7 +12,10 @@ const router = express.Router();
 
 const stripe          = new Stripe(process.env.STRIPE_SECRET_KEY);
 const WEBHOOK_SECRET  = process.env.STRIPE_WEBHOOK_SECRET;
-const SITE_URL        = process.env.SITE_URL || "http://localhost:3000";
+const SITE_URL        = process.env.SITE_URL || "https://padlizsanfansub.hu";
+
+const PAYMENTS_SUSPENDED = false;
+const SUSPENDED_MESSAGE  = "A fizetések átmenetileg szünetelnek. Kérjük, próbáld később.";
 
 /* ── PONT CSOMAGOK ───────────────────────────────────────── */
 const PACKAGES = {
@@ -116,12 +119,28 @@ router.get("/packages", requireLogin, (req, res) => {
 });
 
 router.post("/checkout", requireLogin, async (req, res) => {
-  const { packageId } = req.body;
-  const pkg = PACKAGES[packageId];
-  if (!pkg) return res.status(400).json({ error: "Érvénytelen csomag" });
+  if (PAYMENTS_SUSPENDED) return res.status(503).json({ error: SUSPENDED_MESSAGE });
 
   const userId   = req.session.user.id;
   const username = req.session.user.username;
+
+  const { rows: userRows } = await pool.query(
+    `SELECT email, email_verified, billing_name, billing_address FROM users WHERE id = $1`, [userId]
+  );
+  const user = userRows[0];
+  if (!user?.email_verified) {
+    return res.status(403).json({ error: "A fizetéshez előbb erősítsd meg az e-mail címedet." });
+  }
+  if (!user?.billing_name || !user?.billing_address) {
+    return res.status(403).json({
+      error: "Kérjük, add meg a számlázási neved és címed a folytatáshoz.",
+      billingAddressRequired: true,
+    });
+  }
+
+  const { packageId } = req.body;
+  const pkg = PACKAGES[packageId];
+  if (!pkg) return res.status(400).json({ error: "Érvénytelen csomag" });
 
   try {
     const session = await stripe.checkout.sessions.create({
@@ -144,7 +163,8 @@ router.post("/checkout", requireLogin, async (req, res) => {
         packageId: pkg.id,
         points:    String(pkg.points),
       },
-      customer_email: req.session.user.email,
+      customer_email: user.email,
+      billing_address_collection: "required",
     });
 
     res.json({ url: session.url });
@@ -165,13 +185,29 @@ router.get("/tiers", (req, res) => {
 });
 
 router.post("/subscribe", requireLogin, async (req, res) => {
-  const { tierId } = req.body;
-  const tier = TIERS[tierId];
-  if (!tier) return res.status(400).json({ error: "Érvénytelen tier" });
+  if (PAYMENTS_SUSPENDED) return res.status(503).json({ error: SUSPENDED_MESSAGE });
 
   const userId   = req.session.user.id;
   const username = req.session.user.username;
-  const email    = req.session.user.email;
+
+  const { rows: userRows } = await pool.query(
+    `SELECT email, email_verified, billing_name, billing_address FROM users WHERE id = $1`, [userId]
+  );
+  const user = userRows[0];
+  if (!user?.email_verified) {
+    return res.status(403).json({ error: "A fizetéshez előbb erősítsd meg az e-mail címedet." });
+  }
+  if (!user?.billing_name || !user?.billing_address) {
+    return res.status(403).json({
+      error: "Kérjük, add meg a számlázási neved és címed a folytatáshoz.",
+      billingAddressRequired: true,
+    });
+  }
+  const email = user.email;
+
+  const { tierId } = req.body;
+  const tier = TIERS[tierId];
+  if (!tier) return res.status(400).json({ error: "Érvénytelen tier" });
 
   try {
     // Ellenőrzés: van-e már aktív Stripe előfizetése?
@@ -200,6 +236,7 @@ router.post("/subscribe", requireLogin, async (req, res) => {
         tierId,
         tierName: tier.tier,
       },
+      billing_address_collection: "required",
     });
 
     res.json({ url: session.url });
@@ -293,11 +330,13 @@ router.post("/webhook", async (req, res) => {
         const inv = event.data.object;
         if (inv.billing_reason === "subscription_create") break; // első aktiváláskor már kezeltük
 
-        const sub = await stripe.subscriptions.retrieve(inv.subscription);
+        const sub = await stripe.subscriptions.retrieve(inv.subscription, {
+          expand: ["default_payment_method"],
+        });
         const customerId = sub.customer;
 
         const { rows } = await pool.query(
-          `SELECT id, email, username FROM users WHERE stripe_customer_id = $1`, [customerId]
+          `SELECT id, email, username, billing_address, billing_name FROM users WHERE stripe_customer_id = $1`, [customerId]
         );
         if (!rows.length) break;
         const user = rows[0];
@@ -309,13 +348,16 @@ router.post("/webhook", async (req, res) => {
           WHERE user_id = $2 AND payment_source = 'stripe'
         `, [periodEnd, user.id]);
 
-        // Billingo számla megújulásra
+        // Billingo számla megújulásra — a felhasználó által saját maga megadott,
+        // ellenőrzött (Geoapify-vel validált) valódi nevet és címet használjuk,
+        // NEM a Stripe-nál beírt (nem megbízható, bárhogy kitölthető) nevet.
         const tierMeta = sub.metadata?.tierName;
         if (tierMeta && user.email) {
           const amountHuf = inv.amount_paid;
           createInvoice({
-            email: user.email,
-            name:  user.username,
+            email:   user.email,
+            name:    user.billing_name || user.username,
+            address: user.billing_address || null,
             items: [{ name: `PadlizsanFanSub ${tierMeta} támogatás (megújulás)`, price: amountHuf }],
           }).catch(() => {});
         }
@@ -354,14 +396,17 @@ async function handlePointsPurchase(session, meta, userId) {
     [userId, session.id, packageId, points, pkg?.price || 0]
   );
 
-  // Billingo számla
+  // Billingo számla — a felhasználó saját maga megadott, ellenőrzött
+  // (Geoapify-vel validált) valódi nevét és címét használjuk, NEM a
+  // Stripe checkout önkitöltős (nem megbízható) mezőit.
   const { rows: userRows } = await pool.query(
-    `SELECT email, username FROM users WHERE id = $1`, [userId]
+    `SELECT email, username, billing_name, billing_address FROM users WHERE id = $1`, [userId]
   );
   if (userRows[0]?.email && pkg) {
     createInvoice({
-      email: userRows[0].email,
-      name:  userRows[0].username,
+      email:   userRows[0].email,
+      name:    userRows[0].billing_name || userRows[0].username,
+      address: userRows[0].billing_address || null,
       items: [{ name: `${pkg.name} — ${pkg.points} pont`, price: pkg.price }],
     }).catch(() => {});
   }
@@ -409,14 +454,17 @@ async function handleSubscriptionActivated(session, meta, userId) {
     `, [`stripe_${userId}`, userId, tierName, subId || null, periodEnd]);
   }
 
-  // Billingo számla
+  // Billingo számla — a felhasználó saját maga megadott, ellenőrzött
+  // (Geoapify-vel validált) valódi nevét és címét használjuk, NEM a
+  // Stripe checkout önkitöltős (nem megbízható) mezőit.
   const { rows: userRows } = await pool.query(
-    `SELECT email, username FROM users WHERE id = $1`, [userId]
+    `SELECT email, username, billing_name, billing_address FROM users WHERE id = $1`, [userId]
   );
   if (userRows[0]?.email && tier) {
     createInvoice({
-      email: userRows[0].email,
-      name:  userRows[0].username,
+      email:   userRows[0].email,
+      name:    userRows[0].billing_name || userRows[0].username,
+      address: userRows[0].billing_address || null,
       items: [{ name: `PadlizsanFanSub ${tierName} támogatás — 1 hónap`, price: tier.price }],
     }).catch(() => {});
   }

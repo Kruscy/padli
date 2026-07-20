@@ -31,6 +31,7 @@ import uploaderRoutes from "./routes/uploader.js";
 import inpaintRoutes from "./routes/inpaint.js";
 import translateRoutes from "./routes/translate.js";
 import ocrRoutes from "./routes/ocr.js";
+import geminiProxyRoutes from "./routes/gemini-proxy.js";
 import pointsRoutes from "./routes/points.js";
 import padlicromeRoutes from "./routes/padlicrome.js";
 import gdprRoutes from "./routes/gdpr.js";
@@ -91,7 +92,7 @@ router.post("/auth/register", async (req, res) => {
       return res.status(400).json({ error: "Ez a felhasználónév foglalt" });
     }
 
-    const eCheck = await pool.query("SELECT 1 FROM users WHERE email = $1", [email]);
+    const eCheck = await pool.query("SELECT 1 FROM users WHERE lower(email) = lower($1)", [email]);
     if (eCheck.rowCount > 0) {
       return res.status(400).json({ error: "Ez az email már regisztrálva van" });
     }
@@ -364,6 +365,32 @@ router.get("/want", async (req, res) => {
   }
 });
 
+// ===== WANT TO READ - EGY MANGA ÁLLAPOTA =====
+router.get("/want/:slug", async (req, res) => {
+  if (!req.session?.user?.id) {
+    return res.status(401).json({ error: "Not logged in" });
+  }
+
+  const { slug } = req.params;
+
+  try {
+    const { rows } = await pool.query(
+      `
+      SELECT 1
+      FROM want_to_read w
+      JOIN manga m ON m.id = w.manga_id
+      WHERE m.slug = $1 AND w.user_id = $2
+      `,
+      [slug, req.session.user.id]
+    );
+
+    res.json({ wanted: rows.length > 0 });
+  } catch (err) {
+    console.error("GET /api/want/:slug error", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 // ===== WANT TO READ - TOGGLE =====
 router.post("/want/:slug", requireLogin, async (req, res) => {
   if (!req.session.user) {
@@ -446,6 +473,7 @@ router.use("/uploader", uploaderRoutes);
 router.use("/inpaint", inpaintRoutes);
 router.use("/translate", translateRoutes);
 router.use("/ocr", ocrRoutes);
+router.use("/gemini-proxy", geminiProxyRoutes);
 router.use("/points", pointsRoutes);
 router.use("/padlicrome", padlicromeRoutes);
 router.use("/gdpr", gdprRoutes);

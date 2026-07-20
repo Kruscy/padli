@@ -4,9 +4,8 @@ import { sendToDiscord } from "./discord-bot.js";
 import fs from "fs";
 import path from "path";
 import config from "./padli-config.js";
+import { callGemini } from "./lib/gemini-client.js";
 
-const OLLAMA_URL    = config.general.ollamaUrl;
-const OLLAMA_MODEL  = config.general.ollamaModel;
 const ANILIST_URL   = "https://graphql.anilist.co";
 const KAMRAFY_URL   = "https://kamrafy.hu/api/v1/recommend";
 const KAMRAFY_KEY   = process.env.KAMRAFY_API_KEY || "";
@@ -14,6 +13,7 @@ const JIKAN_URL     = "https://api.jikan.moe/v4";
 const MANGADEX_URL  = "https://api.mangadex.org";
 const KITSU_URL     = "https://kitsu.io/api/edge";
 const SHIKIMORI_URL = "https://shikimori.one/api";
+const SITE_URL      = process.env.SITE_URL || "https://padlizsanfansub.hu";
 export const REPLY_DELAY_MS = config.replyDelay.questionMs;
 const BOT_NAMES = config.bot.triggerNames;
 const LOG = "\uD83C\uDF46"; // 🍆
@@ -209,8 +209,11 @@ function checkEdgeCase(str) {
 
 function applyLLMSafety(reply) {
   if (!reply || !config.features.enableLLMSafety) return reply;
-  // Kamrafy recept válasz: ne szűrjük, megőrizzük a linkeket és sortöréseket
-  if (reply.includes("kamrafy.hu")) return reply;
+  // Kamrafy recept válasz vagy a saját oldal linkjei: ne szűrjük/csonkoljuk –
+  // ezeket a szerver fűzi hozzá utólag, valós adatból, nem az LLM találja ki,
+  // úgyhogy megőrizzük a linkeket és sortöréseket akkor is, ha emiatt
+  // hosszabb a válasz a szokásos limitnél.
+  if (reply.includes("kamrafy.hu") || reply.includes(SITE_URL)) return reply;
   const s = config.llmSafety;
   let r = reply;
   // qwen3/deepseek thinking blokk eltávolítása
@@ -852,25 +855,56 @@ async function searchKamrafy(question) {
   }
 }
 
-/* ── OLLAMA ─────────────────────────────────────────────── */
-async function askOllama(messages) {
+/* ── GEMINI ─────────────────────────────────────────────── */
+async function askLLM(messages) {
   try {
-    const res = await fetch(OLLAMA_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: OLLAMA_MODEL, messages, stream: false,
-        options: { temperature: config.general.temperature, num_predict: config.general.maxTokens }
-      }),
-      signal: AbortSignal.timeout(config.general.ollamaTimeoutMs)
-    });
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    const data = await res.json();
-    return applyLLMSafety(data?.message?.content?.trim() || null);
+    // Gemini nem ismeri a "system"/"assistant" role-t: a system üzenetek
+    // külön systemInstruction-be kerülnek, az assistant pedig "model" role-ra
+    // fordul. A messages mindig Ollama/OpenAI-stílusú {role, content} tömb.
+    const systemText = messages.filter(m => m.role === "system").map(m => m.content).join("\n\n");
+    const contents = messages
+      .filter(m => m.role !== "system")
+      .map(m => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] }));
+
+    const body = {
+      contents,
+      generationConfig: {
+        temperature: config.general.temperature,
+        maxOutputTokens: config.general.maxTokens,
+        // A "thinking" modellek (pl. a "flash-latest" mögötti gemini-3.5-flash)
+        // a maxOutputTokens keretből láthatatlan belső gondolkodásra is
+        // költenek — enélkül a rövid válaszok simán MAX_TOKENS-nél
+        // csonkolódtak, mielőtt a látható szöveg elkezdődött volna.
+        thinkingConfig: { thinkingBudget: 0 },
+      },
+    };
+    if (systemText) body.systemInstruction = { parts: [{ text: systemText }] };
+
+    // A callGemini a 3 kulcs között automatikusan rotál, ha valamelyik
+    // kimerül – lásd server/lib/gemini-client.js.
+    const data = await callGemini(config.general.geminiModel, body, config.general.geminiTimeoutMs);
+    const text = data?.candidates?.[0]?.content?.parts?.map(p => p.text).join("").trim();
+    return applyLLMSafety(text || null);
   } catch (err) {
-    console.error(LOG + " Ollama error: " + err.message);
+    console.error(LOG + " Gemini error: " + err.message);
     return config.fallback.enabled ? config.fallback.message : null;
   }
+}
+
+/* ── ADATVEZÉRELT TERMÉSZETES VÁLASZ ─────────────────────────
+   Néhány ág eddig fix sablonszöveget adott vissza a valós adat
+   köré (pl. Patreon infó, elérhetőség, ajánlások) — a felhasználó
+   kérésére ezeket is átadjuk a Gemininek természetesebb, kevésbé
+   gépies megfogalmazásért. A "fallback" a régi fix szöveg marad,
+   ha a Gemini-hívás valamiért elszáll. */
+async function naturalize(dataContext, instruction, fallback) {
+  const reply = await askLLM([
+    { role: "system", content: getSystemPrompt() },
+    { role: "user", content: instruction +
+      " Ne használj szögletes zárójeleket vagy forráshivatkozásokat a válaszban, csak sima, természetes mondatokat." +
+      "\n\nADATOK (csak ezeket használd, ne találj ki semmit):\n" + dataContext }
+  ]);
+  return reply || fallback;
 }
 
 /* ── TRIGGEREK ──────────────────────────────────────────── */
@@ -960,6 +994,13 @@ function extractSearchTerm(question) {
   if (multi && !MULTI_EXCLUDE.has(multi[1].split(" ")[0]))
     return multi[1].replace(/\s*(manga|anime)\s*$/i, "").trim();
 
+  // "Te ..." kezdetű kérdés (pl. "te utaztál már?", "te szereted...?") magához
+  // Padlihoz szól, nem cím-keresés. Idáig jutva sem az explicit mintázatok,
+  // sem egy felismerhető, nagybetűs cím nem talált semmit — ne csikarjunk
+  // ki belőle keresési kifejezést a token-fallback-kal, hagyjuk a
+  // self/csevegés ágra futni.
+  if (/^te\b/i.test(cleaned)) return null;
+
   // Token alapú fallback – min 3 karakter, stop szavak kiszűrve
   const tokens = cleaned.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
     .split(/\s+/).filter(w => w.length >= 3 && !HU_STOP.has(w));
@@ -1043,7 +1084,7 @@ async function generateReply(question, conversationHistory, userKey) {
   if (intent === "adult") {
     plog("ADULT", "ollamanak atadva lazan");
     padliLog({ event: "adult_soft", query: question });
-    return await askOllama([
+    return await askLLM([
       { role: "system", content: getSystemPrompt() },
       { role: "user", content: "Reagalj erre termeszetesen es lazan, 1-2 mondatban magyarul: " +
         question.replace(/padli[,]?\s*/gi,"").trim() +
@@ -1052,23 +1093,45 @@ async function generateReply(question, conversationHistory, userKey) {
   }
 
   if (intent === "patreon") {
-    plog("PATREON", "fix valasz");
+    plog("PATREON", "gemini termeszetes valasz");
     padliLog({ event: "patreon_question", query: question });
-    return config.fixedReplies.patreon
+    const fallback = config.fixedReplies.patreon
       .replace("{price}", config.bot.patreonPriceText)
       .replace("{url}", config.bot.patreonUrl);
+    return await naturalize(
+      "Támogatói (Patreon) ár: " + config.bot.patreonPriceText + "\nPatreon link: " + config.bot.patreonUrl,
+      "A user a támogatásról/Patreonról kérdezett. Válaszolj természetesen, magyarul, 1-2 mondatban, és MINDIG idézd be pontosan a linket.",
+      fallback
+    );
   }
 
   if (intent === "dbInfo") {
     plog("DB_INFO", "adatbazis info");
     padliLog({ event: "db_info_question", query: question });
-    const l = question.toLowerCase();
+    // Ékezet nélkül hasonlítunk, ugyanúgy mint a scoreIntents()-ben —
+    // különben pl. "milyen műfajok" nem illeszkedett a "milyen mufaj"
+    // trigger szóra, mert az ékezetes "ű" nem egyezett a sima "u"-val.
+    const l = question.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
     if (config.dbInfoTriggers.tags.some(w => l.includes(w))) {
       const tags = await getDBTags();
-      if (tags) return "Nalunk a fobb mufajok: " + tags.genres.slice(0, 8).join(", ") + ". Tagek: " + tags.tags.slice(0, 8).join(", ") + ".";
+      if (tags) {
+        const fallback = "Nalunk a fobb mufajok: " + tags.genres.slice(0, 8).join(", ") + ". Tagek: " + tags.tags.slice(0, 8).join(", ") + ".";
+        return await naturalize(
+          "Elérhető műfajok: " + tags.genres.slice(0, 8).join(", ") + "\nElérhető tagek: " + tags.tags.slice(0, 8).join(", "),
+          "A user arra kérdezett rá, milyen műfajok/tagek vannak az oldalon. Válaszolj természetesen, magyarul, 1-2 mondatban.",
+          fallback
+        );
+      }
     }
     const stats = await getDBStats();
-    if (stats) return "Az oldalon jelenleg " + stats.total + " manga/manhwa/manhua szerepel, ebbol " + stats.with_chapters + " olvashato fejezettel.";
+    if (stats) {
+      const fallback = "Az oldalon jelenleg " + stats.total + " manga/manhwa/manhua szerepel, ebbol " + stats.with_chapters + " olvashato fejezettel.";
+      return await naturalize(
+        "Összes cím az oldalon: " + stats.total + "\nEbből olvasható fejezettel: " + stats.with_chapters,
+        "A user az oldal méretére/statisztikájára kérdezett rá. Válaszolj természetesen, magyarul, 1-2 mondatban.",
+        fallback
+      );
+    }
     return getRandomItem(config.fixedReplies.noData);
   }
 
@@ -1112,7 +1175,7 @@ async function generateReply(question, conversationHistory, userKey) {
             const charCtx = "[SAJÁT KÖZÖSSÉGI KARAKTER: \"" + dbChar.name + "\" - " + (dbChar.description || "") +
               (dbChar.personality ? " | Személyiség: " + dbChar.personality : "") +
               (stories ? " | Történetek: " + stories : "") + "]";
-            return await askOllama([
+            return await askLLM([
               { role: "system", content: getSystemPrompt() },
               { role: "user", content: "Válaszolj magyarul, 1-2 mondatban: " + question + "\n" + charCtx }
             ]);
@@ -1156,7 +1219,7 @@ async function generateReply(question, conversationHistory, userKey) {
         "Link: " + pick.url,
       ].filter(Boolean).join("\n");
 
-      const ollamaReply = await askOllama([
+      const ollamaReply = await askLLM([
         { role: "system", content: "Te Padli vagy, a PadlizsanFanSub manga/anime közösségi bot. Ha receptet kérnek, 1 ételt ajánlasz a Kamrafy.hu-ról, lazán és röviden, magyarul. Az ajánlásban mindig szerepeljen a recept pontos neve és a kamrafy.hu link." },
         { role: "user", content: "Kérdés: \"" + question.replace(/padli[,!]?\s*/gi,"").trim() + "\"\n\nEz a recept illik hozzá:\n" + recipeCtx + "\n\nAjánld be 1-2 mondatban, add meg a linket!" }
       ]);
@@ -1168,7 +1231,7 @@ async function generateReply(question, conversationHistory, userKey) {
       return reply;
     }
     // Ha tényleg semmi nem jön: kérdezzen vissza, ne tagadjon meg mindent
-    return await askOllama([
+    return await askLLM([
       { role: "system", content: "Te Padli vagy, a PadlizsanFanSub manga/anime bot. Ha valaki ételt kér és nincs találat, kérdezz vissza kedvesen hogy mi van otthon vagy milyen ételt szeretne. 1 mondat." },
       { role: "user", content: question.replace(/padli[,!]?\s*/gi,"").trim() }
     ]) || "Mondd meg mi van otthon és megpróbálok ajánlani valamit a Kamrafy.hu-ról!";
@@ -1181,13 +1244,29 @@ async function generateReply(question, conversationHistory, userKey) {
       plog("AVAILABILITY", "megtalalt: " + local.title);
       const chaps = local.chapter_count > 0 ? local.chapter_count + " fejezet van feltoltve" : "de meg nincs feltoltve fejezet";
       const score = local.average_score ? " (" + (local.average_score / 10).toFixed(1) + "/10)" : "";
+      // Ha megvan nálunk, adjunk hozzá közvetlen linket is – ne kelljen
+      // utána külön megkeresnie a user-nek. Discord-kompatibilis markdown
+      // formátum: [cím](url) — Discord ezt nevesített linkként rendereli,
+      // a webes chat widget pedig ugyanígy chat.js-ben van kibontva.
+      const link = local.slug ? "[" + local.title + "](" + SITE_URL + "/chapters.html?slug=" + local.slug + ")" : null;
       const tpl = getRandomItem(config.fixedReplies.found);
-      return fillTemplate(tpl, { title: local.title, chaps: chaps + score }) ||
-        "Igen, a \"" + local.title + "\" megvan nalunk – " + chaps + score + "! \uD83D\uDCD6";
+      const fallback = (fillTemplate(tpl, { title: local.title, chaps: chaps + score }) ||
+        "Igen, a \"" + local.title + "\" megvan nalunk – " + chaps + score + "! 📖") + (link ? "\n" + link : "");
+      const reply = await naturalize(
+        "Cím: " + local.title + "\nÁllapot: " + chaps + score,
+        "A user rákérdezett, hogy megvan-e nálunk ez a cím. IGEN, megvan. Válaszolj lelkesen, természetesen, magyarul, 1-2 mondatban.",
+        fallback
+      );
+      return (link && !reply.includes(link)) ? reply + "\n" + link : reply;
     }
     plog("AVAILABILITY", "nem talalhato: " + searchTerm);
     const tpl = getRandomItem(config.fixedReplies.notFound);
-    return fillTemplate(tpl, { term: searchTerm }) || "Sajnos a \"" + searchTerm + "\" nincs meg nalunk.";
+    const fallback = fillTemplate(tpl, { term: searchTerm }) || "Sajnos a \"" + searchTerm + "\" nincs meg nalunk.";
+    return await naturalize(
+      "Keresett cím: \"" + searchTerm + "\"\nEredmény: NINCS meg nálunk.",
+      "A user rákérdezett, hogy megvan-e nálunk ez a cím. NINCS meg. Válaszolj sajnálkozva de barátságosan, magyarul, 1-2 mondatban.",
+      fallback
+    );
   }
 
   if (intent === "recommendation" && !isRecipeQuestion(question)) {
@@ -1207,25 +1286,47 @@ async function generateReply(question, conversationHistory, userKey) {
           const c = r.chapter_count > 0 ? ", " + r.chapter_count + " fejezet" : "";
           return "\"" + r.title + "\"" + s + c;
         }).join(", ");
-        // Visszaadja a listát – az Ollama NEM kap szerepet ebben, direktben adjuk vissza
-        return "Nálunk elérhető " + genres[0] + " manhwa/manga: " + list + " \uD83D\uDCD6";
+        // Ajánláshoz is adjunk közvetlen linket minden címhez – ne kelljen
+        // utána külön megkeresni. A Gemini a rendszerprompt miatt maga nem
+        // ír linket, ezért ezt mindig utólag, szerver oldalon fűzzük hozzá.
+        // Discord-kompatibilis markdown formátum: [cím](url).
+        const linksBlock = toShow.filter(r => r.slug).map(r => "[" + r.title + "](" + SITE_URL + "/chapters.html?slug=" + r.slug + ")").join("\n");
+        const fallback = "Nálunk elérhető " + genres[0] + " manhwa/manga: " + list + " 📖" + (linksBlock ? "\n" + linksBlock : "");
+        const reply = await naturalize(
+          "Keresett műfaj: " + genres[0] + "\nElérhető címek: " + list,
+          "A user " + genres[0] + " műfajú ajánlást kért. Ajánld be ezeket a címeket természetesen, lelkesen, magyarul, 1-2 mondatban.",
+          fallback
+        );
+        return (linksBlock && !reply.includes(linksBlock)) ? reply + "\n" + linksBlock : reply;
       }
     }
     // Ha nincs genre találat: kérdezzük meg melyik genre-t keresi pontosabban
     // NE adjunk random mangát ami nem illik a genre-hez
     if (genres.length > 0) {
-      return "Sajnos " + genres[0] + " kategóriában most nem találok nálunk olvasható mangát. Próbálj más műfajt, vagy kérdezz rá egy konkrét címre!";
+      const fallback = "Sajnos " + genres[0] + " kategóriában most nem találok nálunk olvasható mangát. Próbálj más műfajt, vagy kérdezz rá egy konkrét címre!";
+      return await naturalize(
+        "Keresett műfaj: " + genres[0] + "\nEredmény: nincs nálunk olvasható cím ebben a műfajban.",
+        "A user " + genres[0] + " műfajú ajánlást kért, de nincs találat. Válaszolj sajnálkozva, javasold hogy próbáljon más műfajt vagy konkrét címet, magyarul, 1-2 mondatban.",
+        fallback
+      );
     }
     // Ha genre sem volt: random ajánlás a DB-ből
     try {
       const { rows } = await dbPool.query(
-        "SELECT m.title, m.average_score, COUNT(DISTINCT c.id) AS chapter_count " +
+        "SELECT m.title, m.slug, m.average_score, COUNT(DISTINCT c.id) AS chapter_count " +
         "FROM manga m LEFT JOIN chapter c ON c.manga_id = m.id " +
         "GROUP BY m.id HAVING COUNT(DISTINCT c.id) > 0 ORDER BY m.average_score DESC NULLS LAST LIMIT 5"
       );
       if (rows.length > 0) {
         const list = rows.map(r => "\"" + r.title + "\"" + (r.average_score ? " (" + (r.average_score / 10).toFixed(1) + "/10)" : "")).join(", ");
-        return "Nálunk a legjobban értékelt sorozatok: " + list + " \uD83D\uDCD6";
+        const linksBlock = rows.filter(r => r.slug).map(r => "[" + r.title + "](" + SITE_URL + "/chapters.html?slug=" + r.slug + ")").join("\n");
+        const fallback = "Nálunk a legjobban értékelt sorozatok: " + list + " 📖" + (linksBlock ? "\n" + linksBlock : "");
+        const reply = await naturalize(
+          "Legjobban értékelt címek nálunk: " + list,
+          "A user ajánlást kért konkrét műfaj megjelölése nélkül. Ajánld be ezeket a legjobban értékelt címeket természetesen, magyarul, 1-2 mondatban.",
+          fallback
+        );
+        return (linksBlock && !reply.includes(linksBlock)) ? reply + "\n" + linksBlock : reply;
       }
     } catch {}
     return "Mondd meg milyen műfajt keresel és megpróbálom megtalálni nálunk!";
@@ -1247,7 +1348,7 @@ async function generateReply(question, conversationHistory, userKey) {
 
     if (isPadliSelfQ) {
       plog("PADLI_SELF", "magáról kérdeznek");
-      return await askOllama([
+      return await askLLM([
         { role: "system", content: getSystemPrompt() },
         { role: "user", content: "Válaszolj magyarul, lazán és személyesen erre: " +
           question.replace(/padli[,]?\s*/gi,"").trim() +
@@ -1257,7 +1358,7 @@ async function generateReply(question, conversationHistory, userKey) {
 
     // Általános off-topic / csevegés – history NÉLKÜL küldünk, hogy ne szivárogjon be
     // előző karakter/manga kontextus
-    return await askOllama([
+    return await askLLM([
       { role: "system", content: getSystemPrompt() },
       { role: "user", content: "Reagálj természetesen és barátságosan erre az üzenetre, 1-2 mondatban magyarul: " +
         question.replace(/padli[,]?\s*/gi,"").trim().slice(0, 80) +
@@ -1286,7 +1387,7 @@ async function generateReply(question, conversationHistory, userKey) {
       const charCtx = "[SAJÁT KÖZÖSSÉGI KARAKTER: \"" + dbChar.name + "\"-" + (dbChar.description || "") +
         (dbChar.personality ? " | Személyiség: " + dbChar.personality : "") +
         (stories ? " | Történetek: " + stories : "") + "]";
-      return await askOllama([
+      return await askLLM([
         { role: "system", content: getSystemPrompt() },
         { role: "user", content: "Válaszolj magyarul, 1-2 mondatban: " + question + "\n" + charCtx }
       ]);
@@ -1299,7 +1400,7 @@ async function generateReply(question, conversationHistory, userKey) {
       padliLog({ event: "char_anilist_hit", name: aniChar.name, query: question });
       const mediaStr = aniChar.media.length ? " | Megjelenik: " + aniChar.media.join(", ") : "";
       const charCtx = "[AniList karakter: \"" + aniChar.name + "\" - " + aniChar.description + mediaStr + "]";
-      return await askOllama([
+      return await askLLM([
         { role: "system", content: getSystemPrompt() },
         { role: "user", content: "Válaszolj magyarul, 1-2 mondatban: " + question + "\n" + charCtx }
       ]);
@@ -1348,7 +1449,15 @@ async function generateReply(question, conversationHistory, userKey) {
   if (msgs[msgs.length - 1]?.role === "user") msgs[msgs.length - 1].content = cleanQ;
   else msgs.push({ role: "user", content: cleanQ });
 
-  return await askOllama(msgs);
+  const reply = await askLLM(msgs);
+  // Ha nálunk megvan (PadliDB találat), adjunk közvetlen linket is –
+  // ne kelljen utána külön megkeresnie a user-nek. Discord-kompatibilis
+  // markdown formátum: [cím](url).
+  if (localResult?.slug && reply) {
+    const link = "[" + localResult.title + "](" + SITE_URL + "/chapters.html?slug=" + localResult.slug + ")";
+    return reply.includes(link) ? reply : reply + "\n" + link;
+  }
+  return reply;
 }
 
 /* ── UZENET KULDES ──────────────────────────────────────── */
@@ -1371,13 +1480,29 @@ const lastReplyTime   = new Map();
 const mutedUsers      = new Map();
 const lastUserMsg     = new Map();
 const processingUsers = new Set();
+// Beszélgetés-folytatás: ha Padli nemrég válaszolt egy konkrét usernek, a
+// következő üzenetét neki szólónak vesszük akkor is, ha nem írja ki újra
+// a nevét és nem kérdőjellel zárja — mintha egy folyamatos beszélgetés
+// része lenne (reply gomb / "padli" szó nélkül is).
+const conversationContinuation = new Map();
+const CONTINUATION_WINDOW_MS = 60000;
 
 export async function handleChatMessageForAI(msg, broadcastFn) {
   const { content: rawContent, author, source } = msg;
   if (author === "Padli") return;
 
-  const content = sanitizeInput(rawContent);
+  let content = sanitizeInput(rawContent);
   if (!content) return;
+
+  const userKey = (source || "web") + ":" + author;
+
+  // Ha nemrég (1 percen belül) Padli válaszolt EBBEN a beszélgetésben
+  // pont ennek a usernek, a most érkező üzenetét is neki szólónak vesszük,
+  // még ha nem is szólítja meg újra és nincs benne kérdőjel.
+  const lastReplyToUser = conversationContinuation.get(userKey);
+  if (lastReplyToUser && Date.now() - lastReplyToUser < CONTINUATION_WINDOW_MS && !isDirectMention(content)) {
+    content = "padli " + content;
+  }
 
   if (isDirectMention(content)) {
     const edgeReply = checkEdgeCase(content);
@@ -1393,8 +1518,6 @@ export async function handleChatMessageForAI(msg, broadcastFn) {
   }
 
   if (!isDirectMention(content) && !isQuestion(content)) return;
-
-  const userKey = (source || "web") + ":" + author;
 
   if (mutedUsers.has(userKey) && Date.now() < mutedUsers.get(userKey)) {
     console.log(LOG + " Mute: " + author); return;
@@ -1426,11 +1549,15 @@ export async function handleChatMessageForAI(msg, broadcastFn) {
     if (isOffTopic) {
       padliLog({ event: "offtopic", query: content, author });
       // Off-topic: ne fix szöveg, hanem az Ollama lazán reagál
-      const offReply = await askOllama([
+      const offReply = await askLLM([
         { role: "system", content: getSystemPrompt() + "\nHa nem manga/anime témáról kérdeznek: lazán reagálj, hülyéskedj ha kell, tereld vissza a témára. NE ismételd vissza amit a user írt. Max 1-2 mondat." },
         { role: "user", content: "Reagálj erre természetesen és lazán, NE idézd vissza: " + content.replace(/padli[,]?\s*/gi,"").trim() }
       ]);
-      if (offReply) { await sendPadliMessage(offReply, broadcastFn); lastReplyTime.set(userKey, Date.now()); }
+      if (offReply) {
+        await sendPadliMessage(offReply, broadcastFn);
+        lastReplyTime.set(userKey, Date.now());
+        conversationContinuation.set(userKey, Date.now());
+      }
       return;
     }
     processingUsers.add(userKey);
@@ -1438,7 +1565,11 @@ export async function handleChatMessageForAI(msg, broadcastFn) {
       plog("HANDLER", "kozvetlen megszolitas: " + author);
       padliLog({ event: "direct_mention", author, query: content.slice(0, 80) });
       const reply = await generateReply(content, [...recentMessages], userKey);
-      if (reply) { await sendPadliMessage(reply, broadcastFn); lastReplyTime.set(userKey, Date.now()); }
+      if (reply) {
+        await sendPadliMessage(reply, broadcastFn);
+        lastReplyTime.set(userKey, Date.now());
+        conversationContinuation.set(userKey, Date.now());
+      }
     } finally { processingUsers.delete(userKey); }
     return;
   }
@@ -1452,7 +1583,10 @@ export async function handleChatMessageForAI(msg, broadcastFn) {
     const timer = setTimeout(async () => {
       pendingTimers.delete(timerId);
       const reply = await generateReply(content, snapshot, null);
-      if (reply) await sendPadliMessage(reply, broadcastFn);
+      if (reply) {
+        await sendPadliMessage(reply, broadcastFn);
+        conversationContinuation.set(userKey, Date.now());
+      }
     }, config.replyDelay.questionMs);
     pendingTimers.set(timerId, timer);
   }

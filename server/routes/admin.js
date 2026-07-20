@@ -1,10 +1,13 @@
 import express from "express";
 import { spawn } from "child_process";
+import fetch from "node-fetch";
 import { pool } from "../db.js";
 import { sendMail } from "../mail.js";
 import { clearNewReleasesCache } from "../cache/new-releases.js";
 import multer from "multer";
 import { refreshMetadataForManga } from "../refresh-metadata.js";
+import { getStatus as getGeminiStatus, validateGeminiKey, invalidateKeyCache } from "../lib/gemini-client.js";
+import { mangaImageToR2Key, deleteObjectsByPrefix } from "../r2.js";
 import fs from "fs";
 import path from "path";
 
@@ -82,8 +85,19 @@ router.post("/manga/:slug", async (req, res) => {
   const { cover_url, description, title, genres, tags, uploaders, anilist_id } = req.body;
 
   try {
+    // Duplikált slug esetén ugyanazt a kanonikus bejegyzést válasszuk,
+    // mint a GET /api/manga/:slug (a több fejezettel rendelkezőt) —
+    // különben az admin olyan példányt szerkeszt, amit az olvasók nem
+    // is látnak.
     const mangaRes = await pool.query(
-      `SELECT id FROM manga WHERE slug = $1`, [slug]
+      `SELECT m.id
+       FROM manga m
+       LEFT JOIN chapter c ON c.manga_id = m.id
+       WHERE m.slug = $1
+       GROUP BY m.id
+       ORDER BY COUNT(DISTINCT c.id) DESC, m.id ASC
+       LIMIT 1`,
+      [slug]
     );
     if (!mangaRes.rows.length) return res.status(404).json({ error: "Not found" });
     const mangaId = mangaRes.rows[0].id;
@@ -228,6 +242,26 @@ router.post("/chapter/:id/unlock", async (req, res) => {
 
 router.delete("/chapter/:id", async (req, res) => {
   try {
+    const { rows } = await pool.query(
+      `SELECT l.path AS library_path, m.folder AS manga_folder, c.folder AS chapter_folder, m.r2_migrated
+       FROM chapter c
+       JOIN manga m ON m.id = c.manga_id
+       JOIN library l ON l.id = c.library_id
+       WHERE c.id = $1`,
+      [req.params.id]
+    );
+
+    if (rows.length && rows[0].r2_migrated) {
+      const { library_path, manga_folder, chapter_folder } = rows[0];
+      try {
+        const prefix = mangaImageToR2Key(library_path, manga_folder, chapter_folder, "");
+        const deleted = await deleteObjectsByPrefix(prefix);
+        console.log(`[R2] fejezet törölve (${deleted} fájl): ${prefix}`);
+      } catch (err) {
+        console.error("R2 fejezet törlési hiba:", err.message);
+      }
+    }
+
     await pool.query(`DELETE FROM chapter WHERE id = $1`, [req.params.id]);
     res.json({ ok: true });
   } catch (err) {
@@ -259,10 +293,19 @@ router.post("/manga/:slug/cover", coverUpload.single("cover"), async (req, res) 
 router.post("/manga/:slug/refresh-metadata", async (req, res) => {
   const { slug } = req.params;
   const { anilist_id } = req.body;
- 
+
   try {
+    // Duplikált slug esetén ugyanazt a kanonikus bejegyzést válasszuk,
+    // mint a GET /api/manga/:slug (a több fejezettel rendelkezőt).
     const mangaRes = await pool.query(
-      `SELECT id FROM manga WHERE slug = $1`, [slug]
+      `SELECT m.id
+       FROM manga m
+       LEFT JOIN chapter c ON c.manga_id = m.id
+       WHERE m.slug = $1
+       GROUP BY m.id
+       ORDER BY COUNT(DISTINCT c.id) DESC, m.id ASC
+       LIMIT 1`,
+      [slug]
     );
     if (!mangaRes.rows.length) return res.status(404).json({ error: "Not found" });
     const mangaId = mangaRes.rows[0].id;
@@ -646,6 +689,121 @@ router.post("/send-verification-emails", async (req, res) => {
     res.json({ ok: true, sent, failed, total: users.length });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+/* ================= API KULCSOK HASZNÁLATA ================= */
+router.get("/api-usage", async (req, res) => {
+  try {
+    const geminiStatus = await getGeminiStatus();
+
+    const monthRows = await pool.query(`
+      SELECT provider, key_label,
+        COUNT(*) FILTER (WHERE created_at >= date_trunc('month', now()))::int AS this_month,
+        COUNT(*) FILTER (WHERE created_at >= date_trunc('month', now()) AND success = false)::int AS this_month_failures,
+        COUNT(*) FILTER (WHERE created_at >= CURRENT_DATE)::int AS today
+      FROM api_key_usage
+      GROUP BY provider, key_label
+    `);
+
+    const gemini = geminiStatus.map(g => {
+      const row = monthRows.rows.find(r => r.provider === "gemini" && r.key_label === g.label);
+      return {
+        label: g.label,
+        thisMonth: row ? row.this_month : 0,
+        thisMonthFailures: row ? row.this_month_failures : 0,
+        today: row ? row.today : 0,
+        exhausted: g.exhausted,
+      };
+    });
+
+    const deeplRow = monthRows.rows.find(r => r.provider === "deepl");
+    let deeplUsage = null;
+    if (process.env.DEEPL_API_KEY) {
+      try {
+        const usageRes = await fetch("https://api-free.deepl.com/v2/usage", {
+          headers: { "Authorization": `DeepL-Auth-Key ${process.env.DEEPL_API_KEY}` },
+          timeout: 8000,
+        });
+        if (usageRes.ok) deeplUsage = await usageRes.json();
+      } catch (err) {
+        console.error("DeepL usage lekérdezési hiba:", err.message);
+      }
+    }
+
+    res.json({
+      gemini,
+      deepl: {
+        thisMonthRequests: deeplRow ? deeplRow.this_month : 0,
+        thisMonthFailures: deeplRow ? deeplRow.this_month_failures : 0,
+        characterCount: deeplUsage?.character_count ?? null,
+        characterLimit: deeplUsage?.character_limit ?? null,
+      },
+    });
+  } catch (err) {
+    console.error("api-usage hiba:", err);
+    res.status(500).json({ error: "Szerver hiba" });
+  }
+});
+
+/* ================= GEMINI KULCSOK KEZELÉSE ================= */
+function maskKey(key) {
+  if (!key || key.length < 10) return "••••••••";
+  return key.slice(0, 6) + "…" + key.slice(-4);
+}
+
+router.get("/gemini-keys", async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, label, api_key, is_active, created_at FROM gemini_keys ORDER BY id`
+    );
+    res.json(rows.map(r => ({
+      id: r.id,
+      label: r.label,
+      keyMasked: maskKey(r.api_key),
+      isActive: r.is_active,
+      createdAt: r.created_at,
+    })));
+  } catch (err) {
+    console.error("gemini-keys lekérdezési hiba:", err);
+    res.status(500).json({ error: "Szerver hiba" });
+  }
+});
+
+router.post("/gemini-keys", async (req, res) => {
+  try {
+    const { apiKey } = req.body;
+    let { label } = req.body;
+    if (!apiKey?.trim()) return res.status(400).json({ error: "Hiányzó API kulcs" });
+
+    const check = await validateGeminiKey(apiKey.trim());
+    if (!check.valid) return res.status(400).json({ error: check.message });
+
+    if (!label?.trim()) {
+      const { rows } = await pool.query(`SELECT COUNT(*)::int AS c FROM gemini_keys`);
+      label = "Gemini-" + (rows[0].c + 1);
+    }
+
+    const { rows } = await pool.query(
+      `INSERT INTO gemini_keys (label, api_key) VALUES ($1,$2) RETURNING id, label, is_active, created_at`,
+      [label.trim(), apiKey.trim()]
+    );
+    invalidateKeyCache();
+    res.json({ id: rows[0].id, label: rows[0].label, isActive: rows[0].is_active, createdAt: rows[0].created_at });
+  } catch (err) {
+    console.error("gemini-keys hozzáadási hiba:", err);
+    res.status(500).json({ error: "Szerver hiba" });
+  }
+});
+
+router.delete("/gemini-keys/:id", async (req, res) => {
+  try {
+    await pool.query(`DELETE FROM gemini_keys WHERE id = $1`, [req.params.id]);
+    invalidateKeyCache();
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("gemini-keys törlési hiba:", err);
+    res.status(500).json({ error: "Szerver hiba" });
   }
 });
 

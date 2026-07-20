@@ -1,4 +1,4 @@
-import { S3Client, HeadObjectCommand, ListObjectsV2Command } from "@aws-sdk/client-s3";
+import { S3Client, HeadObjectCommand, ListObjectsV2Command, DeleteObjectsCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 
@@ -60,4 +60,25 @@ export async function listFiles(prefix) {
 export function mangaImageToR2Key(libraryPath, mangaFolder, chapter, file) {
   const full = `${libraryPath}/${mangaFolder}/${chapter}/${file}`;
   return localPathToR2Key(full.replace(/\/+/g, "/"));
+}
+
+// Egy prefix alatti összes objektum törlése (pl. egy teljes fejezet mappája).
+// Max 1000 kulcs törölhető egy DeleteObjectsCommand hívással, ezért darabolunk.
+export async function deleteObjectsByPrefix(prefix) {
+  let deleted = 0;
+  let token;
+  do {
+    const listCmd = new ListObjectsV2Command({ Bucket: BUCKET, Prefix: prefix, ContinuationToken: token });
+    const listRes = await r2.send(listCmd);
+    const keys = (listRes.Contents ?? []).map(o => o.Key);
+    if (keys.length) {
+      await r2.send(new DeleteObjectsCommand({
+        Bucket: BUCKET,
+        Delete: { Objects: keys.map(Key => ({ Key })) },
+      }));
+      deleted += keys.length;
+    }
+    token = listRes.NextContinuationToken;
+  } while (token);
+  return deleted;
 }

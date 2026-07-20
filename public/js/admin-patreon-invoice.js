@@ -66,7 +66,7 @@
       const description = descEl.value.trim();
       if (!amount || amount < 1) { statusEl.style.color = "#f87171"; statusEl.textContent = "❌ Adj meg érvényes összeget!"; return; }
       if (!description) { statusEl.style.color = "#f87171"; statusEl.textContent = "❌ A megnevezés nem lehet üres!"; return; }
-      if (!confirm(`Biztosan kiállítod a számlát?\n\nCím: Patreon Ireland Limited, German Branch\nMegnevezés: ${description}\nÖsszeg: ${fmt(amount)} (AAM 0%)\nFizetési mód: Átutalás (már teljesített)`)) return;
+      if (!confirm(`Biztosan kiállítod a számlát?\n\nCím: Patreon, Inc., 600 Townsend Street, Suite 500, San Francisco, CA 94103, United States\nMegnevezés: ${description}\nÖsszeg: ${fmt(amount)} (HO)\nFizetési mód: Átutalás (már teljesített)`)) return;
       sendBtn.disabled = true; sendBtn.textContent = "⏳ Kiállítás..."; statusEl.textContent = "";
       try {
         const res = await fetch("/api/patreon-invoice", {

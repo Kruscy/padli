@@ -6,6 +6,7 @@ import { pool } from "../db.js";
 import { r2, BUCKET, localPathToR2Key } from "../r2.js";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import multer from "multer";
+import { applyBugFix } from "../lib/apply-bug-fix.js";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
@@ -30,7 +31,7 @@ function parseImageUrl(imageUrl) {
 // Csoportosítva: manga → chapter → image
 router.get("/", requireLogin, async (req, res) => {
   try {
-    const { manga_slug, chapter, closed } = req.query;
+    const { manga_slug, chapter, closed, type } = req.query;
     
     let query = `
       SELECT
@@ -84,6 +85,12 @@ router.get("/", requireLogin, async (req, res) => {
       const isClosed = closed === 'true' || closed === true;
       query += ` AND br.is_closed = $${paramCount}`;
       params.push(isClosed);
+    }
+
+    if (type) {
+      paramCount++;
+      query += ` AND COALESCE(br.type, 'other') = $${paramCount}`;
+      params.push(type);
     }
 
     query += ` ORDER BY br.created_at DESC`;
@@ -238,14 +245,20 @@ router.get("/:id", requireLogin, async (req, res) => {
 });
 
 /* ── POST /api/bug-reports – új hibajegy beküldése ─────── */
+const VALID_REPORT_TYPES = ["english_remained", "wrong_chapter", "other"];
+
 router.post("/", requireLogin, async (req, res) => {
   try {
     const { image_url, description, image_index: explicitIndex } = req.body;
+    const type = VALID_REPORT_TYPES.includes(req.body?.type) ? req.body.type : "other";
     const userId   = req.session.user?.id;
     const username = req.session.user?.username;
 
-    if (!image_url || !description?.trim()) {
-      return res.status(400).json({ error: "image_url és description kötelező" });
+    if (!image_url) {
+      return res.status(400).json({ error: "image_url kötelező" });
+    }
+    if (type === "other" && !description?.trim()) {
+      return res.status(400).json({ error: "Egyéb típusnál a leírás kötelező" });
     }
 
     const parsed = parseImageUrl(image_url);
@@ -259,12 +272,14 @@ router.post("/", requireLogin, async (req, res) => {
       ? parseInt(explicitIndex)
       : parsed.imageIndex;
 
-    // Deduplication: ha már van nyitott hibajegy ugyanarra a képre, növeljük a számlálót
+    // Deduplication: ha már van nyitott, AZONOS TÍPUSÚ hibajegy ugyanarra a
+    // képre, növeljük a számlálót ahelyett, hogy duplikátumot hoznánk létre.
     const existing = await pool.query(`
       SELECT id FROM bug_reports
-      WHERE manga_slug=$1 AND chapter=$2 AND (image_index=$3 OR (image_index IS NULL AND image_file=$4)) AND is_closed=false
+      WHERE manga_slug=$1 AND chapter=$2 AND (image_index=$3 OR (image_index IS NULL AND image_file=$4))
+        AND is_closed=false AND COALESCE(type, 'other') = $5
       LIMIT 1
-    `, [mangaSlug, chapter, imageIndex, imageFile]);
+    `, [mangaSlug, chapter, imageIndex, imageFile, type]);
 
     if (existing.rows.length) {
       const existingId = existing.rows[0].id;
@@ -285,11 +300,11 @@ router.post("/", requireLogin, async (req, res) => {
 
     const { rows } = await pool.query(`
       INSERT INTO bug_reports
-        (provider, manga_slug, chapter, image_file, image_index, image_url, user_id, username, description, report_count)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,1)
+        (provider, manga_slug, chapter, image_file, image_index, image_url, user_id, username, description, type, report_count)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,1)
       RETURNING *
     `, [provider, mangaSlug, chapter, imageFile, imageIndex, image_url,
-        userId || null, username || "Névtelen", description.trim()]);
+        userId || null, username || "Névtelen", description?.trim() || null, type]);
 
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -533,202 +548,11 @@ router.post("/fix/upload", requireLogin, upload.single("image"), async (req, res
 /* ── POST /api/bug-reports/fix/:id/apply – admin alkalmazza ── */
 router.post("/fix/:id/apply", requireAdmin, async (req, res) => {
   try {
-    const { rows: fixRows } = await pool.query(
-      "SELECT * FROM bug_fixes WHERE id=$1", [req.params.id]
-    );
-    if (!fixRows.length) return res.status(404).json({ error: "Nem található" });
-    const fix = fixRows[0];
-
-    const fs = fsSync;
-    const path = pathSync;
-
-    // 1. Eredeti fájlnév lekérése a bug_reports táblából
-    const { rows: reportRows } = await pool.query(`
-      SELECT image_file FROM bug_reports
-      WHERE manga_slug=$1 AND chapter=$2 AND image_index=$3
-      LIMIT 1
-    `, [fix.manga_slug, fix.chapter, fix.image_index]);
-
-    if (!reportRows.length) {
-      return res.status(404).json({ error: "Bug report nem található az eredeti fájlnévhez" });
-    }
-    // ?r2=1 és egyéb query paraméterek levágása
-    const originalFilename = reportRows[0].image_file.split("?")[0];
-
-    // 2. Javított kép helye — a fixed_image_url-ből vesszük a pontos fájlnevet (pl. 19_5.jpg)
-    const fixedDir = path.join(process.cwd(), "uploads", "bugs", "javitott", fix.manga_slug, fix.chapter);
-    if (!fix.fixed_image_url) {
-      return res.status(404).json({ error: "A javítás nem tartalmaz fájl URL-t" });
-    }
-    const fixedFile = path.join(fixedDir, path.basename(fix.fixed_image_url));
-    if (!fs.existsSync(fixedFile)) {
-      return res.status(404).json({ error: "Javított kép fájl nem található: " + fixedFile });
-    }
-
-    // 3. Eredeti kép elérési útja a DB-ből (library_path + manga_folder + chapter + eredeti fájlnév)
-    const { rows: pathRows } = await pool.query(`
-      SELECT l.path AS library_path, m.folder AS manga_folder
-      FROM manga m
-      JOIN library l ON l.id = m.library_id
-      WHERE m.slug = $1
-      LIMIT 1
-    `, [fix.manga_slug]);
-
-    if (!pathRows.length) {
-      return res.status(404).json({ error: "Manga nem található az adatbázisban: " + fix.manga_slug });
-    }
-
-    const { library_path, manga_folder } = pathRows[0];
-    const originalPath = pathSync.join(library_path, manga_folder, fix.chapter, originalFilename);
-
-    // 3. Javított fájl beolvasása, majd célhelyre írás (ha a mappa/fájl nem létezik, létrehozzuk)
-    const fileData = fsSync.readFileSync(fixedFile);
-    fsSync.mkdirSync(pathSync.dirname(originalPath), { recursive: true });
-    fsSync.writeFileSync(originalPath, fileData);
-
-    // 4. Javított kép törlése az uploads mappából
-    fsSync.unlinkSync(fixedFile);
-
-    // 5. Ha a mappa üres lett, törli azt is
-    try {
-      const remaining = fsSync.readdirSync(fixedDir);
-      if (remaining.length === 0) fsSync.rmdirSync(fixedDir);
-    } catch (_) {}
-
-    // 6. DB frissítés
-    await pool.query(
-      `UPDATE bug_fixes SET is_applied=true, fixed_image_url=$1 WHERE id=$2`,
-      [originalPath, req.params.id]
-    );
-
-    // 6.5. R2 feltöltés + chapter updated_at cache-bust
-    try {
-      const r2Key = localPathToR2Key(originalPath);
-      const ct = /\.png$/i.test(originalFilename) ? "image/png" : "image/jpeg";
-      await r2.send(new PutObjectCommand({ Bucket: BUCKET, Key: r2Key, Body: fileData, ContentType: ct }));
-      await pool.query(
-        `UPDATE chapter SET updated_at = NOW()
-         WHERE folder = $1 AND manga_id = (SELECT id FROM manga WHERE slug = $2 LIMIT 1)`,
-        [fix.chapter, fix.manga_slug]
-      );
-      console.log(`[fix-apply] R2 feltöltve: ${r2Key}`);
-    } catch (r2Err) {
-      console.error("[fix-apply] R2 hiba:", r2Err.message);
-    }
-
-    // 7. Kapcsolódó bug reportok lezárása
-    await pool.query(`
-      UPDATE bug_reports SET is_closed=true, closed_at=NOW(), closed_by=$1
-      WHERE manga_slug=$2 AND chapter=$3 AND image_index=$4
-    `, [req.session.user.id, fix.manga_slug, fix.chapter, fix.image_index]);
-
-    // 7.5. Pont hozzáadása — csak ha award_points true
-    try {
-      if (fix.award_points !== false) {
-        const { rows: pointCheck } = await pool.query(
-          `SELECT id FROM user_points WHERE fix_id = $1`,
-          [req.params.id]
-        );
-        if (!pointCheck.length) {
-          await pool.query(`
-            INSERT INTO user_points (user_id, fix_id, points, approved_by, earned_at)
-            VALUES ($1, $2, 5, $3, NOW())
-          `, [fix.fixed_by, req.params.id, req.session.user.id]);
-          console.log(`[PONT] +5 pont user_id=${fix.fixed_by} (fix_id=${req.params.id})`);
-        }
-      } else {
-        console.log(`[PONT] Kihagyva (award_points=false) fix_id=${req.params.id}`);
-      }
-    } catch (pointErr) {
-      console.error("[PONT hiba]", pointErr.message);
-    }
-
-    // 7.6. Többi (el nem fogadott) javítás fájljainak törlése
-    try {
-      const { rows: otherFixes } = await pool.query(
-        `SELECT fixed_image_url FROM bug_fixes WHERE manga_slug=$1 AND chapter=$2 AND image_index=$3 AND id != $4`,
-        [fix.manga_slug, fix.chapter, fix.image_index, req.params.id]
-      );
-      for (const other of otherFixes) {
-        try {
-          const p = path.join(process.cwd(), other.fixed_image_url);
-          if (fs.existsSync(p)) fs.unlinkSync(p);
-        } catch (_) {}
-      }
-    } catch (_) {}
-
-    // 7.6. Notification küldése
-    try {
-      const fixerName = fix.fixed_by_name || "Javító";
-      const mangaInfo = `${fix.manga_slug} ${fix.chapter} #${fix.image_index}`;
-      const bugLink   = `/bug-reports.html?id=`;
-
-      const { rows: reporters } = await pool.query(`
-        SELECT DISTINCT user_id FROM bug_reports
-        WHERE manga_slug=$1 AND chapter=$2 AND image_index=$3 AND user_id IS NOT NULL
-      `, [fix.manga_slug, fix.chapter, fix.image_index]);
-
-      for (const reporter of reporters) {
-        const { rows: rr } = await pool.query(`
-          SELECT id FROM bug_reports
-          WHERE manga_slug=$1 AND chapter=$2 AND image_index=$3 AND user_id=$4
-          LIMIT 1
-        `, [fix.manga_slug, fix.chapter, fix.image_index, reporter.user_id]);
-        await pool.query(`
-          INSERT INTO notifications (user_id, type, message, link)
-          VALUES ($1, 'bug_closed', $2, $3)
-        `, [
-          reporter.user_id,
-          `A hibajegyed javítva lett: ${mangaInfo} – Javította: ${fixerName}`,
-          rr[0] ? `${bugLink}${rr[0].id}` : null
-        ]);
-      }
-
-      if (fix.fixed_by && fix.fixed_by !== req.session.user.id) {
-        const { rows: fixerReport } = await pool.query(`
-          SELECT id FROM bug_reports
-          WHERE manga_slug=$1 AND chapter=$2 AND image_index=$3
-          LIMIT 1
-        `, [fix.manga_slug, fix.chapter, fix.image_index]);
-        await pool.query(`
-          INSERT INTO notifications (user_id, type, message, link)
-          VALUES ($1, 'bug_closed', $2, $3)
-        `, [
-          fix.fixed_by,
-          `Javításod elfogadva! +1 pont jóváírva – ${mangaInfo}`,
-          fixerReport[0] ? `${bugLink}${fixerReport[0].id}` : null
-        ]);
-      }
-    } catch (notifErr) {
-      console.error("[NOTIF hiba]", notifErr.message);
-    }
-
-    // 8. Cloudflare cache purge — API URL + R2 public URL
-    try {
-      const CF_ZONE   = process.env.CF_ZONE_ID;
-      const CF_TOKEN  = process.env.CF_API_TOKEN;
-      const CF_DOMAIN = process.env.CF_DOMAIN || "http://localhost:3000";
-      const R2_PUBLIC = process.env.R2_PUBLIC_URL;
-      if (CF_ZONE && CF_TOKEN) {
-        const urls = [
-          `${CF_DOMAIN}/api/image/${fix.provider}/${fix.manga_slug}/${fix.chapter}/${encodeURIComponent(originalFilename)}`,
-        ];
-        if (R2_PUBLIC) urls.push(`${R2_PUBLIC}/${localPathToR2Key(originalPath)}`);
-        await fetch(`https://api.cloudflare.com/client/v4/zones/${CF_ZONE}/purge_cache`, {
-          method: "POST",
-          headers: { "Authorization": `Bearer ${CF_TOKEN}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ files: urls }),
-        });
-        console.log("[CF purge] OK:", urls.join(", "));
-      }
-    } catch (cfErr) {
-      console.warn("[CF purge hiba]", cfErr.message);
-    }
-
-    res.json({ ok: true, original: originalPath });
+    const result = await applyBugFix(req.params.id, req.session.user.id);
+    res.json(result);
   } catch (err) {
     console.error("Fix apply error:", err);
-    res.status(500).json({ error: err.message });
+    res.status(err.message?.includes("nem található") ? 404 : 500).json({ error: err.message });
   }
 });
 
@@ -750,8 +574,11 @@ router.post("/fix/:id/correct", requireAdmin, upload.single("image"), async (req
 
     const { rows: pathRows } = await pool.query(
       `SELECT l.path AS library_path, m.folder AS manga_folder
-       FROM manga m JOIN library l ON l.id = m.library_id WHERE m.slug=$1 LIMIT 1`,
-      [fix.manga_slug]
+       FROM manga m
+       JOIN chapter c ON c.manga_id = m.id AND c.folder = $2
+       JOIN library l ON l.id = c.library_id
+       WHERE m.slug=$1 LIMIT 1`,
+      [fix.manga_slug, fix.chapter]
     );
     if (!pathRows.length) return res.status(404).json({ error: "Manga nem található" });
 
@@ -807,9 +634,11 @@ async function purgeImageCF(mangaSlug, chapter, imageFile) {
   try {
     const { rows } = await pool.query(`
       SELECT l.name AS library_name
-      FROM manga m JOIN library l ON l.id = m.library_id
+      FROM manga m
+      JOIN chapter c ON c.manga_id = m.id AND c.folder = $2
+      JOIN library l ON l.id = c.library_id
       WHERE m.slug = $1 LIMIT 1
-    `, [mangaSlug]);
+    `, [mangaSlug, chapter]);
     if (!rows.length) return;
     const url = `${CF_DOMAIN}/api/image/${encodeURIComponent(rows[0].library_name)}/${encodeURIComponent(mangaSlug)}/${encodeURIComponent(chapter)}/${encodeURIComponent(imageFile)}`;
     await fetch(`https://api.cloudflare.com/client/v4/zones/${CF_ZONE}/purge_cache`, {

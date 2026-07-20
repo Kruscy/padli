@@ -10,6 +10,10 @@ router.get("/:slug", requireLogin, async (req, res) => {
   const userId = req.session.user.id;
 
   try {
+    // Duplikált slug esetén (két manga-bejegyzés ugyanazzal a slug-gal)
+    // ugyanazt a kanonikus bejegyzést válasszuk, mint a GET /api/manga/:slug
+    // (a több fejezettel rendelkezőt) — így az értékelés mindig oda íródik
+    // és onnan olvasódik, ahonnan a metaadat is jön.
     const { rows } = await pool.query(
       `SELECT
         m.avg_rating,
@@ -17,7 +21,11 @@ router.get("/:slug", requireLogin, async (req, res) => {
         mr.rating AS user_rating
        FROM manga m
        LEFT JOIN manga_rating mr ON mr.manga_id = m.id AND mr.user_id = $1
-       WHERE m.slug = $2`,
+       LEFT JOIN chapter c ON c.manga_id = m.id
+       WHERE m.slug = $2
+       GROUP BY m.id, mr.rating
+       ORDER BY COUNT(DISTINCT c.id) DESC, m.id ASC
+       LIMIT 1`,
       [userId, slug]
     );
 
@@ -40,8 +48,18 @@ router.post("/:slug", requireLogin, async (req, res) => {
   }
 
   try {
+    // Duplikált slug esetén ugyanazt a kanonikus bejegyzést válasszuk,
+    // mint a GET rating és a GET /api/manga/:slug (a több fejezettel
+    // rendelkezőt).
     const mangaRes = await pool.query(
-      "SELECT id FROM manga WHERE slug = $1", [slug]
+      `SELECT m.id
+       FROM manga m
+       LEFT JOIN chapter c ON c.manga_id = m.id
+       WHERE m.slug = $1
+       GROUP BY m.id
+       ORDER BY COUNT(DISTINCT c.id) DESC, m.id ASC
+       LIMIT 1`,
+      [slug]
     );
     if (!mangaRes.rows.length) return res.status(404).json({ error: "Not found" });
     const mangaId = mangaRes.rows[0].id;

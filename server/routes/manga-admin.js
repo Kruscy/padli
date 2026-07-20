@@ -75,15 +75,20 @@ router.delete("/chapter/:id", async (req, res) => {
 router.delete("/manga/:slug", async (req, res) => {
   try {
     const { slug } = req.params;
+    // Duplikált slug esetén (két manga-bejegyzés ugyanazzal a slug-gal)
+    // MINDEGYIKET töröljük — különben a meg nem törölt duplikátum
+    // "feltámasztja" a címet a következő oldalbetöltéskor.
     const { rows } = await pool.query(`SELECT id, title FROM manga WHERE slug = $1`, [slug]);
     if (!rows.length) return res.status(404).json({ error: "Manga nem található" });
-    const { id, title } = rows[0];
 
-    await pool.query(`DELETE FROM chapter WHERE manga_id = $1`, [id]);
-    await pool.query(`DELETE FROM manga WHERE id = $1`, [id]);
+    const ids = rows.map(r => r.id);
+    const title = rows[0].title;
 
-    console.log(`[manga-delete] Törölve: "${title}" (slug: ${slug}, id: ${id}) – admin: ${req.session.user.username}`);
-    res.json({ ok: true, deleted: title });
+    await pool.query(`DELETE FROM chapter WHERE manga_id = ANY($1)`, [ids]);
+    await pool.query(`DELETE FROM manga WHERE id = ANY($1)`, [ids]);
+
+    console.log(`[manga-delete] Törölve: "${title}" (slug: ${slug}, id-k: ${ids.join(",")}) – admin: ${req.session.user.username}`);
+    res.json({ ok: true, deleted: title, deletedCount: ids.length });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "DB error" });

@@ -25,10 +25,26 @@
 <main class="content">
 <h1>My Profile</h1>
 <div class="avatar-container">
-  <img id="avatar" src="/uploads/default.png" />
+  <img id="avatar" src="https://padlizsanfansub.hu/assets/logo.png" />
   <div class="avatar-edit" onclick="openUpload()">✏️</div>
 </div>
 <input type="file" id="fileInput" hidden />
+
+<section style="
+  margin: 24px 0; padding: 18px 20px; background: #0f0f1a;
+  border: 1px solid rgba(255,255,255,.1); border-radius: 14px; max-width: 480px;
+">
+  <h2 style="margin:0 0 10px; font-size:1.1rem;">📚 AniList szinkron</h2>
+  <p id="anilistSyncHint" class="hidden" style="margin:0 0 12px; font-size:.85rem; color:#888;">
+    Előbb kösd össze az AniList fiókodat a <a href="/settings.html" style="color:#c4b5fd;">Beállításokban</a>.
+  </p>
+  <button id="anilistSyncBtn" style="
+    background:linear-gradient(135deg,#7c3aed,#5b21b6); border:none; color:#fff;
+    padding:9px 22px; border-radius:9px; cursor:pointer; font-size:.88rem; font-weight:700;
+  ">🔄 Szinkronizálás</button>
+  <span id="anilistSyncFeedback" style="margin-left:12px; font-size:.85rem; font-weight:600;"></span>
+</section>
+
 <div id="modal" style="display:none;">
   <div class="modal-content">
     <!-- JOBB FELÜL X GOMB -->
@@ -57,10 +73,11 @@
   </div>
 </div>
 <script src="/js/profile-init.js?v=20260619"></script>
+<script src="/js/anilist-sync-modal.js?v=20260720"></script>
 <div id="footer"></div>
 <script src="/js/footer.js?v=20260619"></script>
 
-<script type="module" src="/js/layout-loader.js?v=20260619"></script>
+<script type="module" src="/js/layout-loader.js?v=20260713"></script>
 <script src="/js/sidebar.js?v=20260204"></script>
 <script src="/js/auth-check.js?v=20260323"></script>
 <script type="module" src="/js/avatar.js?v=20260323"></script>

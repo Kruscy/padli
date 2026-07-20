@@ -216,7 +216,24 @@
     return text
       .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
       .replace(/\r\n|\n/g, "<br>")
-      .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+      .replace(/(https?:\/\/[^\s<]+)/g, (match) => {
+        // A záró írásjeleket (pl. mondat végi ")" vagy ",") ne vegyük bele
+        // a linkbe, ha "(https://...)" formában van a szövegben írva —
+        // különben a link maga a ")"-t is tartalmazza.
+        let url = match;
+        let trailing = "";
+        while (url.length && /[).,;:!?\]]$/.test(url)) {
+          const lastChar = url.slice(-1);
+          if (lastChar === ")") {
+            const opens = (url.match(/\(/g) || []).length;
+            const closes = (url.match(/\)/g) || []).length;
+            if (opens >= closes) break;
+          }
+          trailing = lastChar + trailing;
+          url = url.slice(0, -1);
+        }
+        return `<a href="${url}" target="_blank" rel="noopener">${url}</a>${trailing}`;
+      });
   }
 
   /* ===== DOTS ===== */

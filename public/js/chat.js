@@ -43,6 +43,8 @@ function createWidget() {
       <div id="emojiPicker" class="emoji-picker hidden"></div>
       <div class="chat-input-row">
         <button id="chatEmojiBtn" class="chat-emoji-btn">😊</button>
+        <button id="chatImageBtn" class="chat-emoji-btn" title="Kép küldése">📷</button>
+        <input id="chatImageInput" type="file" accept="image/*" hidden>
         <input id="chatInput" type="text" placeholder="Üzenet..." maxlength="500">
         <button id="chatSendBtn">➤</button>
       </div>
@@ -67,6 +69,11 @@ function createWidget() {
   document.getElementById("emojiPicker")?.addEventListener("click", (e) => {
     e.stopPropagation();
   });
+
+  document.getElementById("chatImageBtn").addEventListener("click", () => {
+    document.getElementById("chatImageInput").click();
+  });
+  document.getElementById("chatImageInput").addEventListener("change", sendChatImage);
 }
 
 async function loadEmojis() {
@@ -170,8 +177,24 @@ function formatContent(content) {
   let safe = escapeHtml(content);
 
   safe = safe.replace(
-    /(https?:\/\/[^\s&]+)/g,
-    '<a href="$1" target="_blank" rel="noopener" style="color:#a78bfa; word-break:break-all; text-decoration:underline;">$1</a>'
+    // Egy menetben kezeljük a Discord-stílusú "[cím](url)" markdown linket
+    // ÉS a nyers URL-eket is, hogy a markdown-linkben lévő url-t a nyers-URL
+    // ág ne csomagolja be még egyszer. [^\s]-ig megyünk (nem &-ig): a
+    // HTML-escapelés miatt a query-string "&"-jei már "&amp;"-ként
+    // szerepelnek, amit a böngésző az attribútumban helyesen vissza is old
+    // &-re — de ha itt megállnánk az első &-nál, a Discord CDN aláírt
+    // (?ex=...&is=...&hm=...) linkjei csonkolódnának.
+    /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s]+)/g,
+    (match, linkText, linkUrl, bareUrl) => {
+      if (linkUrl) {
+        return `<a href="${linkUrl}" target="_blank" rel="noopener" style="color:#a78bfa; text-decoration:underline;">${linkText}</a>`;
+      }
+      const isImage = /\.(jpe?g|png|gif|webp)(\?.*)?$/i.test(bareUrl);
+      if (isImage) {
+        return `<a href="${bareUrl}" target="_blank" rel="noopener"><img src="${bareUrl}" class="chat-inline-image" loading="lazy" alt="kép"></a>`;
+      }
+      return `<a href="${bareUrl}" target="_blank" rel="noopener" style="color:#a78bfa; word-break:break-all; text-decoration:underline;">${bareUrl}</a>`;
+    }
   );
 
   safe = safe.replace(
@@ -206,7 +229,7 @@ function addMessage(data) {
 
   div.innerHTML = `
     <div class="chat-msg-header">
-      <img src="${data.avatar || '/uploads/default.png'}" class="chat-avatar">
+      <img src="${data.avatar || 'https://padlizsanfansub.hu/assets/logo.png'}" class="chat-avatar">
       <span class="chat-name ${isDiscord ? 'chat-discord' : ''}">${isDiscord ? '🎮 ' : ''}${escapeHtml(displayName)}</span>
       <span class="chat-time">${formatTime(data.timestamp)}</span>
     </div>
@@ -254,5 +277,33 @@ async function sendChatMsg() {
     });
   } catch (err) {
     console.error("Chat send error:", err);
+  }
+}
+
+async function sendChatImage(e) {
+  const input = e.target;
+  const file = input.files?.[0];
+  if (!file) return;
+
+  const imageBtn = document.getElementById("chatImageBtn");
+  const original = imageBtn.textContent;
+  imageBtn.textContent = "⏳";
+  imageBtn.disabled = true;
+
+  try {
+    const formData = new FormData();
+    formData.append("image", file);
+    const res = await fetch("/api/chat/send-image", { method: "POST", body: formData });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      alert(data.error || "Nem sikerült elküldeni a képet.");
+    }
+  } catch (err) {
+    console.error("Chat image send error:", err);
+    alert("Hálózati hiba a kép küldésekor.");
+  } finally {
+    imageBtn.textContent = original;
+    imageBtn.disabled = false;
+    input.value = "";
   }
 }

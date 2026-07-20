@@ -17,7 +17,7 @@ sudo -u postgres pg_dump padli > "$FILENAME"
 if [ $? -eq 0 ]; then
   echo "$(date) - Backup sikeres: $FILENAME"
   # Régi backupok törlése
-  find "$BACKUP_DIR" -name "padliSql*.sql" -mtime +$KEEP_DAYS -delete
+  find "$BACKUP_DIR" -name "padli-Sql_*.sql" -mtime +$KEEP_DAYS -delete
   echo "$(date) - $KEEP_DAYS napnál régebbi backupok törölve"
 else
   echo "$(date) - Backup SIKERTELEN!" >&2

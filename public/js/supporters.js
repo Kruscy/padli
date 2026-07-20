@@ -77,9 +77,9 @@ function getTierConfig(key) {
 
         const img = document.createElement("img");
         img.className = "supporter-avatar";
-        img.src = s.avatar || "/uploads/default.png";
+        img.src = s.avatar || "https://padlizsanfansub.hu/assets/logo.png";
         img.alt = s.username || "?";
-        img.onerror = function() { this.src = "/uploads/default.png"; };
+        img.onerror = function() { this.src = "https://padlizsanfansub.hu/assets/logo.png"; };
 
         const name = document.createElement("div");
         name.className = "supporter-name";

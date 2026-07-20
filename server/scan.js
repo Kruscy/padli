@@ -191,17 +191,31 @@ async function scan() {
 
       let mangaId;
       try {
-        const mangaRes = await pool.query(
-          `
-          INSERT INTO manga (title, slug, folder, library_id)
-          VALUES ($1, $2, $3, $4)
-          ON CONFLICT (slug, library_id) DO UPDATE
-            SET folder = EXCLUDED.folder
-          RETURNING id
-          `,
-          [mangaTitle, mangaSlug, mangaTitle, libraryId]
+        // Előbb megnézzük, létezik-e már manga ezzel a sluggal BÁRMELYIK
+        // könyvtárban — ha igen, azt használjuk (a fejezetek a saját
+        // library_id-jukat kapják lentebb), hogy ne jöjjön létre duplikált
+        // manga-bejegyzés, ha ugyanaz a cím több uploader mappájában is
+        // szerepel. Csak akkor hozunk létre újat, ha a slug még sehol
+        // nem létezik.
+        const existingManga = await pool.query(
+          `SELECT id FROM manga WHERE slug = $1 LIMIT 1`,
+          [mangaSlug]
         );
-        mangaId = mangaRes.rows[0].id;
+        if (existingManga.rows.length) {
+          mangaId = existingManga.rows[0].id;
+        } else {
+          const mangaRes = await pool.query(
+            `
+            INSERT INTO manga (title, slug, folder, library_id)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (slug, library_id) DO UPDATE
+              SET folder = EXCLUDED.folder
+            RETURNING id
+            `,
+            [mangaTitle, mangaSlug, mangaTitle, libraryId]
+          );
+          mangaId = mangaRes.rows[0].id;
+        }
 
         // Feltöltő auto-hozzárendelés root_path alapján
         for (const ur of uploaderRoots) {
@@ -361,7 +375,7 @@ scan()
       }
     }
     console.log(`📢 Sending ${newChaptersResult.length} new manga to Discord...`);
-    const siteUrl = process.env.SITE_URL || "http://localhost:3000";
+    const siteUrl = process.env.SITE_URL || "https://padlizsanfansub.hu";
     const discordBot = new Client({ intents: [GatewayIntentBits.Guilds] });
     try {
       await discordBot.login(process.env.DISCORD_BOT_TOKEN);

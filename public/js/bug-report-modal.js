@@ -23,7 +23,7 @@ function createBugModal() {
 
   modal.innerHTML = `
     <div id="bugModalBox" style="
-      width:min(96vw, 700px); max-height:96vh; background:#0f0f1a;
+      width:min(96vw, 700px); max-height:96vh; max-height:96dvh; background:#0f0f1a;
       border:1px solid rgba(255,255,255,.1); border-radius:18px;
       display:flex; flex-direction:column; overflow:hidden;
     ">
@@ -55,7 +55,7 @@ function createBugModal() {
       </div>
 
       <!-- ══ KÉP HIBA PANEL ══ -->
-      <div id="bugPanelImage">
+      <div id="bugPanelImage" style="overflow-y:auto; flex:1 1 auto; min-height:0;">
         <!-- Kép választó -->
         <div style="padding:16px 20px 0; flex-shrink:0;">
           <div style="
@@ -119,12 +119,42 @@ function createBugModal() {
           "></div>
         </div>
 
-        <!-- Leírás -->
+        <!-- Hiba típusa -->
         <div style="padding:14px 20px 0; flex-shrink:0;">
           <div style="
             font-size:.78rem; color:#666; text-transform:uppercase;
             letter-spacing:.08em; font-weight:700; margin-bottom:8px;
-          ">Mi a hiba? <span style="color:#7c3aed">*</span></div>
+          ">Hiba típusa <span style="color:#7c3aed">*</span></div>
+          <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:14px;">
+            <label class="bug-type-option">
+              <input type="radio" name="bugImageType" value="english_remained" id="bugImgTypeEng">
+              <span class="bug-type-label">
+                <span style="font-size:1.1rem">🇬🇧</span>
+                <div>
+                  <div style="font-weight:600;color:#f0f0fa;">Angol maradt</div>
+                  <div style="font-size:.75rem;color:#666;margin-top:2px;">Ezen az oldalon fordítatlan/angol szöveg maradt</div>
+                </div>
+              </span>
+            </label>
+            <label class="bug-type-option">
+              <input type="radio" name="bugImageType" value="other" id="bugImgTypeOther" checked>
+              <span class="bug-type-label">
+                <span style="font-size:1.1rem">💬</span>
+                <div>
+                  <div style="font-weight:600;color:#f0f0fa;">Egyéb</div>
+                  <div style="font-size:.75rem;color:#666;margin-top:2px;">Pl. fordítási hiba, pixeles kép, hiányzó buborék</div>
+                </div>
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Leírás -->
+        <div style="padding:0 20px 0; flex-shrink:0;">
+          <div style="
+            font-size:.78rem; color:#666; text-transform:uppercase;
+            letter-spacing:.08em; font-weight:700; margin-bottom:8px;
+          ">Mi a hiba? <span id="bugDescReqMark" style="color:#7c3aed">*</span></div>
           <textarea id="bugDescription" rows="3" placeholder="Pl. fordítási hiba, rossz szöveg, pixeles kép, hiányzó buborék..." style="
             width:100%; box-sizing:border-box;
             background:#080810; border:1px solid rgba(255,255,255,.12);
@@ -136,7 +166,10 @@ function createBugModal() {
         </div>
 
         <!-- Küldés -->
-        <div style="padding:14px 20px 18px; display:flex; justify-content:flex-end; gap:10px; flex-shrink:0;">
+        <div style="
+          padding:14px 20px 18px; display:flex; justify-content:flex-end; gap:10px;
+          flex-shrink:0; position:sticky; bottom:0; background:#0f0f1a; z-index:2;
+        ">
           <button id="bugCancelBtn" style="
             background:none; border:1px solid rgba(255,255,255,.12);
             color:#888; padding:9px 20px; border-radius:9px;
@@ -151,7 +184,7 @@ function createBugModal() {
       </div>
 
       <!-- ══ RÉSZSZINTŰ HIBA PANEL ══ -->
-      <div id="bugPanelChapter" style="display:none;">
+      <div id="bugPanelChapter" style="display:none; overflow-y:auto; flex:1 1 auto; min-height:0;">
         <div style="padding:20px 20px 0; flex-shrink:0;">
           <div style="
             font-size:.78rem; color:#666; text-transform:uppercase;
@@ -209,7 +242,10 @@ function createBugModal() {
         </div>
 
         <!-- Küldés -->
-        <div style="padding:14px 20px 18px; display:flex; justify-content:flex-end; gap:10px; flex-shrink:0;">
+        <div style="
+          padding:14px 20px 18px; display:flex; justify-content:flex-end; gap:10px;
+          flex-shrink:0; position:sticky; bottom:0; background:#0f0f1a; z-index:2;
+        ">
           <button id="bugChapterCancelBtn" style="
             background:none; border:1px solid rgba(255,255,255,.12);
             color:#888; padding:9px 20px; border-radius:9px;
@@ -275,6 +311,9 @@ function createBugModal() {
     .bug-type-option:hover .bug-type-label {
       border-color: rgba(124,92,255,.4);
       background: #20203a;
+    }
+    @media (max-height: 700px) {
+      #bugImgWrap { height: 26vh; min-height: 120px; }
     }
   `;
   document.head.appendChild(style);
@@ -436,6 +475,14 @@ function initBugModalEvents(modal) {
     if (wrap) wrap.style.display = "";
   });
 
+  // Képhiba típusa: "Angol maradt" esetén a leírás opcionális
+  document.querySelectorAll("input[name=bugImageType]").forEach(radio => {
+    radio.addEventListener("change", () => {
+      const mark = document.getElementById("bugDescReqMark");
+      if (mark) mark.style.display = radio.value === "other" ? "" : "none";
+    });
+  });
+
   document.getElementById("bugSubmitBtn")?.addEventListener("click", submitBugReport);
   document.getElementById("bugChapterSubmitBtn")?.addEventListener("click", submitChapterBugReport);
 }
@@ -446,7 +493,11 @@ async function submitBugReport() {
   const submitBtn = document.getElementById("bugSubmitBtn");
   const fb        = document.getElementById("bugFeedback");
 
-  if (!desc) {
+  const typeRadio = document.querySelector("input[name=bugImageType]:checked");
+  const type = typeRadio ? typeRadio.value : "other";
+
+  // "Angol maradt" esetén nem kötelező külön leírás, egyébként igen
+  if (type === "other" && !desc) {
     document.getElementById("bugDescription").style.borderColor = "#ef4444";
     setTimeout(() => {
       document.getElementById("bugDescription").style.borderColor = "rgba(255,255,255,.12)";
@@ -471,7 +522,7 @@ async function submitBugReport() {
     const res = await fetch("/api/bug-reports", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ image_url: buildUrl(bugCurrentIndex), description: desc })
+      body: JSON.stringify({ image_url: buildUrl(bugCurrentIndex), description: desc || null, type })
     });
     const data = await res.json();
     fb.style.display = "block";

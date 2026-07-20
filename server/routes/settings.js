@@ -55,7 +55,7 @@ router.post("/", async (req, res) => {
   let emailChanged = false;
   if (email) {
     const exists = await pool.query(
-      "SELECT 1 FROM users WHERE email = $1 AND id != $2",
+      "SELECT 1 FROM users WHERE lower(email) = lower($1) AND id != $2",
       [email, userId]
     );
 

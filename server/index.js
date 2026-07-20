@@ -8,6 +8,7 @@ import { rateLimit } from "express-rate-limit";
 import routes from "./routes.js";
 import userRoutes from "./routes/user.js";
 import { activityTracker } from "./middleware/activity.js";
+import { billingAddressGate } from "./middleware/billingAddressGate.js";
 import "./discord-bot.js";
 import cron from "node-cron";
 import { generateBlogPost } from "./scripts/blog-auto-generator.js";
@@ -144,6 +145,7 @@ app.use(express.static(PUBLIC_DIR));
 app.use(activityTracker);
 
 /* ===== API ROUTES ===== */
+app.use("/api", billingAddressGate);
 app.use("/api", routes);
 app.use("/api/user", userRoutes);
 app.use("/uploads", express.static("uploads"));

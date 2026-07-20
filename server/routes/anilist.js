@@ -324,10 +324,16 @@ router.post("/queue", requireLogin, async (req, res) => {
     }
 
     // ===== MANGA =====
+    // Duplikált slug esetén (két manga-bejegyzés ugyanazzal a slug-gal)
+    // azt részesítjük előnyben, amelyiknél TÉNYLEGESEN be van állítva
+    // az anilist_id — különben a szinkron feleslegesen kihagyná azt a
+    // felhasználót, akinél a "rossz" (anilist_id nélküli) duplikátum
+    // jönne ki elsőnek.
     const mangaRes = await pool.query(`
       SELECT anilist_id, title
       FROM manga
       WHERE slug = $1
+      ORDER BY (anilist_id IS NOT NULL) DESC, id ASC
     `, [slug]);
 
     if (!mangaRes.rows.length) {
@@ -407,5 +413,184 @@ if (existing.rows.length) {
   }
 });
 
+
+/* ================= COMPARE (Padli vs AniList progress) ================= */
+router.get("/compare", requireLogin, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+
+    const userRes = await pool.query(
+      `SELECT anilist_connected, anilist_token FROM users WHERE id = $1`,
+      [userId]
+    );
+    const user = userRes.rows[0];
+    if (!user?.anilist_connected || !user?.anilist_token) {
+      return res.status(400).json({ error: "not_connected" });
+    }
+    const token = user.anilist_token;
+
+    const progressRes = await pool.query(`
+      SELECT m.anilist_id, m.slug, m.title, m.cover_url, rp.chapter
+      FROM reading_progress rp
+      JOIN manga m ON m.id = rp.manga_id
+      WHERE rp.user_id = $1 AND m.anilist_id IS NOT NULL
+    `, [userId]);
+
+    if (!progressRes.rows.length) {
+      return res.json({ mismatches: [] });
+    }
+
+    // Viewer AniList user ID lekérdezése
+    const viewerRes = await fetch("https://graphql.anilist.co", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ query: `query { Viewer { id } }` }),
+    });
+    const viewerJson = await viewerRes.json();
+    const anilistUserId = viewerJson?.data?.Viewer?.id;
+    if (!anilistUserId) {
+      console.error("ANILIST COMPARE — Viewer lekérdezés sikertelen:", viewerJson);
+      return res.status(502).json({ error: "anilist_unavailable" });
+    }
+
+    // Teljes manga-lista lekérdezése egy hívással (nem mangánként)
+    const listRes = await fetch("https://graphql.anilist.co", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        query: `query ($userId: Int) {
+          MediaListCollection(userId: $userId, type: MANGA) {
+            lists { entries { mediaId progress } }
+          }
+        }`,
+        variables: { userId: anilistUserId },
+      }),
+    });
+    const listJson = await listRes.json();
+    const anilistProgressMap = new Map();
+    for (const list of listJson?.data?.MediaListCollection?.lists || []) {
+      for (const entry of list.entries || []) {
+        anilistProgressMap.set(entry.mediaId, entry.progress);
+      }
+    }
+
+    const mismatches = [];
+    for (const row of progressRes.rows) {
+      const parsed = parseChapter(row.chapter);
+      if (!parsed) continue;
+      const anilistProgress = anilistProgressMap.get(row.anilist_id);
+      if (anilistProgress == null) continue; // AniList-en nincs bejegyzés, nincs mit egyeztetni
+      if (anilistProgress === parsed.progress) continue; // egyezik
+
+      mismatches.push({
+        slug: row.slug,
+        title: row.title,
+        cover_url: row.cover_url,
+        anilist_id: row.anilist_id,
+        padliChapter: row.chapter,
+        padliProgress: parsed.progress,
+        anilistProgress,
+      });
+    }
+
+    res.json({ mismatches });
+
+  } catch (err) {
+    console.error("ANILIST COMPARE ERROR:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+/* ================= APPLY SYNC (user döntések alkalmazása) ================= */
+router.post("/apply-sync", requireLogin, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const resolutions = Array.isArray(req.body?.resolutions) ? req.body.resolutions : [];
+
+    const applied = [];
+    const failed = [];
+
+    for (const item of resolutions) {
+      const { slug, anilist_id, resolution, padliProgress, anilistProgress } = item || {};
+      if (!slug || !anilist_id || !resolution) {
+        failed.push({ slug, reason: "invalid_item" });
+        continue;
+      }
+
+      if (resolution === "padli") {
+        // Padli értéke nyer → push AniList felé, ugyanaz a dedup minta, mint a /queue endpointban
+        await pool.query(
+          `DELETE FROM anilist_queue WHERE user_id = $1 AND processed = false AND anilist_id = $2`,
+          [userId, anilist_id]
+        );
+        await pool.query(
+          `INSERT INTO anilist_queue (user_id, anilist_id, progress) VALUES ($1, $2, $3)`,
+          [userId, anilist_id, Math.floor(padliProgress)]
+        );
+        applied.push({ slug, resolution });
+        continue;
+      }
+
+      if (resolution === "anilist") {
+        // AniList értéke nyer → keresünk egy megfelelő fejezet-mappát a Padli-n
+        const mangaRes = await pool.query(`SELECT id FROM manga WHERE slug = $1 LIMIT 1`, [slug]);
+        const mangaId = mangaRes.rows[0]?.id;
+        if (!mangaId) {
+          failed.push({ slug, reason: "manga_not_found" });
+          continue;
+        }
+
+        const chapterRes = await pool.query(`SELECT folder FROM chapter WHERE manga_id = $1`, [mangaId]);
+        const target = Math.floor(anilistProgress);
+        let matched = null;
+        for (const { folder } of chapterRes.rows) {
+          const parsed = parseChapter(folder);
+          if (!parsed || parsed.progress !== target) continue;
+          // pontos, tört nélküli egyezést preferáljuk (pl. "Ch280" a "Ch280.5" helyett)
+          if (!matched || (parsed.float === target && matched.float !== target)) {
+            matched = { folder, float: parsed.float };
+          }
+        }
+
+        if (!matched) {
+          failed.push({ slug, reason: "chapter_not_found" });
+          continue;
+        }
+
+        const prev = await pool.query(
+          `SELECT chapter FROM reading_progress WHERE user_id = $1 AND manga_id = $2`,
+          [userId, mangaId]
+        );
+        const prevChapter = prev.rows[0]?.chapter || null;
+
+        await pool.query(
+          `INSERT INTO reading_progress (user_id, manga_id, chapter, page)
+           VALUES ($1, $2, $3, 1)
+           ON CONFLICT (user_id, manga_id)
+           DO UPDATE SET chapter = EXCLUDED.chapter, page = EXCLUDED.page, updated_at = now()`,
+          [userId, mangaId, matched.folder]
+        );
+
+        if (prevChapter !== matched.folder) {
+          await pool.query(
+            `INSERT INTO chapter_reads (user_id, manga_id, chapter) VALUES ($1, $2, $3)`,
+            [userId, mangaId, matched.folder]
+          ).catch(() => {});
+        }
+
+        applied.push({ slug, resolution, chapter: matched.folder });
+        continue;
+      }
+
+      failed.push({ slug, reason: "invalid_resolution" });
+    }
+
+    res.json({ applied, failed });
+
+  } catch (err) {
+    console.error("ANILIST APPLY-SYNC ERROR:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 
 export default router;

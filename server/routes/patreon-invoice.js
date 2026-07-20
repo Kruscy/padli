@@ -13,15 +13,15 @@ const invoiceRateLimit = rateLimit({
 });
 
 const PATREON_PARTNER = {
-  name: "Patreon Ireland Limited, German Branch",
+  name: "Patreon, Inc.",
   emails: [],
   send_email: false,
   taxcode: "",
   address: {
-    country_code: "DE",
-    post_code:    "10245",
-    city:         "Berlin-Friedrichshain",
-    address:      "Revaler Strasse 99, Hall 20, 2nd floor rooms 3.19 and 3.25",
+    country_code: "US",
+    post_code:    "94103",
+    city:         "San Francisco, CA",
+    address:      "600 Townsend Street, Suite 500",
   },
 };
 
@@ -42,7 +42,7 @@ async function billingoReq(method, path, body) {
 }
 
 async function findOrCreatePatreonPartner() {
-  const search = await billingoReq("GET", `/partners?query=${encodeURIComponent("Patreon Ireland Limited")}`);
+  const search = await billingoReq("GET", `/partners?query=${encodeURIComponent("Patreon, Inc.")}`);
   if (search.data?.length) return search.data[0].id;
 
   const partner = await billingoReq("POST", "/partners", PATREON_PARTNER);
@@ -87,7 +87,7 @@ router.post("/", invoiceRateLimit, requireAdmin, async (req, res) => {
         unit_price_type: "net",
         quantity:        1,
         unit:            "db",
-        vat:             "AAM",
+        vat:             "HO",
       }],
       settings: { should_send_email: false },
     });

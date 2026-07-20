@@ -674,7 +674,7 @@ router.post("/import-bug-image", requireAuth, async (req, res) => {
         `SELECT l.path AS library_path, m.folder AS manga_folder
          FROM chapter c
          JOIN manga m ON m.id = c.manga_id
-         JOIN library l ON l.id = m.library_id
+         JOIN library l ON l.id = c.library_id
          WHERE l.name = $1 AND m.slug = $2 AND c.folder = $3
          LIMIT 1`,
         [library, slug, chapterFolder]
@@ -733,9 +733,11 @@ router.post("/import-chapter", requireAuth, async (req, res) => {
 
     const { rows } = await pool.query(`
       SELECT l.name AS library_name, l.path AS library_path, m.folder AS manga_folder
-      FROM manga m JOIN library l ON l.id = m.library_id
+      FROM manga m
+      JOIN chapter c ON c.manga_id = m.id AND c.folder = $2
+      JOIN library l ON l.id = c.library_id
       WHERE m.slug = $1 LIMIT 1
-    `, [mangaSlug]);
+    `, [mangaSlug, chapter]);
     if (!rows.length) return res.status(404).json({ error: "Manga nem található" });
     const { library_name, library_path, manga_folder } = rows[0];
 

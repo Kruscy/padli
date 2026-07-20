@@ -143,6 +143,34 @@ router.get("/files", requireUploader, async (req, res) => {
   }
 });
 
+/* ── Manga megkeresése egy fizikai fájlútvonalból ──────────
+   Egy manga mappaneve TÖBB különböző könyvtár (uploader root)
+   alatt is előfordulhat (pl. Ascyra ÉS Stukker mappájában is
+   van "Tomb Raider King" alkönyvtár, mert a fejezetek szét
+   vannak osztva köztük) — ezért NEM szabad a manga saját,
+   "otthoni" library_id-jére szűrni. Előbb megkeressük, melyik
+   library alá esik a fájl (path-prefix egyezés), utána a
+   library ALATTI mappanév alapján a mangát (nem a manga rögzített
+   library_id-je alapján). ── */
+async function findMangaForPath(fullPath) {
+  const { rows: libRows } = await pool.query(
+    `SELECT id, path, name FROM library WHERE $1 LIKE (path || '/%') ORDER BY length(path) DESC LIMIT 1`,
+    [fullPath]
+  );
+  if (!libRows.length) return null;
+  const lib = libRows[0];
+  const rel = fullPath.slice(lib.path.length + 1);
+  const mangaFolder = rel.split("/")[0];
+  if (!mangaFolder) return null;
+
+  const { rows: mangaRows } = await pool.query(
+    `SELECT slug, r2_migrated FROM manga WHERE folder = $1 LIMIT 1`,
+    [mangaFolder]
+  );
+  if (!mangaRows.length) return null;
+  return { slug: mangaRows[0].slug, r2_migrated: mangaRows[0].r2_migrated, library_name: lib.name };
+}
+
 /* ── CF cache purge egy felülírt képre ──────────────────── */
 async function purgeOverwrittenFile(fullPath, filename, chapter) {
   const CF_ZONE   = process.env.CF_ZONE_ID;
@@ -151,16 +179,9 @@ async function purgeOverwrittenFile(fullPath, filename, chapter) {
   if (!CF_ZONE || !CF_TOKEN || !chapter) return;
 
   try {
-    const { rows } = await pool.query(`
-      SELECT m.slug, l.name AS library_name
-      FROM manga m
-      JOIN library l ON l.id = m.library_id
-      WHERE $1 LIKE (l.path || '/' || m.folder || '/%')
-      LIMIT 1
-    `, [fullPath]);
-
-    if (!rows.length) return;
-    const { slug, library_name } = rows[0];
+    const found = await findMangaForPath(fullPath);
+    if (!found) return;
+    const { slug, library_name } = found;
 
     const base = `${CF_DOMAIN}/api/image/${encodeURIComponent(library_name)}/${encodeURIComponent(slug)}/${encodeURIComponent(chapter)}/${encodeURIComponent(filename)}`;
     // Mindkét URL-t töröljük: alap és ?r2=1-es (CF ezeket külön cache-eli)
@@ -181,14 +202,8 @@ function syncToR2IfMigrated(fullPath, buffer) {
   if (!IMAGE_EXTS.has(ext)) return;
   enqueueR2Sync(async () => {
     try {
-      const { rows } = await pool.query(`
-        SELECT m.r2_migrated
-        FROM manga m
-        JOIN library l ON l.id = m.library_id
-        WHERE $1 LIKE (l.path || '/' || m.folder || '/%')
-        LIMIT 1
-      `, [fullPath]);
-      if (!rows.length || !rows[0].r2_migrated) return;
+      const found = await findMangaForPath(fullPath);
+      if (!found || !found.r2_migrated) return;
       await uploadToR2(fullPath, buffer);
       console.log("[R2 sync] feltöltve:", fullPath);
     } catch (err) {

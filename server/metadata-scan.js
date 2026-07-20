@@ -1,6 +1,8 @@
 import { pool } from "./db.js";
 import fetch from "node-fetch";
 import dotenv from "dotenv";
+import { autoClaimWishlistForManga } from "./lib/wishlist-auto-claim.js";
+import { translateToHungarian } from "./lib/translate.js";
 dotenv.config();
 
 /* ================= CONFIG ================= */
@@ -9,7 +11,6 @@ const ANILIST_URL = "https://graphql.anilist.co";
 const REQUEST_DELAY_MS = 1200;
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 2000;
-const DEEPL_API_KEY = process.env.DEEPL_API_KEY;
 
 /* ================= HELPERS ================= */
 
@@ -23,30 +24,6 @@ function cleanTitle(title) {
     .replace(/\[.*?\]/g, "")
     .replace(/[-_]/g, " ")
     .trim();
-}
-
-async function translateToHungarian(text) {
-  if (!text || !DEEPL_API_KEY) return text;
-
-  try {
-    const res = await fetch("https://api-free.deepl.com/v2/translate", {
-      method: "POST",
-      headers: {
-        "Authorization": `DeepL-Auth-Key ${DEEPL_API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        text: [text],
-        target_lang: "HU"
-      })
-    });
-
-    const data = await res.json();
-    return data.translations?.[0]?.text || text;
-  } catch (err) {
-    console.error("DeepL error:", err.message);
-    return text;
-  }
 }
 
 /* ================= ANILIST QUERY ================= */
@@ -118,7 +95,7 @@ async function scanMetadata() {
   console.log("🧠 Starting AniList metadata scan\n");
 
   const mangas = await pool.query(`
-    SELECT id, title
+    SELECT id, title, anilist_id, uploaders
     FROM manga
     WHERE anilist_failed = FALSE
       AND (
@@ -140,6 +117,7 @@ async function scanMetadata() {
 
   for (const manga of mangas.rows) {
     processed++;
+    const hadNoAnilistId = manga.anilist_id == null;
     const searchTitle = cleanTitle(manga.title);
 
     console.log(`\n[${processed}/${total}] 🔍 Searching: "${searchTitle}"`);
@@ -246,6 +224,21 @@ async function scanMetadata() {
             rec.coverImage?.large || null
           ]
         );
+      }
+
+      /* ===== KÍVÁNSÁGLISTA AUTO-CLAIM ===== */
+      if (hadNoAnilistId && media.id) {
+        try {
+          const claimResult = await autoClaimWishlistForManga({
+            anilist_id: media.id,
+            uploaders: manga.uploaders,
+          });
+          if (claimResult.claimed.length) {
+            console.log(`🍆 Auto-claim: ${claimResult.claimed.length} claim létrehozva a kívánságlistán`);
+          }
+        } catch (err) {
+          console.error("Auto-claim error:", err);
+        }
       }
 
       console.log("✅ Metadata saved");

@@ -5,6 +5,7 @@ import path from "path";
 import sharp from "sharp";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { requireLogin } from "../middleware/auth.js";
+import { validateHungarianAddress, validateRealName } from "../lib/address-validate.js";
 
 const router = express.Router();
 
@@ -71,7 +72,7 @@ router.get("/me", async (req, res) => {
     res.json({
       id: userId,
       username: user.username,
-      avatar: user.avatar || "/uploads/default.png",
+      avatar: user.avatar || "https://padlizsanfansub.hu/assets/logo.png",
       tier: user.tier || null,
       role: req.session.user.role || "user",
     });
@@ -101,4 +102,88 @@ router.post("/birth-date", requireLogin, async (req, res) => {
   );
   res.json({ ok: true });
 });
+
+/* ── Számlázási cím ───────────────────────────────────────────
+   Csak azoknál a felhasználóknál kötelező, akiknek aktív (vagy
+   szüneteltetett) Stripe-előfizetésük van, és még nincs rögzítve
+   a címük — a javított/helyes számla kiállításához kell. ── */
+router.get("/billing-address", requireLogin, async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT u.billing_address, u.billing_name, u.force_billing_address,
+            EXISTS (
+              SELECT 1 FROM patreon_status ps
+              WHERE ps.user_id = u.id AND ps.payment_source = 'stripe'
+            ) AS is_stripe_payer
+     FROM users u WHERE u.id = $1`,
+    [req.session.user.id]
+  );
+  const row = rows[0];
+  const missing = !row?.billing_address || !row?.billing_name;
+  res.json({
+    billing_address: row?.billing_address || null,
+    billing_name: row?.billing_name || null,
+    required: (!!row?.is_stripe_payer || !!row?.force_billing_address) && missing,
+  });
+});
+
+router.post("/billing-address", requireLogin, async (req, res) => {
+  const { post_code, city, street, house_number, full_name } = req.body;
+  if (!/^\d{4}$/.test(post_code || "") || !city?.trim() || !street?.trim() || !house_number?.trim()) {
+    return res.status(400).json({ error: "Érvénytelen cím — minden mező kitöltése kötelező" });
+  }
+
+  const nameCheck = await validateRealName(full_name, req.session.user.username);
+  if (!nameCheck.valid) {
+    return res.status(400).json({ error: nameCheck.reason });
+  }
+
+  const addressCheck = await validateHungarianAddress({
+    post_code: post_code.trim(), city: city.trim(), street: street.trim(), house_number: house_number.trim(),
+  });
+  if (!addressCheck.valid) {
+    return res.status(400).json({ error: addressCheck.reason });
+  }
+
+  const billing_address = `${post_code.trim()} ${city.trim()}, ${street.trim()} ${house_number.trim()}`;
+  await pool.query(
+    `UPDATE users SET billing_address = $1, billing_name = $2 WHERE id = $3`,
+    [billing_address, full_name.trim(), req.session.user.id]
+  );
+
+  // Köszönő értesítés a felhasználónak, amiért kitöltötte
+  try {
+    await pool.query(
+      `INSERT INTO notifications (user_id, type, message, link) VALUES ($1, 'billing_address_thanks', $2, '/settings.html')`,
+      [req.session.user.id, "🙏 Köszönjük, hogy megadtad a valódi számlázási neved és címed! Ezzel nem kerülünk bajba a könyvelőnknél — a jogszabályok szerint helyes adatokkal tudjuk kiállítani a számládat."]
+    );
+  } catch (err) {
+    console.error("[billing-address] köszönő értesítés hiba:", err);
+  }
+
+  // Értesítés Ascyra-nak (user_id=5), ha most adta meg a címét egy Stripe-fizető
+  try {
+    const { rows: stripeCheck } = await pool.query(
+      `SELECT 1 FROM patreon_status WHERE user_id = $1 AND payment_source = 'stripe' LIMIT 1`,
+      [req.session.user.id]
+    );
+    if (stripeCheck.length) {
+      const { rows: remainingRows } = await pool.query(`
+        SELECT COUNT(DISTINCT u.id) AS cnt
+        FROM users u
+        JOIN patreon_status ps ON ps.user_id = u.id AND ps.payment_source = 'stripe'
+        WHERE u.billing_address IS NULL OR u.billing_name IS NULL
+      `);
+      const remaining = parseInt(remainingRows[0]?.cnt || 0);
+      await pool.query(`
+        INSERT INTO notifications (user_id, type, message, link)
+        VALUES (5, 'billing_address', $1, '/admin.html')
+      `, [`📮 ${req.session.user.username} megadta a számlázási nevét/címét. Még ${remaining} Stripe-fizetőnél hiányzik.`]);
+    }
+  } catch (err) {
+    console.error("[billing-address] értesítés hiba:", err);
+  }
+
+  res.json({ ok: true });
+});
+
 export default router;

@@ -26,7 +26,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       const p = await r.json();
       if (p) {
         continueBtn.classList.remove("hidden");
-        continueBtn.href = `/reader.html?slug=${slug}&chapter=${p.chapter}&page=${p.page}`;
+        continueBtn.href = `/reader.html?slug=${encodeURIComponent(slug)}&chapter=${encodeURIComponent(p.chapter)}&page=${encodeURIComponent(p.page)}`;
         deleteProgressBtn.classList.remove("hidden");
       }
     }

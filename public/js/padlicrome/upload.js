@@ -27,16 +27,57 @@ export function initDropzone() {
   dz.addEventListener("click", () => input.click());
   dz.addEventListener("dragover", e => { e.preventDefault(); dz.classList.add("drag-over"); });
   dz.addEventListener("dragleave", () => dz.classList.remove("drag-over"));
-  dz.addEventListener("drop", e => {
+  dz.addEventListener("drop", async e => {
     e.preventDefault();
     dz.classList.remove("drag-over");
-    const files = [...e.dataTransfer.files].filter(f => f.type.startsWith("image/"));
-    if (files.length) uploadFiles(files);
+
+    const items = e.dataTransfer.items;
+    const rawFiles = (items && items.length && items[0].webkitGetAsEntry)
+      ? await collectFilesFromItems(items)
+      : [...e.dataTransfer.files];
+
+    const files = rawFiles.filter(f => f.type.startsWith("image/"));
+    if (files.length) {
+      uploadFiles(files);
+    } else {
+      showStatus("Nem találtam képfájlt a húzott elemek között (ha mappát húztál be, ellenőrizd hogy vannak-e benne kép fájlok).", "warn");
+    }
   });
 
   input.addEventListener("change", () => {
     if (input.files.length) uploadFiles([...input.files]);
     input.value = "";
+  });
+}
+
+/* ── MAPPA-HÚZÁS: rekurzív fájl-kigyűjtés ────────────────── */
+function collectFilesFromItems(items) {
+  const entries = [...items].map(it => it.webkitGetAsEntry()).filter(Boolean);
+  return Promise.all(entries.map(readEntry)).then(arrs => arrs.flat());
+}
+
+function readEntry(entry) {
+  return new Promise(resolve => {
+    if (entry.isFile) {
+      entry.file(file => resolve([file]), () => resolve([]));
+      return;
+    }
+    if (entry.isDirectory) {
+      const reader = entry.createReader();
+      const collected = [];
+      const readBatch = () => {
+        reader.readEntries(async batch => {
+          if (!batch.length) { resolve(collected); return; }
+          for (const child of batch) {
+            collected.push(...(await readEntry(child)));
+          }
+          readBatch();
+        }, () => resolve(collected));
+      };
+      readBatch();
+      return;
+    }
+    resolve([]);
   });
 }
 

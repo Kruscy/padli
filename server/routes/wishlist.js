@@ -5,6 +5,39 @@ import { requireLogin } from "../middleware/auth.js";
 
 const router = express.Router();
 
+/* ── Értesítés a kérőnek ÉS a lájkolóknak, ha egy admin claimeli/
+   tervbe veszi a mangájukat (a saját magukat érintő eset kihagyva).
+   buildMessage(username, title, reason) állítja elő a pontos, a
+   claim/plan igének megfelelő magyar mondatot. ── */
+export async function notifyWishlistWatchers(wishlistId, actingUser, type, buildMessage) {
+  try {
+    const { rows: wlRows } = await pool.query(
+      `SELECT user_id, title FROM wishlist WHERE id = $1`, [wishlistId]
+    );
+    if (!wlRows.length) return;
+    const { user_id: requesterId, title } = wlRows[0];
+
+    const { rows: likeRows } = await pool.query(
+      `SELECT DISTINCT user_id FROM wishlist_likes WHERE wishlist_id = $1`, [wishlistId]
+    );
+    const likerIds = likeRows.map(r => r.user_id);
+
+    const recipients = new Set([requesterId, ...likerIds].filter(Boolean));
+    recipients.delete(actingUser.id);
+
+    for (const recipientId of recipients) {
+      const reason = recipientId === requesterId ? "amit te kértél" : "amit te lájkoltál";
+      await pool.query(
+        `INSERT INTO notifications (user_id, type, message, link)
+         VALUES ($1, $2, $3, '/wishlist.html')`,
+        [recipientId, type, buildMessage(actingUser.username, title, reason)]
+      );
+    }
+  } catch (err) {
+    console.error("wishlist notification error:", err);
+  }
+}
+
 /* ================= ADD ================= */
 router.post("/", requireLogin, async (req, res) => {
   try {
@@ -219,6 +252,11 @@ router.post("/:id/claim", requireLogin, async (req, res) => {
     VALUES ($1,$2)
   `, [id, req.session.user.id]);
 
+  // Értesítés a kérőnek ÉS mindenkinek, aki lájkolta ezt a kívánságot.
+  await notifyWishlistWatchers(id, req.session.user, "wishlist_claimed",
+    (username, title, reason) => `🎬 ${username} elkezdte a(z) "${title}" fordítását, ${reason}!`
+  );
+
   res.json({ claimed: true });
 });
 
@@ -248,6 +286,11 @@ router.post("/:id/plan", requireLogin, async (req, res) => {
     INSERT INTO wishlist_planned (wishlist_id, user_id)
     VALUES ($1,$2)
   `, [id, req.session.user.id]);
+
+  // Értesítés a kérőnek ÉS mindenkinek, aki lájkolta ezt a kívánságot.
+  await notifyWishlistWatchers(id, req.session.user, "wishlist_planned",
+    (username, title, reason) => `📋 ${username} tervbe vette a(z) "${title}" mangát, ${reason}!`
+  );
 
   res.json({ planned: true });
 });

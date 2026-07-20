@@ -200,6 +200,16 @@
   display: inline;
 }
 
+.chat-inline-image {
+  display: block;
+  max-width: 220px;
+  max-height: 220px;
+  border-radius: 8px;
+  margin-top: 6px;
+  cursor: pointer;
+  object-fit: contain;
+}
+
 .chat-emoji-btn {
   background: #1a1f35;
   border: 1px solid #2a2a3e;

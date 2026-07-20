@@ -167,6 +167,11 @@ async function loadLayout() {
 const birthJS = document.createElement("script");
 birthJS.src = "/js/birth-date.js";
 document.body.appendChild(birthJS);
+
+  // számlázási cím (Stripe-előfizetőknek)
+  const billingAddressJS = document.createElement("script");
+  billingAddressJS.src = "/js/billing-address-gate.js?v=20260713";
+  document.body.appendChild(billingAddressJS);
   // Chat widget betöltése
   const chatCSS = document.createElement("link");
   chatCSS.rel = "stylesheet";

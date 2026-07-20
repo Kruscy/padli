@@ -52,7 +52,17 @@ async function loadImageList() {
       const urlFilename = decodeURIComponent(BUG_URL.split("/").pop().split("?")[0]);
       parsedIndex = allImages.findIndex(img => img === urlFilename);
     }
-    currentImageIndex = isNaN(parsedIndex) || parsedIndex < 0 ? 0 : parsedIndex;
+    // A mentett/URL-ben kapott index nagyobb is lehet, mint a fejezet
+    // jelenlegi oldalszáma (pl. újraszkennelt, rövidebb verzió) — enélkül
+    // a "Ezt is javítom" gomb egy nem létező fájlra (".../undefined")
+    // küldene be hibajelentést csendben.
+    if (isNaN(parsedIndex) || parsedIndex < 0) {
+      currentImageIndex = 0;
+    } else if (parsedIndex >= allImages.length) {
+      currentImageIndex = Math.max(0, allImages.length - 1);
+    } else {
+      currentImageIndex = parsedIndex;
+    }
     await loadBugReportsStatus();
     renderImageList();
     checkCurrentImageBugReport();

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PadlizsanFanSub - Admin</title>
 <link rel="stylesheet" href="/css/sidebar.css?v=20260119">
-<link rel="stylesheet" href="/css/admin.css?v=20260427">
+<link rel="stylesheet" href="/css/admin.css?v=20260712">
 <link rel="stylesheet" href="/css/main.css?v=20260619">
 <link rel="stylesheet" href="/css/header.css?v=20260619">
 <link rel="stylesheet" href="/css/footer.css?v=20260405">
@@ -25,6 +25,7 @@
   <button class="tab-btn" data-tab="tab-mangas">📚 Mangák</button>
   <button class="tab-btn" data-tab="tab-blog">✍️ Blog</button>
   <button class="tab-btn" data-tab="tab-padli">🤖 Padli AI</button>
+  <button class="tab-btn" data-tab="tab-api-usage">🔑 API kulcsok</button>
   <button class="tab-btn" data-tab="tab-libraries">📁 Könyvtárak</button>
   <button class="tab-btn" data-tab="tab-gifts">🎁 Patreon Gift</button>
   <button class="tab-btn" data-tab="tab-patreon-invoice">🧾 Patreon</button>
@@ -55,10 +56,13 @@
     <input id="annImage" type="url" placeholder="Kép URL (opcionális)">
     <input id="annDays" type="number" min="1" max="365" placeholder="Megjelenés (napok száma) *" required>
     <button type="submit">➕ Kiírás hozzáadása</button>
+    <button type="button" id="annCancelEdit" style="display:none">✕ Mégse</button>
   </form>
   <div class="ann-list" id="annList"></div>
 </div>
 <div id="tab-mangas" class="tab-panel">
+  <input type="text" id="mangaSearchInput" placeholder="🔍 Keresés cím alapján..."
+    style="width:100%;max-width:400px;background:#1e293b;border:1px solid #334155;border-radius:8px;padding:8px 12px;color:#e2e8f0;font-size:.9rem;margin-bottom:14px">
   <div id="mangaAdminList"></div>
 </div>
 
@@ -370,6 +374,14 @@
   </div>
 </div>
 
+<div id="tab-api-usage" class="tab-panel">
+  <h2 style="margin-bottom:6px">🔑 API kulcsok használata</h2>
+  <p style="color:#888;font-size:.88rem;margin-bottom:20px">
+    A Padli AI és a leírás-fordító ezeket a kulcsokat használja. Minden Gemini kulcsnak <strong>napi</strong> 500 ingyenes kérés a kerete (nem havi) — ha egy kulcs eléri ezt, automatikusan a következőre vált.
+  </p>
+  <div id="apiUsageList">Betöltés...</div>
+</div>
+
 <div id="tab-libraries" class="tab-panel">
   <h2 style="margin-bottom:16px">📁 Feltöltők könyvtárai</h2>
   <p style="color:#888;font-size:.88rem;margin-bottom:20px">
@@ -435,14 +447,14 @@
 
   <!-- SZÁMLA ŰRL AP (zárolva) -->
   <div id="piPanel" style="display:none;max-width:520px;margin-top:16px">
-    <p style="color:#64748b;font-size:.83rem;margin-bottom:20px">Alanyi adómentes (AAM, 0% ÁFA) — átutalásos, már teljesített számla.</p>
+    <p style="color:#64748b;font-size:.83rem;margin-bottom:20px">Harmadik országbeli szolgáltatásnyújtás (HO ÁFA) — átutalásos, már teljesített számla.</p>
     <div style="background:#0f172a;border:1px solid #1e293b;border-radius:14px;padding:24px">
 
       <div style="background:#111827;border-radius:10px;padding:14px 16px;margin-bottom:20px;font-size:.82rem;color:#94a3b8;line-height:1.7">
         <div style="color:#a78bfa;font-weight:700;margin-bottom:4px;font-size:.88rem">Számlázási cím</div>
-        Patreon Ireland Limited, German Branch<br>
-        Németország, DE-10245 Berlin-Friedrichshain<br>
-        Revaler Strasse 99, Hall 20, 2nd floor rooms 3.19 and 3.25
+        Patreon, Inc.<br>
+        United States, San Francisco, CA 94103<br>
+        600 Townsend Street, Suite 500
       </div>
 
       <div style="margin-bottom:16px">
@@ -452,7 +464,7 @@
       </div>
 
       <div style="margin-bottom:20px">
-        <label style="display:block;color:#94a3b8;font-size:.82rem;margin-bottom:6px">Nettó összeg (Ft) — ÁFA: AAM 0%</label>
+        <label style="display:block;color:#94a3b8;font-size:.82rem;margin-bottom:6px">Nettó összeg (Ft) — ÁFA: HO</label>
         <input type="number" id="piAmount" min="1" max="10000000" placeholder="pl. 164290"
           style="width:100%;background:#1e293b;border:1px solid #334155;border-radius:8px;padding:10px 14px;color:#fff;font-size:1.1rem;font-weight:700;box-sizing:border-box">
       </div>
@@ -470,7 +482,7 @@
             <td style="padding:6px 0" id="piPreviewDesc">—</td>
             <td style="text-align:right;padding:6px 0">1 db</td>
             <td style="text-align:right;padding:6px 0" id="piPreviewNet">—</td>
-            <td style="text-align:right;padding:6px 0;color:#4ade80">AAM 0%</td>
+            <td style="text-align:right;padding:6px 0;color:#4ade80">HO</td>
             <td style="text-align:right;padding:6px 0;font-weight:700" id="piPreviewGross">—</td>
           </tr>
         </table>
@@ -487,10 +499,10 @@
 
 <div id="footer"></div>
 <script src="/js/footer.js?v=20260619"></script>
-<script type="module" src="/js/layout-loader.js?v=20260619"></script>
+<script type="module" src="/js/layout-loader.js?v=20260713"></script>
 <script src="/js/sidebar.js?v=20260204"></script>
 <script src="/js/auth-check.js?v=20260323"></script>
-<script src="/js/admin-mangak.js?v=20260619"></script>
+<script src="/js/admin-mangak.js?v=20260712d"></script>
 <script src="/js/admin-blog.js?v=20260427"></script>
 <script src="/js/admin-padli.js?v=20260427"></script>
 <script src="/js/admin-patreon-invoice.js?v=20260629"></script>

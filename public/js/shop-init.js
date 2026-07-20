@@ -87,7 +87,15 @@ async function checkout(packageId, btn) {
       body: JSON.stringify({ packageId }),
     });
     const data = await r.json();
-    if (!r.ok) throw new Error(data.error || "Hiba");
+    if (!r.ok) {
+      if (data.billingAddressRequired && typeof showBillingAddressPopup === "function") {
+        showBillingAddressPopup();
+        btn.disabled = false;
+        btn.textContent = "Megvásárlom";
+        return;
+      }
+      throw new Error(data.error || "Hiba");
+    }
     window.location.href = data.url;
   } catch (err) {
     showMsg("❌ Hiba: " + err.message, "error");

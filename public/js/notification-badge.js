@@ -4,6 +4,7 @@
   const TYPE_CONFIG = {
     bug_comment:  { icon: "💬" },
     bug_closed:   { icon: "🔒" },
+    bug_rejected: { icon: "❌" },
     patreon_gift: { icon: "🎁" },
     patreon_won:  { icon: "🏆" },
     default:      { icon: "🔔" },

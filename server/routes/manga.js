@@ -67,24 +67,32 @@ router.get("/manga-list", requireLogin, async (_req, res) => {
 router.get("/manga/:slug", requireLogin, async (req, res) => {
   const { slug } = req.params;
 
+  // Duplikált slug esetén (két manga-bejegyzés ugyanazzal a slug-gal)
+  // determinisztikusan a több fejezettel rendelkezőt (a "teljesebb"
+  // bejegyzést) részesítjük előnyben, hogy a metaadat ne "villogjon"
+  // kérésenként a két duplikátum között.
   const { rows } = await pool.query(
     `SELECT
       m.title, m.slug, m.cover_url, m.description,
       m.status, m.average_score, m.total_chapters,
       m.uploaders, m.anilist_id,
       COALESCE(ARRAY_AGG(DISTINCT g.name) FILTER (WHERE g.name IS NOT NULL), '{}') AS genres,
-      COALESCE(ARRAY_AGG(DISTINCT t.name) FILTER (WHERE t.name IS NOT NULL), '{}') AS tags
+      COALESCE(ARRAY_AGG(DISTINCT t.name) FILTER (WHERE t.name IS NOT NULL), '{}') AS tags,
+      COUNT(DISTINCT c.id) AS chapter_count
      FROM manga m
      LEFT JOIN manga_genre mg ON mg.manga_id = m.id
      LEFT JOIN genre g ON g.id = mg.genre_id
      LEFT JOIN manga_tag mt ON mt.manga_id = m.id
      LEFT JOIN tag t ON t.id = mt.tag_id
+     LEFT JOIN chapter c ON c.manga_id = m.id
      WHERE m.slug = $1
-     GROUP BY m.id`,
+     GROUP BY m.id
+     ORDER BY chapter_count DESC, m.id ASC`,
     [slug]
   );
 
   if (!rows.length) return res.status(404).end();
+  delete rows[0].chapter_count;
   res.json(rows[0]);
 });
 
@@ -175,16 +183,21 @@ router.get("/pages/:slug/:chapter", requireLogin, async (req, res) => {
 
       if (!isPatron) {
 
+// Duplikált slug esetén (két manga-bejegyzés ugyanazzal a slug-gal)
+// előfordulhat, hogy ugyanaz a fejezetnév mindkét oldalon szerepel,
+// eltérő unlocks_at-tal. Csak akkor zárjuk, ha MINDEN jelölt még zárt —
+// ha bármelyik duplikátum alatt már fel van oldva, ne akadályozzuk.
 const chRes = await pool.query(
   `SELECT c.unlocks_at FROM chapter c
    JOIN manga m ON m.id = c.manga_id
-   WHERE m.slug = $1 AND c.folder = $2 LIMIT 1`,
+   WHERE m.slug = $1 AND c.folder = $2`,
   [slug, chapter]
 );
 
 if (chRes.rows.length) {
-  const unlocks = chRes.rows[0].unlocks_at;
-  if (unlocks && new Date(unlocks) > new Date()) {
+  const now = new Date();
+  const allLocked = chRes.rows.every(r => r.unlocks_at && new Date(r.unlocks_at) > now);
+  if (allLocked) {
     return res.status(403).json({ error: "locked" });
   }
 }
@@ -195,7 +208,11 @@ if (chRes.rows.length) {
     console.error("Lock check error:", lockErr);
   }
 
-  const result = await pool.query(
+  // Duplikált slug esetén (két manga-bejegyzés ugyanazzal a slug-gal,
+  // pl. két külön scan/uploader) LIMIT 1 nélkül lekérjük az ÖSSZES
+  // egyező jelöltet, és azt használjuk, amelyiknél ténylegesen van fájl —
+  // nem bízzuk a sorrendet a Postgres-re.
+  const candidates = await pool.query(
     `
     SELECT
       l.path AS library_path,
@@ -205,32 +222,43 @@ if (chRes.rows.length) {
       EXTRACT(EPOCH FROM c.updated_at)::bigint AS chapter_version
     FROM chapter c
     JOIN manga m ON m.id = c.manga_id
-    JOIN library l ON l.id = m.library_id
+    JOIN library l ON l.id = c.library_id
     WHERE m.slug = $1 AND c.folder = $2
-    LIMIT 1
     `,
     [slug, chapter]
   );
 
-  if (!result.rows.length) {
+  if (!candidates.rows.length) {
     return res.status(404).json({ error: "Chapter not found" });
   }
 
-  const { library_path, library_name, manga_folder, r2_migrated, chapter_version } = result.rows[0];
-  const dir = path.join(library_path, manga_folder, chapter);
-
-  try {
-    let files;
+  async function tryLoadFiles({ library_path, manga_folder, r2_migrated }) {
+    const dir = path.join(library_path, manga_folder, chapter);
     if (r2_migrated) {
       const prefix = localPathToR2Key(`${library_path}/${manga_folder}/${chapter}/`.replace(/\/+/g, "/"));
-      files = (await listFiles(prefix)).filter(f => /\.(jpg|jpeg|png|webp)$/i.test(f));
+      let files = (await listFiles(prefix)).filter(f => /\.(jpg|jpeg|png|webp)$/i.test(f));
       // Fallback: ha R2-n még nincs fent (pl. friss feltöltés scan előtt), lokálisból
       if (files.length === 0 && fs.existsSync(dir)) {
         files = fs.readdirSync(dir).filter(f => /\.(jpg|jpeg|png|webp)$/i.test(f));
       }
-    } else {
-      files = fs.readdirSync(dir).filter(f => /\.(jpg|jpeg|png|webp)$/i.test(f));
+      return files;
     }
+    if (!fs.existsSync(dir)) return [];
+    return fs.readdirSync(dir).filter(f => /\.(jpg|jpeg|png|webp)$/i.test(f));
+  }
+
+  try {
+    let files = [];
+    let chosen = candidates.rows[0];
+    for (const candidate of candidates.rows) {
+      const found = await tryLoadFiles(candidate);
+      if (found.length) {
+        files = found;
+        chosen = candidate;
+        break;
+      }
+    }
+    const { library_name, chapter_version } = chosen;
 
     const pages = files
       .map(f => ({ f, n: extractPageNumber(f) }))
@@ -241,6 +269,10 @@ if (chRes.rows.length) {
         return a.f.localeCompare(b.f, undefined, { numeric: true });
       })
       .map(p => p.f);
+
+    if (!pages.length) {
+      return res.status(404).json({ error: "Pages not found" });
+    }
 
     // Javított képek verziói — böngésző cache-bust
     const { rows: fixRows } = await pool.query(
@@ -266,6 +298,10 @@ if (chRes.rows.length) {
 router.get("/image/:library/:slug/:chapter/:file", async (req, res) => {
   const { library, slug, chapter, file } = req.params;
 
+  // A library.name szűrés a legtöbb esetben már egyértelművé teszi a
+  // sort, de duplikált slug esetén (ha véletlenül ugyanabban a
+  // könyvtárban is előfordulna) LIMIT 1 nélkül minden jelöltet
+  // megnézünk, és azt választjuk, amelyiknél tényleg létezik a fájl.
   const result = await pool.query(
     `
     SELECT
@@ -274,16 +310,29 @@ router.get("/image/:library/:slug/:chapter/:file", async (req, res) => {
       m.r2_migrated
     FROM chapter c
     JOIN manga m ON m.id = c.manga_id
-    JOIN library l ON l.id = m.library_id
+    JOIN library l ON l.id = c.library_id
     WHERE l.name = $1 AND m.slug = $2 AND c.folder = $3
-    LIMIT 1
     `,
     [library, slug, chapter]
   );
 
   if (!result.rows.length) return res.status(404).end();
 
-  const { library_path, manga_folder, r2_migrated } = result.rows[0];
+  let chosen = result.rows[0];
+  if (result.rows.length > 1) {
+    for (const candidate of result.rows) {
+      const candidatePath = path.join(candidate.library_path, candidate.manga_folder, chapter, file);
+      if (candidate.r2_migrated) {
+        try {
+          const key = mangaImageToR2Key(candidate.library_path, candidate.manga_folder, chapter, file);
+          if (await objectExists(key)) { chosen = candidate; break; }
+        } catch {}
+      }
+      if (fs.existsSync(candidatePath)) { chosen = candidate; break; }
+    }
+  }
+
+  const { library_path, manga_folder, r2_migrated } = chosen;
 
   // Path traversal védelem
   const baseDir = path.resolve(path.join(library_path, manga_folder, chapter));

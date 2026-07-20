@@ -19,7 +19,16 @@ router.post("/", async (req, res) => {
 
   if (!userId) return res.status(401).json({ error: "Not logged in" });
 
-  const manga = await pool.query("SELECT id FROM manga WHERE slug = $1", [slug]);
+  // Duplikált slug esetén (két manga-bejegyzés ugyanazzal a slug-gal)
+  // azt a bejegyzést részesítjük előnyben, amelyiknél TÉNYLEGESEN
+  // létezik ez a fejezet — így a progress a helyes oldalhoz kötődik.
+  const manga = await pool.query(
+    `SELECT m.id,
+            EXISTS (SELECT 1 FROM chapter c WHERE c.manga_id = m.id AND c.folder = $2) AS has_chapter
+     FROM manga m WHERE m.slug = $1
+     ORDER BY has_chapter DESC`,
+    [slug, chapter]
+  );
   if (!manga.rows.length) return res.status(404).json({ error: "Manga not found" });
 
   const mangaId = manga.rows[0].id;
@@ -74,7 +83,8 @@ router.get("/recent-reading", async (req, res) => {
         ) AS chapters
       FROM reading_progress rp
       INNER JOIN manga m ON m.id = rp.manga_id
-      LEFT JOIN library l ON l.id = m.library_id
+      LEFT JOIN chapter pc ON pc.manga_id = m.id AND pc.folder = rp.chapter
+      LEFT JOIN library l ON l.id = COALESCE(pc.library_id, m.library_id)
       WHERE rp.user_id = $1
       ORDER BY rp.updated_at DESC
     `, [userId]);
@@ -138,11 +148,15 @@ router.get("/:slug?", requireLogin, async (req, res) => {
   if (!slug) return res.json(null);
   const userId = req.session.user.id;
 
+  // Duplikált slug esetén (két manga-bejegyzés ugyanazzal a slug-gal)
+  // előfordulhat, hogy a felhasználónak mindkettő alatt van külön
+  // reading_progress sora — ilyenkor a legutóbb frissítettet vesszük.
   const { rows } = await pool.query(
     `SELECT rp.chapter, rp.page, rp.updated_at
      FROM reading_progress rp
      JOIN manga m ON m.id = rp.manga_id
      WHERE rp.user_id = $1 AND m.slug = $2
+     ORDER BY rp.updated_at DESC NULLS LAST
      LIMIT 1`,
     [userId, slug]
   );
@@ -156,14 +170,12 @@ router.delete("/:slug", requireLogin, async (req, res) => {
   const { slug } = req.params;
 
   try {
-    const manga = await pool.query("SELECT id FROM manga WHERE slug = $1", [slug]);
-    if (!manga.rows.length) return res.status(404).json({ error: "Manga not found" });
-
-    const mangaId = manga.rows[0].id;
-
+    // Duplikált slug esetén mindkét (vagy több) manga-bejegyzés alatti
+    // progresszust töröljük, hogy a könyvjelző valóban eltűnjön.
     await pool.query(
-      `DELETE FROM reading_progress WHERE user_id = $1 AND manga_id = $2`,
-      [userId, mangaId]
+      `DELETE FROM reading_progress WHERE user_id = $1
+       AND manga_id IN (SELECT id FROM manga WHERE slug = $2)`,
+      [userId, slug]
     );
 
     res.json({ ok: true });

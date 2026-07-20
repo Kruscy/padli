@@ -69,9 +69,8 @@
 .ann-item-info { flex: 1; }
 .ann-item-info h3 { margin: 0 0 4px; font-size: 1rem; }
 .ann-item-info p { margin: 0; font-size: 0.8rem; color: #aaa; }
-.ann-delete {
-  background: #7f1d1d;
-  color: #fff;
+.ann-item-actions { display: flex; flex-direction: column; gap: 8px; }
+.ann-edit, .ann-delete {
   border: none;
   padding: 6px 14px;
   border-radius: 8px;
@@ -79,6 +78,9 @@
   font-weight: 600;
   white-space: nowrap;
 }
+.ann-edit { background: #2a2a4e; color: #a78bfa; }
+.ann-delete { background: #7f1d1d; color: #fff; }
+#annCancelEdit { background: #2a2a3e; color: #ccc; }
 .manga-admin-block {
   margin-bottom: 8px;
   border-radius: 10px;

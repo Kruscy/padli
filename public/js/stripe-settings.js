@@ -97,6 +97,11 @@ async function stripeSubscribe(tierId) {
     });
     const data = await res.json();
     if (!res.ok) {
+      if (data.billingAddressRequired && typeof showBillingAddressPopup === "function") {
+        showBillingAddressPopup();
+        if (statusEl) statusEl.textContent = "";
+        return;
+      }
       if (statusEl) statusEl.textContent = "❌ " + (data.error || "Hiba");
       return;
     }
