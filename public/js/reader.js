@@ -205,7 +205,12 @@ async function loadPages() {
   }
 
   if (res.status === 403) {
-    await showLockPage(slug);
+    const errData = await res.clone().json().catch(() => ({}));
+    if (errData.error === "age_restricted") {
+      showErrorPage("🔞 Ez a tartalom csak 18 éven felülieknek elérhető. A fiókodhoz rögzített születési dátum alapján jelenleg nem férhetsz hozzá.");
+    } else {
+      await showLockPage(slug);
+    }
     return false;
   }
 

@@ -14,6 +14,32 @@ function extractPageNumber(filename) {
   const match = base.match(/(\d+)(?!.*\d)/);
   return match ? parseInt(match[1], 10) : null;
 }
+
+// 18+ korhatár-ellenőrzés: felnőtt tartalmú (Hentai/Ecchi) mangákhoz
+function isAdultVerified(birthDate) {
+  if (!birthDate) return false; // nincs dátum → fail closed, nem tekintjük felnőttnek
+  const b = new Date(birthDate);
+  if (isNaN(b.getTime())) return false; // értelmezhetetlen dátum → fail closed
+  const now = new Date();
+  if (b > now) return false; // jövőbeli "születési" dátum → érvénytelen, fail closed
+  let age = now.getFullYear() - b.getFullYear();
+  const m = now.getMonth() - b.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < b.getDate())) age--;
+  if (age > 120) return false; // irreális kor (pl. hibás/placeholder dátum) → fail closed
+  return age >= 18;
+}
+
+async function isAdultManga(slug) {
+  const { rows } = await pool.query(`
+    SELECT EXISTS (
+      SELECT 1 FROM manga m
+      JOIN manga_genre mg ON mg.manga_id = m.id
+      JOIN genre g ON g.id = mg.genre_id
+      WHERE m.slug = $1 AND g.name IN ('Hentai','Ecchi')
+    ) AS is_adult
+  `, [slug]);
+  return rows[0]?.is_adult || false;
+}
 /* ================= MANGA LIST ================= */
 router.get("/manga", requireLogin, async (_req, res) => {
   try {
@@ -159,7 +185,14 @@ const result = rows.map(ch => {
   return { ...ch, locked };
 });
 
-res.json({ chapters: result, lockHours: parseInt(process.env.LOCK_HOURS || "24", 10) });
+// ===== 18+ KORHATÁR ELLENŐRZÉS =====
+let ageBlocked = false;
+if (userRole !== "admin" && await isAdultManga(slug)) {
+  const u = await pool.query(`SELECT birth_date FROM users WHERE id = $1`, [userId]);
+  ageBlocked = !isAdultVerified(u.rows[0]?.birth_date);
+}
+
+res.json({ chapters: result, lockHours: parseInt(process.env.LOCK_HOURS || "24", 10), ageBlocked });
 
   } catch (e) {
     console.error(e);
@@ -172,7 +205,22 @@ router.get("/pages/:slug/:chapter", requireLogin, async (req, res) => {
   const userId = req.session.user?.id;
   const userRole = req.session.user?.role;
 
-  // ===== ZÁROLÁS ELLENŐRZÉS =====
+  // ===== 18+ KORHATÁR ELLENŐRZÉS =====
+  // Ez a valódi biztonsági határ — nem bypass-olható, függetlenül attól,
+  // hogy a fejezetlista (/chapters) mit jelzett előre a kliensnek.
+  try {
+    if (userRole !== "admin" && await isAdultManga(slug)) {
+      const u = await pool.query(`SELECT birth_date FROM users WHERE id = $1`, [userId]);
+      if (!isAdultVerified(u.rows[0]?.birth_date)) {
+        return res.status(403).json({ error: "age_restricted" });
+      }
+    }
+  } catch (ageErr) {
+    console.error("Age check error:", ageErr);
+    return res.status(403).json({ error: "age_restricted" }); // hiba esetén fail closed
+  }
+
+  // ===== ZÁROLÁS ELLENŐRZÉS (Patreon) =====
   try {
     if (userRole !== "admin") {
       const ps = await pool.query(
@@ -218,8 +266,7 @@ if (chRes.rows.length) {
       l.path AS library_path,
       l.name AS library_name,
       m.folder AS manga_folder,
-      m.r2_migrated,
-      EXTRACT(EPOCH FROM c.updated_at)::bigint AS chapter_version
+      m.r2_migrated
     FROM chapter c
     JOIN manga m ON m.id = c.manga_id
     JOIN library l ON l.id = c.library_id
@@ -258,7 +305,7 @@ if (chRes.rows.length) {
         break;
       }
     }
-    const { library_name, chapter_version } = chosen;
+    const { library_name } = chosen;
 
     const pages = files
       .map(f => ({ f, n: extractPageNumber(f) }))
@@ -286,7 +333,7 @@ if (chRes.rows.length) {
       if (r.image_file) fixVersions[r.image_file] = Number(r.v);
     }
 
-    res.json({ pages, library: library_name, fixVersions, chapterVersion: chapter_version || null });
+    res.json({ pages, library: library_name, fixVersions });
   } catch (e) {
     console.error(e);
     res.status(404).json({ error: "Pages not found" });

@@ -43,6 +43,13 @@ let currentManga = null;
     s.textContent = g;
     genresEl.appendChild(s);
   });
+  if ((currentManga.genres || []).some(g => g === "Hentai" || g === "Ecchi")) {
+    const badge = document.createElement("span");
+    badge.className = "manga-badge badge-adult";
+    badge.style.cssText = "background:#dc2626; color:#fff; font-weight:700;";
+    badge.textContent = "🔞 18+";
+    document.getElementById("mangaInfoBar").appendChild(badge);
+  }
 
   const tagsEl = document.getElementById("tags");
   tagsEl.innerHTML = "";

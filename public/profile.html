@@ -34,6 +34,26 @@
   margin: 24px 0; padding: 18px 20px; background: #0f0f1a;
   border: 1px solid rgba(255,255,255,.1); border-radius: 14px; max-width: 480px;
 ">
+  <h2 style="margin:0 0 10px; font-size:1.1rem;">🎂 Születési dátum</h2>
+  <p style="margin:0 0 12px; font-size:.85rem; color:#888;">
+    Ez alapján dönti el a rendszer, hogy hozzáférhetsz-e a 18+ tartalmú mangákhoz.
+  </p>
+  <input id="birthDateInput" type="date" style="
+    background:#1a1a2e; border:1px solid rgba(255,255,255,.12); color:#fff;
+    border-radius:9px; padding:9px 12px; font-size:.9rem; font-family:inherit;
+  ">
+  <button id="birthDateSaveBtn" style="
+    background:linear-gradient(135deg,#7c3aed,#5b21b6); border:none; color:#fff;
+    padding:9px 22px; border-radius:9px; cursor:pointer; font-size:.88rem; font-weight:700;
+    margin-left:8px;
+  ">Mentés</button>
+  <div id="birthDateFeedback" style="margin-top:8px; font-size:.85rem; font-weight:600;"></div>
+</section>
+
+<section style="
+  margin: 24px 0; padding: 18px 20px; background: #0f0f1a;
+  border: 1px solid rgba(255,255,255,.1); border-radius: 14px; max-width: 480px;
+">
   <h2 style="margin:0 0 10px; font-size:1.1rem;">📚 AniList szinkron</h2>
   <p id="anilistSyncHint" class="hidden" style="margin:0 0 12px; font-size:.85rem; color:#888;">
     Előbb kösd össze az AniList fiókodat a <a href="/settings.html" style="color:#c4b5fd;">Beállításokban</a>.
@@ -73,6 +93,7 @@
   </div>
 </div>
 <script src="/js/profile-init.js?v=20260619"></script>
+<script src="/js/profile-birthdate.js?v=20260722"></script>
 <script src="/js/anilist-sync-modal.js?v=20260720"></script>
 <div id="footer"></div>
 <script src="/js/footer.js?v=20260619"></script>

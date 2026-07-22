@@ -83,9 +83,14 @@ router.get("/me", async (req, res) => {
   }
 });
 // Születési dátum lekérése
+// FONTOS: TO_CHAR-ral kérjük le szövegként, nem a nyers DATE oszlopot —
+// a pg driver a DATE-et helyi időzóna szerinti éjfélként JS Date objektummá
+// alakítja, amit a res.json() UTC ISO stringgé szerializál (.toISOString()),
+// ez pedig +1-2 órás UTC-eltolódás miatt egy nappal korábbi dátumot adna
+// vissza (pl. "1998-11-11" → "1998-11-10T23:00:00.000Z").
 router.get("/birth-date", requireLogin, async (req, res) => {
   const { rows } = await pool.query(
-    `SELECT birth_date FROM users WHERE id = $1`,
+    `SELECT TO_CHAR(birth_date, 'YYYY-MM-DD') AS birth_date FROM users WHERE id = $1`,
     [req.session.user.id]
   );
   res.json({ birth_date: rows[0]?.birth_date || null });
@@ -95,6 +100,12 @@ router.get("/birth-date", requireLogin, async (req, res) => {
 router.post("/birth-date", requireLogin, async (req, res) => {
   const { birth_date } = req.body;
   if (!birth_date) return res.status(400).json({ error: "Hiányzó dátum" });
+
+  const b = new Date(birth_date);
+  const ageInYears = (Date.now() - b.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+  if (isNaN(b.getTime()) || b > new Date() || ageInYears > 120) {
+    return res.status(400).json({ error: "Érvénytelen születési dátum" });
+  }
 
   await pool.query(
     `UPDATE users SET birth_date = $1 WHERE id = $2`,

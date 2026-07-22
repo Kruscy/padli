@@ -34,13 +34,18 @@ function parseChapterNumber(str) {
     const res = await fetch(`/api/chapters/${slug}`);
     const data = await res.json();
     let chapters = data.chapters;
+    const ageBlocked = !!data.ageBlocked;
     chapters.sort((a, b) => parseChapterNumber(a.folder) - parseChapterNumber(b.folder));
     const list = document.getElementById("chapters");
     list.innerHTML = "";
     chapters.forEach(ch => {
       const row = document.createElement("a");
       row.className = "chapter-row";
-      if (ch.locked) {
+      if (ageBlocked) {
+        row.href = "#";
+        row.classList.add("locked");
+        row.addEventListener("click", (e) => { e.preventDefault(); showAgeRestrictedModal(); });
+      } else if (ch.locked) {
         ch._availableIn = ch.unlocks_at ? Math.ceil((new Date(ch.unlocks_at) - new Date()) / 3600000) : 0;
         row.href = "#";
         row.classList.add("locked");
@@ -51,7 +56,7 @@ function parseChapterNumber(str) {
       const read = progress && progress.chapter === ch.folder;
       const status = document.createElement("span");
       status.className = `read ${read ? "yes" : "no"}`;
-      status.textContent = ch.locked ? "🔒" : (read ? "✅" : "⬜");
+      status.textContent = ageBlocked ? "🔞" : (ch.locked ? "🔒" : (read ? "✅" : "⬜"));
       const title = document.createElement("span");
       title.className = "chapter-title";
       title.textContent = ch.folder;

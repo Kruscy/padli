@@ -11,7 +11,7 @@ router.get("/export", requireLogin, async (req, res) => {
     const [profile, progress, reads, ratings, favorites, wishlist, wantToRead, orders, points] =
       await Promise.all([
         pool.query(
-          `SELECT username, email, created_at, birth_date FROM users WHERE id = $1`,
+          `SELECT username, email, created_at, TO_CHAR(birth_date, 'YYYY-MM-DD') AS birth_date FROM users WHERE id = $1`,
           [userId]
         ),
         pool.query(

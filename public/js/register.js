@@ -5,13 +5,14 @@ form.addEventListener("submit", async (e) => {
   e.preventDefault();
   errorEl.textContent = "";
 
-  const username = document.getElementById("username").value.trim();
-  const email    = document.getElementById("email").value.trim();
-  const password = document.getElementById("password").value;
+  const username  = document.getElementById("username").value.trim();
+  const email     = document.getElementById("email").value.trim();
+  const password  = document.getElementById("password").value;
   const password2 = document.getElementById("password2").value;
-  const gdpr     = document.getElementById("gdprAccept").checked;
+  const birthDate = document.getElementById("birthDate").value;
+  const gdpr      = document.getElementById("gdprAccept").checked;
 
-  if (!username || !email || !password || !password2) {
+  if (!username || !email || !password || !password2 || !birthDate) {
     errorEl.textContent = "Minden mező kötelező";
     return;
   }
@@ -35,7 +36,7 @@ form.addEventListener("submit", async (e) => {
     const res = await fetch("/api/auth/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, email, password, gdprAccepted: true })
+      body: JSON.stringify({ username, email, password, birthDate, gdprAccepted: true })
     });
 
     const data = await res.json();
