@@ -109,6 +109,10 @@ function parseChapter(chapter) {
 router.get("/search", requireLogin, async (req, res) => {
   try {
     const q = req.query.q;
+    // Alapértelmezés MANGA — a meglévő manga-kereső hívók viselkedése változatlan.
+    const isAnime = req.query.type === "anime";
+    const anilistType = isAnime ? "ANIME" : "MANGA";
+    const countField = isAnime ? "episodes" : "chapters";
 
     if (!q || q.length < 2) {
       return res.json([]);
@@ -117,11 +121,11 @@ router.get("/search", requireLogin, async (req, res) => {
     const query = `
       query ($search: String) {
         Page(perPage: 5) {
-          media(search: $search, type: MANGA) {
+          media(search: $search, type: ${anilistType}) {
             id
             title { romaji english }
             coverImage { medium }
-            chapters
+            ${countField}
           }
         }
       }

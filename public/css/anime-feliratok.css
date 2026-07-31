@@ -1,0 +1,296 @@
+body {
+  margin: 0;
+  background: #0e1117;
+  color: #fff;
+  font-family: system-ui, sans-serif;
+}
+
+.anime-sub-page {
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 80px 20px 40px;
+  box-sizing: border-box;
+}
+
+.page-title {
+  font-size: 28px;
+  margin-bottom: 20px;
+}
+
+.anime-sub-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.anime-sub-card {
+  border-radius: 12px;
+  overflow: hidden;
+  background: #0f172a;
+  transition: background .2s;
+}
+
+.anime-sub-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px;
+  cursor: pointer;
+}
+
+.anime-sub-card:hover {
+  background: #16203a;
+}
+
+.anime-sub-cover {
+  width: 70px;
+  height: 100px;
+  object-fit: cover;
+  border-radius: 8px;
+  flex-shrink: 0;
+  background: #1a1a2e;
+}
+
+.anime-sub-title-wrap {
+  flex: 1;
+  min-width: 0;
+}
+
+.anime-sub-title {
+  font-weight: 700;
+  color: #f0f0fa;
+  font-size: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.anime-sub-meta {
+  font-size: 13px;
+  opacity: .7;
+  margin-top: 4px;
+}
+
+.anime-sub-toggle-icon {
+  font-size: .8rem;
+  color: #888;
+  flex-shrink: 0;
+}
+
+.anime-sub-body {
+  background: #080810;
+  border-top: 1px solid rgba(255,255,255,.08);
+  padding: 12px 16px 16px;
+}
+
+.anime-sub-season {
+  margin-bottom: 14px;
+}
+
+.anime-sub-season:last-child {
+  margin-bottom: 0;
+}
+
+.anime-sub-season-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.anime-sub-season-title {
+  font-weight: 600;
+  color: #c4b5fd;
+  font-size: .88rem;
+}
+
+.anime-sub-season-download {
+  background: linear-gradient(135deg,#7c3aed,#5b21b6);
+  border: none;
+  color: #fff;
+  padding: 6px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: .78rem;
+  font-weight: 700;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.anime-sub-episode-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: #1a1a2e;
+  margin-bottom: 6px;
+  font-size: .85rem;
+  color: #ddd;
+}
+
+.anime-sub-episode-row:last-child {
+  margin-bottom: 0;
+}
+
+.anime-sub-episode-download {
+  background: #1e1e30;
+  border: 1px solid rgba(255,255,255,.12);
+  color: #c4b5fd;
+  padding: 4px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: .78rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.anime-sub-episode-download:hover {
+  background: #2a2a4e;
+}
+
+.anime-sub-empty {
+  color: #666;
+  font-size: .85rem;
+  text-align: center;
+  padding: 10px 0;
+}
+
+/* Gemini-kulcs felajánló + fordítás-kérés doboz */
+.anime-sub-offer-box,
+.anime-sub-request-box {
+  background: #0f172a;
+  border: 1px solid rgba(124,92,255,.25);
+  border-radius: 12px;
+  padding: 18px 20px;
+  margin-bottom: 24px;
+}
+
+.anime-sub-offer-box h3,
+.anime-sub-request-box h3 {
+  margin: 0 0 8px;
+  font-size: 1.05rem;
+  color: #c4b5fd;
+}
+
+.anime-sub-offer-box p,
+.anime-sub-request-box p {
+  margin: 0 0 14px;
+  font-size: .88rem;
+  color: #bbb;
+  line-height: 1.6;
+}
+
+.anime-sub-offer-box a {
+  color: #7dd3fc;
+}
+
+.anime-sub-offer-form {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.anime-sub-offer-form input {
+  flex: 1;
+  min-width: 200px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid #2a2d3e;
+  background: #0b0e1a;
+  color: #fff;
+  font-size: .9rem;
+  outline: none;
+}
+
+.anime-sub-offer-form input:focus {
+  border-color: #7c5cff;
+}
+
+.anime-sub-offer-form button,
+.anime-sub-req-form button {
+  background: linear-gradient(135deg,#7c3aed,#5b21b6);
+  border: none;
+  color: #fff;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: .88rem;
+  font-weight: 700;
+}
+
+.anime-sub-offer-form button:disabled,
+.anime-sub-req-form button:disabled {
+  opacity: .6;
+  cursor: default;
+}
+
+.anime-sub-offer-msg {
+  margin: 10px 0 0 !important;
+  font-size: .85rem;
+  font-weight: 600;
+}
+
+.anime-sub-offer-msg:empty {
+  display: none;
+}
+
+.anime-sub-req-selected {
+  margin-top: 16px;
+  background: #080810;
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.anime-sub-req-selected-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.anime-sub-req-selected-cover {
+  width: 46px;
+  height: 66px;
+  object-fit: cover;
+  border-radius: 6px;
+  background: #1a1a2e;
+  flex-shrink: 0;
+}
+
+.anime-sub-req-selected-title {
+  font-weight: 700;
+  color: #f0f0fa;
+  font-size: .95rem;
+}
+
+.anime-sub-req-form {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  align-items: end;
+}
+
+.anime-sub-req-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: .8rem;
+  color: #999;
+}
+
+.anime-sub-req-form input {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid #2a2d3e;
+  background: #0b0e1a;
+  color: #fff;
+  font-size: .88rem;
+  outline: none;
+  width: 130px;
+}
+
+.anime-sub-req-form input:focus {
+  border-color: #7c5cff;
+}

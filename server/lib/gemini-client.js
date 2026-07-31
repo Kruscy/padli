@@ -72,11 +72,11 @@ function nextUtcMidnight() {
   return d.getTime();
 }
 
-async function logUsage(keyLabel, success, statusCode, errorMessage) {
+async function logUsage(keyLabel, success, statusCode, errorMessage, source) {
   try {
     await pool.query(
-      `INSERT INTO api_key_usage (provider, key_label, success, status_code, error_message) VALUES ($1,$2,$3,$4,$5)`,
-      ["gemini", keyLabel, success, statusCode || null, errorMessage ? String(errorMessage).slice(0, 500) : null]
+      `INSERT INTO api_key_usage (provider, key_label, success, status_code, error_message, source) VALUES ($1,$2,$3,$4,$5,$6)`,
+      ["gemini", keyLabel, success, statusCode || null, errorMessage ? String(errorMessage).slice(0, 500) : null, source || null]
     );
   } catch (err) {
     console.error("api_key_usage log hiba:", err.message);
@@ -106,12 +106,23 @@ function recordRequest(label) {
 // Ez alapján döntjük el, hogy egész napra letiltsuk-e a kulcsot, vagy csak
 // egy rövid hűtési időre – különben egy átmeneti percenkénti pörgés is
 // tévesen egész napra kiütné a kulcsot.
+//
+// FONTOS (2026-07-22-i incidens): a Gemini 429 válasza gyakran EGYSZERRE
+// listázza a "PerDay" és "PerMinute" quotaId-t is (több egyidejűleg
+// megsértett kvótát sorol fel egy válaszban), NEM azt jelenti, hogy a napi
+// kvóta ténylegesen kimerült. Korábban ez az ambiguous eset "biztonságból"
+// napi kimerülésnek számított — ez okozta, hogy egy pillanatnyi, sok
+// párhuzamos kéréssel járó percenkénti (RPM) korlátozás (pl. PadliCrome
+// egyszerre több oldalt fordít) az ÖSSZES kulcsot egyszerre "kimerültnek"
+// jelölte egész napra, holott néhány kérésen kívül semmi nem történt és a
+// kulcsok másodperceken belül újra sikeresen válaszoltak. Csak akkor
+// tekintjük valódi napi kimerülésnek, ha KIZÁRÓLAG "PerDay" szerepel a
+// válaszban — minden más (ambiguous vagy ismeretlen formátum) esetben a
+// rövidebb, kevésbé zavaró percenkénti hűtést alkalmazzuk.
 function isDailyQuotaError(bodyText) {
   const hasDaily = /PerDay/i.test(bodyText);
   const hasMinute = /PerMinute/i.test(bodyText);
-  if (hasDaily && !hasMinute) return true;
-  if (hasMinute && !hasDaily) return false;
-  return true; // ismeretlen formátum esetén a biztonságosabb (napi) útra megyünk
+  return hasDaily && !hasMinute;
 }
 
 /**
@@ -123,8 +134,10 @@ function isDailyQuotaError(bodyText) {
  * @param {(key: string) => object} buildHeaders
  * @param {object} body
  * @param {number} timeoutMs
+ * @param {string} source - melyik funkció hívta (pl. "padli-ai", "gemini-proxy") — a
+ *   naplóba kerül, hogy egy jövőbeli burst-nél azonosítható legyen az okozó.
  */
-async function callWithRotation(buildUrl, buildHeaders, body, timeoutMs) {
+async function callWithRotation(buildUrl, buildHeaders, body, timeoutMs, source) {
   const KEYS = await loadKeys();
   if (!KEYS.length) {
     const err = new Error("Nincs beállítva Gemini API kulcs");
@@ -175,7 +188,7 @@ async function callWithRotation(buildUrl, buildHeaders, body, timeoutMs) {
         if (isDaily) {
           const wasAlreadyExhausted = (exhaustedUntil.get(label) || 0) > Date.now();
           exhaustedUntil.set(label, nextUtcMidnight());
-          await logUsage(label, false, 429, "daily quota exceeded");
+          await logUsage(label, false, 429, text || "daily quota exceeded", source);
           if (!wasAlreadyExhausted) {
             await notifyAdminOnce("gemini_" + label, "⚠️ A " + label + " Gemini API kulcs kimerült mára (napi ingyenes kvóta elfogyott).");
           }
@@ -184,29 +197,29 @@ async function callWithRotation(buildUrl, buildHeaders, body, timeoutMs) {
           // Percenkénti (RPM) korlát – ez átmeneti, nem valódi kimerülés,
           // ezért csak rövid hűtési időt kap és nincs admin riasztás.
           exhaustedUntil.set(label, Date.now() + 65000);
-          await logUsage(label, false, 429, "per-minute rate limit");
+          await logUsage(label, false, 429, text || "per-minute rate limit", source);
           lastErr = new Error(label + ": percenkénti korlát elérve (429)");
         }
         continue;
       }
       if (!res.ok) {
         const text = await res.text().catch(() => "");
-        await logUsage(label, false, res.status, text);
+        await logUsage(label, false, res.status, text, source);
         lastErr = new Error(label + ": HTTP " + res.status);
         allQuotaErrors = false;
         continue;
       }
 
-      await logUsage(label, true, 200, null);
+      await logUsage(label, true, 200, null, source);
       return await res.json();
     } catch (err) {
       lastErr = err;
       allQuotaErrors = false;
-      await logUsage(label, false, null, err.message);
+      await logUsage(label, false, null, err.message, source);
     }
   }
 
-  await notifyAdminOnce("gemini_all", "🚨 Mind a Gemini API kulcs kimerült — a Padli AI és a leírás-fordító sem tud most válaszolni Geminivel.");
+  await notifyAdminOnce("gemini_all", "🚨 Mind a Gemini API kulcs kimerült" + (source ? ` (${source} hívás közben)` : "") + " — a Padli AI és a leírás-fordító sem tud most válaszolni Geminivel.");
   const finalErr = lastErr || new Error("Nincs elérhető Gemini kulcs");
   finalErr.isQuotaExhausted = allQuotaErrors;
   throw finalErr;
@@ -217,14 +230,16 @@ async function callWithRotation(buildUrl, buildHeaders, body, timeoutMs) {
  * @param {string} model - pl. "gemini-3.1-flash-lite"
  * @param {object} body - a generateContent request body (contents, systemInstruction, generationConfig)
  * @param {number} timeoutMs
+ * @param {string} source - hívó azonosítója a naplózáshoz (pl. "padli-ai", "translate")
  * @returns {Promise<object>} a nyers Gemini JSON válasz
  */
-export async function callGemini(model, body, timeoutMs = 30000) {
+export async function callGemini(model, body, timeoutMs = 30000, source = "unknown") {
   return callWithRotation(
     (key) => `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
     () => ({ "Content-Type": "application/json" }),
     body,
-    timeoutMs
+    timeoutMs,
+    source
   );
 }
 
@@ -234,13 +249,15 @@ export async function callGemini(model, body, timeoutMs = 30000) {
  * futó) szolgáltatások csatlakoznak a gemini-proxy route-on át.
  * @param {object} body - OpenAI chat/completions formátumú kérés
  * @param {number} timeoutMs
+ * @param {string} source - hívó azonosítója a naplózáshoz
  */
-export async function callGeminiOpenAiChat(body, timeoutMs = 60000) {
+export async function callGeminiOpenAiChat(body, timeoutMs = 60000, source = "unknown") {
   return callWithRotation(
     () => `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions`,
     (key) => ({ "Content-Type": "application/json", "Authorization": `Bearer ${key}` }),
     body,
-    timeoutMs
+    timeoutMs,
+    source
   );
 }
 

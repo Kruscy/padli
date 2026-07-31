@@ -10,6 +10,37 @@ import { callGeminiOpenAiChat } from "../lib/gemini-client.js";
 
 const router = express.Router();
 
+// 2026-07-24-i incidens: a PadliCrome (manga-image-translator, 192.168.0.90)
+// néha egyszerre sok oldalt küld fordításra, ami egy pillanat alatt annyi
+// párhuzamos kérést indít, hogy a teljes kulcs-pool (11 kulcs × 15 RPM) egy
+// szempillantás alatt kimerül, és minden kulcs 429-et ad ugyanabban a
+// másodpercben. Innentől max ennyi kérést engedünk egyszerre a Gemini felé
+// erről a proxyról — a többi a sorban vár, ez szétteríti a terhelést
+// ahelyett, hogy egyszerre robbanna rá a teljes kulcs-poolra.
+const MAX_CONCURRENT = 8;
+let activeCount = 0;
+const waitQueue = [];
+
+function acquireSlot() {
+  return new Promise(resolve => {
+    if (activeCount < MAX_CONCURRENT) {
+      activeCount++;
+      resolve();
+    } else {
+      waitQueue.push(resolve);
+    }
+  });
+}
+
+function releaseSlot() {
+  activeCount--;
+  const next = waitQueue.shift();
+  if (next) {
+    activeCount++;
+    next();
+  }
+}
+
 function isAuthorized(req) {
   const auth = req.headers["authorization"] || "";
   const provided = auth.startsWith("Bearer ") ? auth.slice(7) : "";
@@ -46,17 +77,20 @@ router.post("/v1/chat/completions", async (req, res) => {
   const info = summarizeRequest(req);
   const startedAt = new Date().toISOString();
 
+  await acquireSlot();
   try {
-    const data = await callGeminiOpenAiChat(req.body, 60000);
-    console.log(`[gemini-proxy] ${startedAt} OK ip=${info.ip} model=${info.model} messages=${info.messageCount} hasImage=${info.hasImage}`);
+    const data = await callGeminiOpenAiChat(req.body, 60000, "gemini-proxy");
+    console.log(`[gemini-proxy] ${startedAt} OK ip=${info.ip} model=${info.model} messages=${info.messageCount} hasImage=${info.hasImage} active=${activeCount} queued=${waitQueue.length}`);
     res.json(data);
   } catch (err) {
     if (err.isQuotaExhausted) {
-      console.warn(`[gemini-proxy] ${startedAt} QUOTA_EXCEEDED ip=${info.ip} model=${info.model} messages=${info.messageCount} hasImage=${info.hasImage}`);
+      console.warn(`[gemini-proxy] ${startedAt} QUOTA_EXCEEDED ip=${info.ip} model=${info.model} messages=${info.messageCount} hasImage=${info.hasImage} active=${activeCount} queued=${waitQueue.length}`);
       return res.status(429).json({ error: "quota_exceeded", message: err.message });
     }
     console.error(`[gemini-proxy] ${startedAt} UPSTREAM_ERROR ip=${info.ip} model=${info.model} messages=${info.messageCount} hasImage=${info.hasImage} hiba: ${err.message}`);
     res.status(502).json({ error: "upstream_error", message: err.message });
+  } finally {
+    releaseSlot();
   }
 });
 

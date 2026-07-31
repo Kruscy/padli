@@ -7,8 +7,6 @@ import config from "./padli-config.js";
 import { callGemini } from "./lib/gemini-client.js";
 
 const ANILIST_URL   = "https://graphql.anilist.co";
-const KAMRAFY_URL   = "https://kamrafy.hu/api/v1/recommend";
-const KAMRAFY_KEY   = process.env.KAMRAFY_API_KEY || "";
 const JIKAN_URL     = "https://api.jikan.moe/v4";
 const MANGADEX_URL  = "https://api.mangadex.org";
 const KITSU_URL     = "https://kitsu.io/api/edge";
@@ -209,16 +207,13 @@ function checkEdgeCase(str) {
 
 function applyLLMSafety(reply) {
   if (!reply || !config.features.enableLLMSafety) return reply;
-  // Kamrafy recept válasz vagy a saját oldal linkjei: ne szűrjük/csonkoljuk –
-  // ezeket a szerver fűzi hozzá utólag, valós adatból, nem az LLM találja ki,
-  // úgyhogy megőrizzük a linkeket és sortöréseket akkor is, ha emiatt
-  // hosszabb a válasz a szokásos limitnél.
-  if (reply.includes("kamrafy.hu") || reply.includes(SITE_URL)) return reply;
+  // A saját oldal linkjeit: ne szűrjük/csonkoljuk – ezeket a szerver fűzi
+  // hozzá utólag, valós adatból, nem az LLM találja ki, úgyhogy megőrizzük
+  // a linkeket és sortöréseket akkor is, ha emiatt hosszabb a válasz a
+  // szokásos limitnél.
+  if (reply.includes(SITE_URL)) return reply;
   const s = config.llmSafety;
   let r = reply;
-  // qwen3/deepseek thinking blokk eltávolítása
-  r = r.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
-  r = r.replace(/^[\s\S]*?<\/think>/i, "").trim();
   if (s.stripSelfName)  r = r.replace(/^Padli[!,]?\s*/i, "").trim();
   if (s.stripNewlines)  r = r.replace(/\n{2,}/g, " ").replace(/\n/g, " ").trim();
   if (s.maxResponseChars && r.length > s.maxResponseChars) {
@@ -749,112 +744,6 @@ async function searchShikimori(searchTerm) {
   } catch (err) { console.error(LOG + " Shikimori error: " + err.message); return null; }
 }
 
-/* ── KAMRAFY RECEPT API ─────────────────────────────────── */
-const RECIPE_KEYWORDS = [
-  "recept","főzz","főzzek","főzzünk","főzni","főztem","főzzél","sütni","süssek",
-  "étel","ételek","kalória","kcal","vega","vegetáriánus","desszert","sütemény",
-  "leves","mit főzzek","mit süssek","hozzávalók","hozzávalókból","kamrafy",
-  "befőzés","tepsis","krumpliból","csirkéből","marhából","tojásból","tejfölből",
-  "reggelire","reggeli ötlet","reggelit","vacsorára","vacsorát","ebédre","ebédet",
-  "enni","ennivaló","mit egyek","mit együnk","mit quyek","főételt","főétel",
-  "gyors vacsora","gyors ebéd","ebéd ötlet","vacsora ötlet",
-];
-
-function isRecipeQuestion(text) {
-  const l = text.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
-  return RECIPE_KEYWORDS.some(k =>
-    l.includes(k.normalize("NFD").replace(/[̀-ͯ]/g, ""))
-  );
-}
-
-function parseKamrafyRequest(question) {
-  const l = question.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
-  const body = {};
-
-  // Hozzávalók kinyerése
-  const ingMatch = question.match(/(?:van\s+otthon|van\s+|otthon\s+van|hozzávalók?[:\s]+)([^.?!]{5,60})/i);
-  if (ingMatch) {
-    const rawIngs = ingMatch[1].replace(/\b(és|meg|valamint|is)\b/gi, ",").split(/[,;]/);
-    const cleaned = rawIngs.map(s => s.replace(/\b(ból|ből|t|k)\b/g, "").trim()).filter(s => s.length > 2);
-    if (cleaned.length) body.ingredients = cleaned;
-  }
-
-  // Nehézség
-  if (l.includes("konnyu") || l.includes("egyszeru") || l.includes("gyors")) body.filters = { difficulty: "könnyű" };
-  else if (l.includes("nehez") || l.includes("bonyolult")) body.filters = { difficulty: "nehéz" };
-
-  // Időkorlát
-  const timeMatch = l.match(/(\d+)\s*perc/);
-  if (timeMatch) body.filters = { ...(body.filters||{}), max_total_time: parseInt(timeMatch[1]) };
-  else if (l.includes("gyors")) body.filters = { ...(body.filters||{}), max_total_time: 30 };
-
-  // Meal type filter (új API feature)
-  const mealTypes = { reggeli: "reggeli", desszert: "desszert", sutes: "sütemény" };
-  for (const [k, v] of Object.entries(mealTypes)) {
-    if (l.includes(k)) { body.filters = { ...(body.filters||{}), meal_type: v }; break; }
-  }
-
-  // Query: az ételre utaló kulcsszó kinyerése a kérdésből
-  const foodWords = ["reggeli","leves","desszert","sütemény","palacsinta","gulyás","rántotta",
-    "csirke","marhahús","sertés","tészta","rizs","pizza","saláta","lencse","gomba","hal"];
-  const foundFood = foodWords.find(w => l.includes(w.normalize("NFD").replace(/[̀-ͯ]/g,"")));
-  if (foundFood) {
-    body.query = foundFood;
-  } else if (body.ingredients?.length) {
-    body.query = body.ingredients[0];
-  } else {
-    body.query = question.replace(/padli[,!]?\s*/gi,"").replace(/[?!]/g,"").trim().slice(0, 60);
-  }
-
-  body.limit = 5;
-  return body;
-}
-
-async function kamrafyApiCall(body) {
-  const res = await fetch(KAMRAFY_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-Api-Key": KAMRAFY_KEY },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(8000),
-  });
-  if (!res.ok) return [];
-  const data = await res.json();
-  return data?.recipes || [];
-}
-
-async function searchKamrafy(question) {
-  if (!KAMRAFY_KEY) return null;
-  const cacheKey = "kamrafy:" + question.slice(0, 60);
-  const cached = cacheGet(cacheKey);
-  if (cached !== null) return cached;
-  try {
-    const body = parseKamrafyRequest(question);
-    plog("KAMRAFY", "keres: " + JSON.stringify(body).slice(0, 120));
-
-    // 1. Próbálkozás az eredeti body-val
-    let recipes = await kamrafyApiCall(body);
-
-    // 2. Ha 0 találat: category filterrel próbáljuk
-    if (!recipes.length && body.filters?.meal_type) {
-      plog("KAMRAFY", "fallback category: " + body.filters.meal_type);
-      recipes = await kamrafyApiCall({ filters: { category: body.filters.meal_type }, limit: 5 });
-    }
-
-    // 3. Ha még mindig 0: csak a query-vel próbáljuk filter nélkül
-    if (!recipes.length && body.query) {
-      plog("KAMRAFY", "fallback query only: " + body.query);
-      recipes = await kamrafyApiCall({ query: body.query, limit: 5 });
-    }
-
-    if (!recipes.length) return null;
-    cacheSet(cacheKey, recipes);
-    return recipes;
-  } catch (err) {
-    console.error(LOG + " Kamrafy error: " + err.message);
-    return null;
-  }
-}
-
 /* ── GEMINI ─────────────────────────────────────────────── */
 async function askLLM(messages) {
   try {
@@ -882,7 +771,7 @@ async function askLLM(messages) {
 
     // A callGemini a 3 kulcs között automatikusan rotál, ha valamelyik
     // kimerül – lásd server/lib/gemini-client.js.
-    const data = await callGemini(config.general.geminiModel, body, config.general.geminiTimeoutMs);
+    const data = await callGemini(config.general.geminiModel, body, config.general.geminiTimeoutMs, "padli-ai");
     const text = data?.candidates?.[0]?.content?.parts?.map(p => p.text).join("").trim();
     return applyLLMSafety(text || null);
   } catch (err) {
@@ -919,7 +808,7 @@ function extractGenreTags(question) {
 
 // 1. Statikus config genre-k - de ha van DB override, azt használja
   const found = config.genres.filter(({ genre, words }) => {
-    const activeWords = dbGenreWords[genre] ? [...words, ...dbGenreWords[genre]] : words;
+    const activeWords = dbGenreWords[genre] || words; // DB felülírja ha van
     return activeWords.some(w => l.includes(w));
   }).map(({ genre }) => genre);
   // 2. DB tag szavak – ha a user szava egyezik a tag szó listájával
@@ -1012,32 +901,24 @@ function extractSearchTerm(question) {
 function buildContext(local, anilist, jikan, mangadex, kitsu, shikimori) {
   let ctx = "";
   if (local) {
-    const chaps = local.chapter_count > 0
-      ? local.chapter_count + " fejezet olvasható nálunk"
-      : "szerepel nálunk de nincs feltöltött fejezet";
-    const score = local.average_score ? " | értékelés: " + (local.average_score / 10).toFixed(1) + "/10" : "";
-    ctx += "\n[FONTOS – PadliDB (SAJÁT OLDALUNK): \"" + local.title + "\" MEGVAN – " + chaps + score + "]";
+    const chaps = local.chapter_count > 0 ? local.chapter_count + " fejezet olvasható nálunk" : "nincs feltöltve fejezet";
+    const score = local.average_score ? " | " + (local.average_score / 10).toFixed(1) + "/10" : "";
+    ctx += "\n[PadliDB (SAJÁT OLDALUNK): \"" + local.title + "\" MEGVAN – " + chaps + " | " + (local.status || "") + score + "]";
   }
   const aniItem = anilist?.anime || anilist?.manga;
   if (aniItem) {
     const type = anilist?.anime ? "anime" : "manga";
     const title = aniItem.title?.english || aniItem.title?.romaji;
-    const score = aniItem.averageScore ? (aniItem.averageScore / 10).toFixed(1) + "/10" : "ismeretlen";
+    const score = aniItem.averageScore ? (aniItem.averageScore / 10).toFixed(1) + "/10" : "N/A";
     const format = aniItem.format ? " [" + aniItem.format + "]" : "";
-    const count = aniItem.episodes
-      ? "Epizódok száma: " + aniItem.episodes
-      : aniItem.chapters
-        ? "Fejezetek száma: " + aniItem.chapters
-        : "fejezetek száma ismeretlen";
-    const status = aniItem.status === "FINISHED" ? "befejezett" : aniItem.status === "RELEASING" ? "folyamatban" : (aniItem.status || "");
-    const genres = (aniItem.genres || []).slice(0, 4).join(", ");
-    const desc = (aniItem.description || "").replace(/<[^>]*>/g, "").substring(0, 150);
-    ctx += "\n[AniList: " + type + format + " – \"" + title + "\" | Pontszám: " + score + " | " + count + " | Állapot: " + status + " | Műfaj: " + genres + " | " + desc + "]";
+    const count = aniItem.episodes ? aniItem.episodes + " ep" : aniItem.chapters ? aniItem.chapters + " fejezet" : "";
+    const desc = (aniItem.description || "").substring(0, 120);
+    ctx += "\n[AniList: " + type + format + " – \"" + title + "\" | " + score + " | " + count + " | " + aniItem.status + " | " + (aniItem.genres || []).slice(0, 3).join(", ") + " | " + desc + "...]";
   }
-  if (jikan)     ctx += "\n[MAL: " + jikan.type + " – \"" + jikan.title + "\" | Pontszám: " + jikan.score + " | " + jikan.count + " | " + jikan.status + "]";
-  if (mangadex)  ctx += "\n[MangaDex: \"" + mangadex.title + "\" | " + mangadex.status + " | " + mangadex.chap + " | Műfaj: " + mangadex.genres + "]";
-  if (kitsu)     ctx += "\n[Kitsu: \"" + kitsu.title + "\" | Pontszám: " + kitsu.score + " | " + kitsu.count + "]";
-  if (shikimori) ctx += "\n[Shikimori: \"" + shikimori.title + "\" | Pontszám: " + shikimori.score + " | " + shikimori.count + "]";
+  if (jikan)     ctx += "\n[MAL: " + jikan.type + " – \"" + jikan.title + "\" | " + jikan.score + " | " + jikan.count + " | " + jikan.status + "]";
+  if (mangadex)  ctx += "\n[MangaDex: \"" + mangadex.title + "\" | " + mangadex.status + " | " + mangadex.chap + "]";
+  if (kitsu)     ctx += "\n[Kitsu: \"" + kitsu.title + "\" | " + kitsu.score + " | " + kitsu.count + "]";
+  if (shikimori) ctx += "\n[Shikimori: \"" + shikimori.title + "\" | " + shikimori.score + " | " + shikimori.count + "]";
   return ctx;
 }
 
@@ -1203,40 +1084,6 @@ async function generateReply(question, conversationHistory, userKey) {
   padliLog({ event: "search_start", query: question, searchTerm, mediaType, intent: intent || "search" });
   if (searchTerm) { trackAnalytics("query", searchTerm); setTopicMemory(userKey, searchTerm); }
 
-  // ── KAMRAFY RECEPT ──────────────────────────────────────
-  if (isRecipeQuestion(question)) {
-    plog("KAMRAFY", "recept kérdés: " + question.slice(0, 60));
-    const recipes = await searchKamrafy(question);
-    if (recipes && recipes.length) {
-      const pick = recipes[0];
-      const time = pick.total_time ? pick.total_time + " perc" : (pick.prep_time || pick.cook_time ? ((pick.prep_time||0)+(pick.cook_time||0)) + " perc" : null);
-      const recipeCtx = [
-        "Cím: " + pick.title,
-        time ? "Elkészítési idő: " + time : null,
-        pick.calories_per_serving ? "Kalória: " + pick.calories_per_serving + " kcal/adag" : null,
-        pick.difficulty ? "Nehézség: " + pick.difficulty : null,
-        pick.description ? "Rövid leírás: " + pick.description.slice(0, 120) : null,
-        "Link: " + pick.url,
-      ].filter(Boolean).join("\n");
-
-      const ollamaReply = await askLLM([
-        { role: "system", content: "Te Padli vagy, a PadlizsanFanSub manga/anime közösségi bot. Ha receptet kérnek, 1 ételt ajánlasz a Kamrafy.hu-ról, lazán és röviden, magyarul. Az ajánlásban mindig szerepeljen a recept pontos neve és a kamrafy.hu link." },
-        { role: "user", content: "Kérdés: \"" + question.replace(/padli[,!]?\s*/gi,"").trim() + "\"\n\nEz a recept illik hozzá:\n" + recipeCtx + "\n\nAjánld be 1-2 mondatban, add meg a linket!" }
-      ]);
-
-      let reply = ollamaReply || "";
-      if (pick.url && !reply.includes(pick.url)) {
-        reply += "\n" + pick.title + ": " + pick.url;
-      }
-      return reply;
-    }
-    // Ha tényleg semmi nem jön: kérdezzen vissza, ne tagadjon meg mindent
-    return await askLLM([
-      { role: "system", content: "Te Padli vagy, a PadlizsanFanSub manga/anime bot. Ha valaki ételt kér és nincs találat, kérdezz vissza kedvesen hogy mi van otthon vagy milyen ételt szeretne. 1 mondat." },
-      { role: "user", content: question.replace(/padli[,!]?\s*/gi,"").trim() }
-    ]) || "Mondd meg mi van otthon és megpróbálok ajánlani valamit a Kamrafy.hu-ról!";
-  }
-
   if (availabilityQ && searchTerm) {
     plog("AVAILABILITY", "\"" + searchTerm + "\"");
     const local = await searchLocalDBFuzzy(searchTerm);
@@ -1245,9 +1092,7 @@ async function generateReply(question, conversationHistory, userKey) {
       const chaps = local.chapter_count > 0 ? local.chapter_count + " fejezet van feltoltve" : "de meg nincs feltoltve fejezet";
       const score = local.average_score ? " (" + (local.average_score / 10).toFixed(1) + "/10)" : "";
       // Ha megvan nálunk, adjunk hozzá közvetlen linket is – ne kelljen
-      // utána külön megkeresnie a user-nek. Discord-kompatibilis markdown
-      // formátum: [cím](url) — Discord ezt nevesített linkként rendereli,
-      // a webes chat widget pedig ugyanígy chat.js-ben van kibontva.
+      // utána külön megkeresnie a user-nek.
       const link = local.slug ? "[" + local.title + "](" + SITE_URL + "/chapters.html?slug=" + local.slug + ")" : null;
       const tpl = getRandomItem(config.fixedReplies.found);
       const fallback = (fillTemplate(tpl, { title: local.title, chaps: chaps + score }) ||
@@ -1269,7 +1114,7 @@ async function generateReply(question, conversationHistory, userKey) {
     );
   }
 
-  if (intent === "recommendation" && !isRecipeQuestion(question)) {
+  if (intent === "recommendation") {
     const genres = extractGenreTags(question);
     plog("RECOMMEND", "genre-k: [" + (genres.join(",") || "nincs") + "]");
     padliLog({ event: "recommendation_question", query: question, genres });
@@ -1289,7 +1134,6 @@ async function generateReply(question, conversationHistory, userKey) {
         // Ajánláshoz is adjunk közvetlen linket minden címhez – ne kelljen
         // utána külön megkeresni. A Gemini a rendszerprompt miatt maga nem
         // ír linket, ezért ezt mindig utólag, szerver oldalon fűzzük hozzá.
-        // Discord-kompatibilis markdown formátum: [cím](url).
         const linksBlock = toShow.filter(r => r.slug).map(r => "[" + r.title + "](" + SITE_URL + "/chapters.html?slug=" + r.slug + ")").join("\n");
         const fallback = "Nálunk elérhető " + genres[0] + " manhwa/manga: " + list + " 📖" + (linksBlock ? "\n" + linksBlock : "");
         const reply = await naturalize(
@@ -1441,18 +1285,14 @@ async function generateReply(question, conversationHistory, userKey) {
 
   const history = buildHistory(conversationHistory, searchTerm);
   const msgs = [{ role: "system", content: getSystemPrompt() }, ...history];
-  // Az adatokat expliciten adjuk meg, ne találjon ki semmit
-  const cleanQ = "Az alábbi adatok alapján válaszolj magyarul, maximum 2 rövid mondatban. " +
-    "Csak a megadott adatokat használd, ne találj ki semmit. " +
-    "Ha PadliDB adat van, emeld ki hogy nálunk megvan." +
-    contextStr;
+  // NE ismételje vissza az eredeti kérdést – csak a kontextust és egy semleges kérést küldünk
+  const cleanQ = "Válaszolj magyarul, 1-2 mondatban." + contextStr;
   if (msgs[msgs.length - 1]?.role === "user") msgs[msgs.length - 1].content = cleanQ;
   else msgs.push({ role: "user", content: cleanQ });
 
   const reply = await askLLM(msgs);
   // Ha nálunk megvan (PadliDB találat), adjunk közvetlen linket is –
-  // ne kelljen utána külön megkeresnie a user-nek. Discord-kompatibilis
-  // markdown formátum: [cím](url).
+  // ne kelljen utána külön megkeresnie a user-nek.
   if (localResult?.slug && reply) {
     const link = "[" + localResult.title + "](" + SITE_URL + "/chapters.html?slug=" + localResult.slug + ")";
     return reply.includes(link) ? reply : reply + "\n" + link;

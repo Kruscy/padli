@@ -39,7 +39,8 @@ CREATE TABLE IF NOT EXISTS public.users (
     stripe_customer_id          VARCHAR(100),
     verified_deadline           TIMESTAMPTZ,
     can_upload                  BOOLEAN NOT NULL DEFAULT false,
-    upload_granted              BOOLEAN NOT NULL DEFAULT false
+    upload_granted              BOOLEAN NOT NULL DEFAULT false,
+    anime_api_key_hash          TEXT UNIQUE
 );
 
 CREATE TABLE IF NOT EXISTS public.auth_accounts (
@@ -628,3 +629,46 @@ SELECT
 FROM public.padli_activations pa
 LEFT JOIN public.patreon_status ps ON pa.patreon_user_id = ps.patreon_user_id
 LEFT JOIN public.users u ON ps.user_id = u.id;
+
+/* ── ANIME FELIRATOK (önálló katalógus, nem kapcsolódik a manga táblákhoz) ── */
+CREATE TABLE IF NOT EXISTS public.anime (
+    id          SERIAL PRIMARY KEY,
+    title       TEXT NOT NULL,
+    slug        TEXT NOT NULL UNIQUE,
+    cover_url   TEXT,
+    anilist_id  INTEGER,
+    created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.anime_season (
+    id            SERIAL PRIMARY KEY,
+    anime_id      INTEGER REFERENCES public.anime(id) ON DELETE CASCADE,
+    season_number INTEGER NOT NULL,
+    UNIQUE (anime_id, season_number)
+);
+
+CREATE TABLE IF NOT EXISTS public.anime_episode (
+    id              SERIAL PRIMARY KEY,
+    season_id       INTEGER REFERENCES public.anime_season(id) ON DELETE CASCADE,
+    episode_number  INTEGER NOT NULL,
+    file_ext        TEXT NOT NULL,
+    r2_key          TEXT NOT NULL,
+    uploaded_by     INTEGER REFERENCES public.users(id),
+    uploaded_at     TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (season_id, episode_number)
+);
+
+-- gemini_keys tábla (kódban jön létre, itt csak a kiegészítés dokumentálva):
+-- ALTER TABLE public.gemini_keys ADD COLUMN IF NOT EXISTS contributed_by INTEGER REFERENCES public.users(id);
+
+CREATE TABLE IF NOT EXISTS public.subtitle_translation_requests (
+    id              SERIAL PRIMARY KEY,
+    user_id         INTEGER REFERENCES public.users(id),
+    anilist_id      INTEGER,
+    anime_title     TEXT NOT NULL,
+    cover_url       TEXT,
+    season_number   INTEGER NOT NULL,
+    episode_number  INTEGER,
+    status          TEXT NOT NULL DEFAULT 'pending',
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);

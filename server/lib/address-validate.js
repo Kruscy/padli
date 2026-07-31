@@ -127,7 +127,7 @@ async function validateWithGemini(addr) {
   const data = await callGemini("gemini-3.1-flash-lite", {
     contents: [{ role: "user", parts: [{ text: buildPlausibilityPrompt(addr) }] }],
     generationConfig: { temperature: 0, maxOutputTokens: 200, thinkingConfig: { thinkingBudget: 0 } },
-  }, 15000);
+  }, 15000, "address-validate");
   const text = data?.candidates?.[0]?.content?.parts?.map(p => p.text).join("") || "";
   const parsed = parseAiJson(text);
   return { valid: !!parsed.valid, reason: parsed.reason || "Az AI ellenőrzés szerint a cím nem tűnik valódinak.", provider: "gemini" };
@@ -231,7 +231,7 @@ async function validateNameWithGemini(name) {
   const data = await callGemini("gemini-3.1-flash-lite", {
     contents: [{ role: "user", parts: [{ text: buildNamePlausibilityPrompt(name) }] }],
     generationConfig: { temperature: 0, maxOutputTokens: 150, thinkingConfig: { thinkingBudget: 0 } },
-  }, 15000);
+  }, 15000, "address-validate");
   const text = data?.candidates?.[0]?.content?.parts?.map(p => p.text).join("") || "";
   const parsed = parseAiJson(text);
   return { valid: !!parsed.valid, reason: parsed.reason || "A név nem tűnik valódinak." };

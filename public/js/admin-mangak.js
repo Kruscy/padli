@@ -57,6 +57,8 @@ function initTabs() {
       if (btn.dataset.tab === "tab-libraries") loadUploaderRoots();
       if (btn.dataset.tab === "tab-gifts") loadGifts();
       if (btn.dataset.tab === "tab-api-usage") loadApiUsage();
+      if (btn.dataset.tab === "tab-subtitle-requests") loadSubtitleRequests();
+      if (btn.dataset.tab === "tab-anime-catalog") loadAnimeCatalog();
     });
   });
 }
@@ -233,12 +235,34 @@ window.syncUploaderManga = syncUploaderManga;
 window.fillRoot = fillRoot;
 
 /* ===== FELHASZNÁLÓK ===== */
+let allUsers = [];
+
 async function loadUsers() {
   const res = await fetch("/api/admin/users");
-  const users = await res.json();
+  allUsers = await res.json();
+
+  const searchInput = document.getElementById("userSearchInput");
+  if (searchInput && !searchInput.dataset.bound) {
+    searchInput.dataset.bound = "1";
+    searchInput.addEventListener("input", () => renderUsersList(searchInput.value));
+  }
+
+  renderUsersList(searchInput ? searchInput.value : "");
+}
+
+function renderUsersList(query) {
+  const q = (query || "").trim().toLowerCase();
+  const filtered = q ? allUsers.filter(u => u.username.toLowerCase().includes(q)) : allUsers;
+
   const tbody = document.getElementById("usersTableBody");
   tbody.innerHTML = "";
-  users.forEach(u => {
+
+  if (!filtered.length) {
+    tbody.innerHTML = "<tr><td colspan='9' style='color:#aaa;padding:1rem'>Nincs találat.</td></tr>";
+    return;
+  }
+
+  filtered.forEach(u => {
     const patreonActive = u.active === true;
     const anilistActive = u.anilist_connected === true;
     const tr = document.createElement("tr");
@@ -586,6 +610,189 @@ async function deleteGeminiKey(id, label) {
   const res = await fetch(`/api/admin/gemini-keys/${id}`, { method: "DELETE" });
   if (!res.ok) { alert("Törlés sikertelen"); return; }
   loadApiUsage();
+}
+
+/* ===== FELIRAT-KÉRÉSEK ===== */
+async function loadSubtitleRequests() {
+  const listEl = document.getElementById("subtitleRequestsList");
+  if (!listEl) return;
+  listEl.innerHTML = "<p style='color:#888'>Betöltés...</p>";
+
+  const res = await fetch("/api/admin/subtitle-requests");
+  if (!res.ok) { listEl.innerHTML = "<p style='color:#ef4444'>Betöltési hiba</p>"; return; }
+  const rows = await res.json();
+
+  if (!rows.length) {
+    listEl.innerHTML = `<p style="color:#64748b;font-size:.85rem">Nincs függőben lévő kérés.</p>`;
+    return;
+  }
+
+  const cardStyle = "background:#0f172a;border-radius:10px;padding:14px 18px;margin-bottom:10px;max-width:640px;display:flex;gap:14px;align-items:center";
+
+  listEl.innerHTML = rows.map(r => {
+    const what = r.episode_number
+      ? `${r.season_number}. évad ${r.episode_number}. rész`
+      : `${r.season_number}. évad (teljes)`;
+    return `<div style="${cardStyle}">
+      <img src="${escHtml(r.cover_url || '/assets/no-cover.png')}" style="width:46px;height:66px;object-fit:cover;border-radius:6px;background:#1a1a2e;flex-shrink:0">
+      <div style="flex:1;min-width:0">
+        <strong style="color:#e2e8f0">${escHtml(r.anime_title)}</strong>
+        <div style="color:#94a3b8;font-size:.85rem;margin-top:2px">${escHtml(what)}</div>
+        <div style="color:#64748b;font-size:.78rem;margin-top:4px">
+          Kérte: <strong style="color:#a78bfa">${escHtml(r.username || "ismeretlen")}</strong> &nbsp;•&nbsp;
+          ${new Date(r.created_at).toLocaleDateString("hu-HU")}
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        <button onclick="updateSubtitleRequestStatus(${r.id}, 'done')" title="Kész"
+          style="background:#14532d33;color:#86efac;border:1px solid #22c55e55;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:.8rem;font-weight:700">✅ Kész</button>
+        <button onclick="updateSubtitleRequestStatus(${r.id}, 'rejected')" title="Elutasítás"
+          style="background:#7f1d1d33;color:#f87171;border:1px solid #ef444455;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:.8rem;font-weight:700">✖ Elutasítás</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+async function updateSubtitleRequestStatus(id, status) {
+  const res = await fetch(`/api/admin/subtitle-requests/${id}/status`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status }),
+  });
+  if (!res.ok) { alert("Frissítés sikertelen"); return; }
+  loadSubtitleRequests();
+}
+
+/* ===== ANIME KATALÓGUS ===== */
+const loadedAnimeAdmin = new Set();
+
+async function loadAnimeCatalog() {
+  const listEl = document.getElementById("animeCatalogList");
+  if (!listEl) return;
+  listEl.innerHTML = "<p style='color:#888'>Betöltés...</p>";
+
+  const res = await fetch("/api/anime");
+  if (!res.ok) { listEl.innerHTML = "<p style='color:#ef4444'>Betöltési hiba</p>"; return; }
+  const rows = await res.json();
+
+  if (!rows.length) {
+    listEl.innerHTML = `<p style="color:#64748b;font-size:.85rem">Nincs anime a katalógusban.</p>`;
+    return;
+  }
+
+  loadedAnimeAdmin.clear();
+  listEl.innerHTML = rows.map(a => `
+    <div style="background:#0f172a;border-radius:10px;margin-bottom:10px;max-width:700px;overflow:hidden" id="animeCard-${a.id}">
+      <div style="display:flex;gap:14px;align-items:center;padding:14px 18px;cursor:pointer" onclick="toggleAnimeCatalog(${a.id}, '${escHtml(a.slug)}')">
+        <img src="${escHtml(a.cover_url || '/assets/no-cover.png')}" style="width:46px;height:66px;object-fit:cover;border-radius:6px;background:#1a1a2e;flex-shrink:0">
+        <div style="flex:1;min-width:0">
+          <strong style="color:#e2e8f0">${escHtml(a.title)}</strong>
+          <div style="color:#64748b;font-size:.78rem;margin-top:2px">${a.episode_count} feltöltött rész &nbsp;•&nbsp; slug: ${escHtml(a.slug)}</div>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0" onclick="event.stopPropagation()">
+          <button onclick="startEditAnime(${a.id}, ${JSON.stringify(a.title)}, ${JSON.stringify(a.cover_url || "")})"
+            style="background:#1e293b;color:#93c5fd;border:1px solid #334155;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:.78rem">✏️ Szerkesztés</button>
+          <button onclick="deleteAnimeCatalog(${a.id}, ${JSON.stringify(a.title)})"
+            style="background:#1e293b;color:#f87171;border:1px solid #334155;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:.78rem">🗑 Törlés</button>
+        </div>
+      </div>
+      <div id="animeEdit-${a.id}" style="display:none;padding:0 18px 14px"></div>
+      <div id="animeBody-${a.id}" style="display:none;padding:0 18px 14px;border-top:1px solid #1e293b"></div>
+    </div>
+  `).join("");
+}
+
+async function toggleAnimeCatalog(id, slug) {
+  const body = document.getElementById(`animeBody-${id}`);
+  if (body.style.display === "block") { body.style.display = "none"; return; }
+  body.style.display = "block";
+  if (loadedAnimeAdmin.has(id)) return;
+  loadedAnimeAdmin.add(id);
+
+  body.innerHTML = "<p style='color:#888;font-size:.85rem'>Betöltés...</p>";
+  const res = await fetch(`/api/anime/${encodeURIComponent(slug)}`);
+  if (!res.ok) { body.innerHTML = "<p style='color:#ef4444;font-size:.85rem'>Betöltési hiba</p>"; return; }
+  const anime = await res.json();
+
+  if (!anime.seasons?.length) {
+    body.innerHTML = "<p style='color:#64748b;font-size:.85rem;padding-top:10px'>Nincs feltöltött évad.</p>";
+    return;
+  }
+
+  body.innerHTML = anime.seasons.map(s => `
+    <div style="padding-top:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <strong style="color:#c4b5fd;font-size:.85rem">${s.season_number}. évad</strong>
+        <button onclick="deleteAnimeSeason(${s.id}, ${id}, '${escHtml(slug)}')"
+          style="background:#1e293b;color:#f87171;border:1px solid #334155;padding:3px 9px;border-radius:6px;cursor:pointer;font-size:.72rem">🗑 Évad törlése</button>
+      </div>
+      ${s.episodes.length ? s.episodes.map(ep => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 10px;background:#1a1a2e;border-radius:6px;margin-bottom:4px;font-size:.82rem;color:#ddd">
+          <span>${ep.episode_number}. rész</span>
+          <button onclick="deleteAnimeEpisode(${ep.id}, ${id}, '${escHtml(slug)}')"
+            style="background:none;color:#f87171;border:none;cursor:pointer;font-size:.75rem">🗑</button>
+        </div>
+      `).join("") : "<p style='color:#64748b;font-size:.8rem'>Nincs feltöltött rész.</p>"}
+    </div>
+  `).join("");
+}
+
+function startEditAnime(id, title, coverUrl) {
+  const editEl = document.getElementById(`animeEdit-${id}`);
+  editEl.style.display = "block";
+  editEl.innerHTML = `
+    <div style="display:flex;gap:8px;flex-wrap:wrap;padding-top:10px">
+      <input id="animeEditTitle-${id}" value="${escHtml(title)}" placeholder="Cím"
+        style="flex:2;min-width:180px;background:#1e293b;border:1px solid #334155;border-radius:6px;padding:6px 10px;color:#e2e8f0;font-size:.85rem">
+      <input id="animeEditCover-${id}" value="${escHtml(coverUrl)}" placeholder="Borítókép URL"
+        style="flex:3;min-width:220px;background:#1e293b;border:1px solid #334155;border-radius:6px;padding:6px 10px;color:#e2e8f0;font-size:.85rem">
+      <button onclick="saveAnimeEdit(${id})" style="background:#7c3aed;color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:.85rem;font-weight:700">Mentés</button>
+      <button onclick="document.getElementById('animeEdit-${id}').style.display='none'" style="background:#1e293b;color:#94a3b8;border:1px solid #334155;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:.85rem">Mégse</button>
+    </div>
+    <div id="animeEditStatus-${id}" style="font-size:.8rem;margin-top:6px"></div>
+  `;
+}
+
+async function saveAnimeEdit(id) {
+  const title = document.getElementById(`animeEditTitle-${id}`).value.trim();
+  const cover_url = document.getElementById(`animeEditCover-${id}`).value.trim();
+  const statusEl = document.getElementById(`animeEditStatus-${id}`);
+  if (!title) { statusEl.innerHTML = `<span style="color:#f87171">A cím kötelező</span>`; return; }
+
+  const res = await fetch(`/api/admin/anime/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title, cover_url }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    statusEl.innerHTML = `<span style="color:#f87171">${escHtml(data.error || "Hiba")}</span>`;
+    return;
+  }
+  loadAnimeCatalog();
+}
+
+async function deleteAnimeCatalog(id, title) {
+  if (!confirm(`Biztosan törlöd a(z) "${title}" animét, minden évadával és részével együtt? Ez a felirat-fájlokat is törli a tárhelyről.`)) return;
+  const res = await fetch(`/api/admin/anime/${id}`, { method: "DELETE" });
+  if (!res.ok) { alert("Törlés sikertelen"); return; }
+  loadAnimeCatalog();
+}
+
+async function deleteAnimeSeason(seasonId, animeId, slug) {
+  if (!confirm("Biztosan törlöd ezt az évadot minden feltöltött résszel együtt?")) return;
+  const res = await fetch(`/api/admin/anime/season/${seasonId}`, { method: "DELETE" });
+  if (!res.ok) { alert("Törlés sikertelen"); return; }
+  loadedAnimeAdmin.delete(animeId);
+  loadAnimeCatalog();
+}
+
+async function deleteAnimeEpisode(episodeId, animeId, slug) {
+  if (!confirm("Biztosan törlöd ezt a részt?")) return;
+  const res = await fetch(`/api/admin/anime/episode/${episodeId}`, { method: "DELETE" });
+  if (!res.ok) { alert("Törlés sikertelen"); return; }
+  loadedAnimeAdmin.delete(animeId);
+  loadAnimeCatalog();
 }
 
 /* ===== PATREON GIFT ===== */

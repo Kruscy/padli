@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Padlizsánfansub - Anime feliratok</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favico.png">
+<link rel="stylesheet" href="/css/sidebar.css?v=20260119">
+<link rel="stylesheet" href="/css/header.css?v=20260619">
+<link rel="stylesheet" href="/css/footer.css?v=20260405">
+<link rel="stylesheet" href="/css/search.css?v=20260619">
+<link rel="stylesheet" href="/css/anime-feliratok.css?v=20260723">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+<div id="header-root"></div>
+<div id="sidebar-root"></div>
+
+<div class="anime-sub-page">
+  <h1 class="page-title" style="text-align:center">🎬 Anime feliratok</h1>
+  <p style="text-align:center; color:#888; margin-bottom:24px;">
+    Letölthető feliratok — töltsd le és nyisd meg BSPlayer-ben, VLC-ben, vagy amivel épp nézed.
+  </p>
+
+  <div id="subtitleRequestSection">
+    <div id="keyOfferBox" class="anime-sub-offer-box" style="display:none">
+      <h3>🔑 Adj egy Gemini API kulcsot, kapj cserébe fordítást!</h3>
+      <p>
+        Ha megadsz nekünk egy saját, ingyenes Google Gemini API kulcsot, cserébe lefordítjuk neked
+        a kért anime rész(ek) feliratát. Ingyenes kulcsot itt igényelhetsz:
+        <a href="https://aistudio.google.com/api-keys" target="_blank" rel="noopener">aistudio.google.com/api-keys</a>
+      </p>
+      <div class="anime-sub-offer-form">
+        <input id="geminiKeyInput" type="text" placeholder="Illeszd be a Gemini API kulcsodat..." autocomplete="off">
+        <button id="geminiKeySubmitBtn">Elküldés</button>
+      </div>
+      <p id="geminiKeyMsg" class="anime-sub-offer-msg"></p>
+    </div>
+
+    <div id="requestSearchBox" class="anime-sub-request-box" style="display:none">
+      <h3>🎌 Kérj fordítást</h3>
+      <p>Keresd meg az animét az AniList-en, majd add meg melyik részhez vagy évadhoz kérsz feliratot.</p>
+      <div class="wishlist-search-wrapper" style="max-width:500px">
+        <input id="animeReqSearchInput" placeholder="Keresés AniList-ről..." autocomplete="off">
+        <div id="animeReqSearchResults" class="wishlist-search-results"></div>
+      </div>
+      <div id="animeReqSelected" class="anime-sub-req-selected" style="display:none"></div>
+      <p id="animeReqMsg" class="anime-sub-offer-msg"></p>
+    </div>
+  </div>
+
+  <div id="animeList" class="anime-sub-list">
+    <p style="color:#888; text-align:center;">Betöltés...</p>
+  </div>
+</div>
+
+<div id="footer"></div>
+<script src="/js/footer.js?v=20260619"></script>
+
+<script type="module" src="/js/layout-loader.js?v=20260713"></script>
+<script src="/js/sidebar.js?v=20260204"></script>
+<script src="/js/auth-check.js?v=20260323"></script>
+<script src="/js/anime-feliratok-init.js?v=20260722"></script>
+<script src="/js/anime-feliratok-request.js?v=20260723"></script>
+
+</body>
+</html>

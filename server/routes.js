@@ -36,6 +36,7 @@ import pointsRoutes from "./routes/points.js";
 import padlicromeRoutes from "./routes/padlicrome.js";
 import gdprRoutes from "./routes/gdpr.js";
 import patreonInvoiceRoutes from "./routes/patreon-invoice.js";
+import animeSubtitlesRoutes from "./routes/anime-subtitles.js";
 
 const router = express.Router();
 
@@ -317,13 +318,14 @@ router.get("/auth/me", async (req, res) => {
   try {
     const [tierRes, userRes] = await Promise.all([
       pool.query(`SELECT tier FROM patreon_status WHERE user_id = $1 LIMIT 1`, [req.session.user.id]),
-      pool.query(`SELECT email, email_verified FROM users WHERE id = $1`, [req.session.user.id]),
+      pool.query(`SELECT email, email_verified, can_upload FROM users WHERE id = $1`, [req.session.user.id]),
     ]);
     res.json({
       ...req.session.user,
       tier: tierRes.rows[0]?.tier || null,
       email: userRes.rows[0]?.email || null,
       email_verified: userRes.rows[0]?.email_verified ?? true,
+      can_upload: userRes.rows[0]?.can_upload || false,
     });
   } catch {
     res.json(req.session.user);
@@ -451,6 +453,7 @@ router.post("/want/:slug", requireLogin, async (req, res) => {
 /* ================= ADMIN ================= */
 
 router.use("/", mangaRoutes);          // /manga, /chapters stb
+router.use("/", animeSubtitlesRoutes); // /anime, /admin/anime stb
 router.use(releasesRoutes);       // /new-releases
 router.get("/new-manga", (req, res) => {
   const data = getNewMangaCache();

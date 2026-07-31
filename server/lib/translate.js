@@ -52,7 +52,7 @@ async function translateWithGemini(text) {
       parts: [{ text: "Fordítsd le magyarra az alábbi szöveget. Csak a fordítást add vissza, ne fűzz hozzá semmilyen magyarázatot vagy megjegyzést:\n\n" + text }]
     }],
     generationConfig: { temperature: 0.3, maxOutputTokens: 2000, thinkingConfig: { thinkingBudget: 0 } }
-  }, 20000);
+  }, 20000, "translate");
   const translated = data?.candidates?.[0]?.content?.parts?.map(p => p.text).join("").trim();
   if (!translated) throw new Error("Gemini: üres válasz");
   return translated;
