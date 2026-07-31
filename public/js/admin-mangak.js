@@ -690,9 +690,9 @@ async function loadAnimeCatalog() {
           <div style="color:#64748b;font-size:.78rem;margin-top:2px">${a.episode_count} feltöltött rész &nbsp;•&nbsp; slug: ${escHtml(a.slug)}</div>
         </div>
         <div style="display:flex;gap:6px;flex-shrink:0" onclick="event.stopPropagation()">
-          <button onclick="startEditAnime(${a.id}, ${JSON.stringify(a.title)}, ${JSON.stringify(a.cover_url || "")})"
+          <button onclick="startEditAnime(${a.id}, ${escHtml(JSON.stringify(a.title))}, ${escHtml(JSON.stringify(a.cover_url || ""))})"
             style="background:#1e293b;color:#93c5fd;border:1px solid #334155;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:.78rem">✏️ Szerkesztés</button>
-          <button onclick="deleteAnimeCatalog(${a.id}, ${JSON.stringify(a.title)})"
+          <button onclick="deleteAnimeCatalog(${a.id}, ${escHtml(JSON.stringify(a.title))})"
             style="background:#1e293b;color:#f87171;border:1px solid #334155;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:.78rem">🗑 Törlés</button>
         </div>
       </div>

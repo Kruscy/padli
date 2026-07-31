@@ -87,9 +87,9 @@ function initRequestSearch() {
       data.forEach(m => {
         const div = document.createElement("div");
         div.className = "search-item";
-        const title = m.title.english || m.title.romaji;
+        const title = escHtml(m.title.english || m.title.romaji);
         div.innerHTML = `
-          <img src="${m.coverImage?.medium || ""}">
+          <img src="${escHtml(m.coverImage?.medium || "")}">
           <span>${title}${m.episodes ? ` <small style="opacity:.6">(${m.episodes} rész)</small>` : ""}</span>
         `;
         div.addEventListener("click", () => selectAnime(m));
@@ -103,11 +103,11 @@ function initRequestSearch() {
     resultsBox.innerHTML = "";
     input.value = "";
     msg.textContent = "";
-    const title = m.title.english || m.title.romaji;
+    const title = escHtml(m.title.english || m.title.romaji);
     selectedBox.style.display = "block";
     selectedBox.innerHTML = `
       <div class="anime-sub-req-selected-header">
-        <img src="${m.coverImage?.medium || ""}" class="anime-sub-req-selected-cover">
+        <img src="${escHtml(m.coverImage?.medium || "")}" class="anime-sub-req-selected-cover">
         <div class="anime-sub-req-selected-title">${title}</div>
       </div>
       <div class="anime-sub-req-form">
