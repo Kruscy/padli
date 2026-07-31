@@ -16,6 +16,8 @@ PadlizsanFanSub is a full-stack web platform built for a Hungarian manga/manhwa 
 - **Manga/manhwa reader** — scroll and book (page-flip) modes, mobile swipe, keyboard navigation
 - **Reading progress** — automatically saves and resumes where you left off, per chapter
 - **AniList sync** — tracks your reading progress on AniList
+- **Anime feliratok** — separate .srt/.ass subtitle catalog for anime (own title/season/episode model), downloadable via the site or a personal per-user API key; request a translation by contributing a Gemini API key to the shared pool
+- **Padli AI** — chatbot (site chat + Discord) that answers manga/anime questions using the site's own catalog plus AniList, MAL, MangaDex, Kitsu and Shikimori
 - **Wishlist** — save titles you want to read
 - **Polls** — community votes on which series to translate next
 - **Leaderboard & points** — reward system for community contributors
@@ -46,6 +48,7 @@ PadlizsanFanSub is a full-stack web platform built for a Hungarian manga/manhwa 
 | Payments | Stripe |
 | Invoicing | Billingo v3 |
 | AI translation | Custom ML service + OpenAI |
+| AI chatbot | Google Gemini (rotating multi-key pool, shared/contributed) |
 | OCR | Tesseract.js |
 | Notifications | Discord bot (discord.js) |
 | Email | Nodemailer |
