@@ -53,6 +53,10 @@
     .rating-label { font-size: 0.85rem; color: #aaa; min-width: 80px; }
     .badge-rating { background: #2d1b69 !important; color: #c4b5fd !important; cursor: pointer; transition: background 0.15s; }
     .badge-rating:hover { background: #3d2b89 !important; }
+    .chapter-sort-toggle { display: flex; gap: 6px; margin: 12px 0 4px; }
+    .chapter-sort-btn { background: #1f2630; color: #94a3b8; border: none; padding: 6px 14px; border-radius: 999px; font-size: 0.82rem; font-weight: 600; cursor: pointer; transition: background 0.15s, color 0.15s; font-family: Poppins, sans-serif; }
+    .chapter-sort-btn:hover { background: #2a3344; color: #cbd5e1; }
+    .chapter-sort-btn.active { background: #7c3aed; color: #fff; }
   </style>
 </head>
 <body>
@@ -86,6 +90,10 @@
     <button class="chapters-tab-btn" data-tab="tab-recommendations">✨ Hasonló művek</button>
   </div>
   <div id="tab-chapters" class="chapters-tab-panel active">
+    <div class="chapter-sort-toggle" id="chapterSortToggle">
+      <button type="button" class="chapter-sort-btn" data-order="asc">1 → Utolsó</button>
+      <button type="button" class="chapter-sort-btn" data-order="desc">Utolsó → 1</button>
+    </div>
     <div id="chapters" class="chapter-list"></div>
   </div>
   <div id="tab-recommendations" class="chapters-tab-panel">
@@ -102,7 +110,7 @@
   </div>
 </div>
 
-<script src="/js/chapters-init.js?v=20260720"></script>
+<script src="/js/chapters-init.js?v=20260807"></script>
 
 <script src="/js/chapters-manga-init.js?v=20260720"></script>
 
