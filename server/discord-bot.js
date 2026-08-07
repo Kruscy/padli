@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits } from "discord.js";
+import { Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
 import { WebSocketServer } from "ws";
 import { pool } from "./db.js";
 import { handleChatMessageForAI } from "./padli-ai.js";
@@ -131,19 +131,30 @@ bot.on("messageCreate", async msg => {
     }
   }
 
-  // Automatikus "Hentai" rang: ha valaki leírja ezt a szót (bármelyik
-  // csatornán), automatikusan megkapja a rangot — nincs mögötte
-  // kor-ellenőrzés, csak ez az egyszerű trigger-szó. Ehhez is a botnak
+  // "Hentai" rang — önbevallásos 18+ megerősítéssel: ha valaki leírja ezt a
+  // szót (bármelyik csatornán), NEM kapja meg azonnal a rangot, hanem egy
+  // gombos megerősítést küldünk neki. Ez nem valódi kor-ellenőrzés (a
+  // Discord API nem ad ki életkor-adatot botoknak, és a userek nincsenek
+  // összekötve a site-fiókjukkal, ahol tényleges születési dátum alapú
+  // ellenőrzés van a 18+ mangáknál) — csak önbevallás, de ez a Discord-
+  // szerverek bevett gyakorlata NSFW/18+ tartalomnál. Ehhez is a botnak
   // "Manage Roles" jogosultság kell a szerveren.
   if (msg.guild && /\bhentai\b/i.test(msg.content)) {
     try {
       const member = msg.member || await msg.guild.members.fetch(msg.author.id);
       if (!member.roles.cache.has(MANAGEABLE_ROLES["Hentai"])) {
-        await member.roles.add(MANAGEABLE_ROLES["Hentai"]);
-        await msg.react("🔞").catch(() => {});
+        const confirmBtn = new ButtonBuilder()
+          .setCustomId(`hentai-confirm-${msg.author.id}`)
+          .setLabel("🔞 Megerősítem, elmúltam 18 éves")
+          .setStyle(ButtonStyle.Danger);
+        const row = new ActionRowBuilder().addComponents(confirmBtn);
+        await msg.reply({
+          content: `${msg.author}, a "Hentai" rang 18+ tartalomhoz ad hozzáférést. Csak akkor kattints a gombra, ha ténylegesen elmúltál 18 éves.`,
+          components: [row],
+        });
       }
     } catch (err) {
-      console.error("Auto Hentai role hiba:", err.message);
+      console.error("Hentai role megerősítés hiba:", err.message);
     }
   }
 
@@ -193,6 +204,30 @@ bot.on("messageCreate", async msg => {
   );
 });
 bot.on("interactionCreate", async (interaction) => {
+  // "Hentai" rang önbevallásos megerősítő gombja — csak az kattinthat
+  // érvényesen, aki a trigger-üzenetet küldte (a customId tartalmazza az ő
+  // userId-ját), hogy más ne tudjon valaki más nevében "megerősíteni".
+  if (interaction.isButton() && interaction.customId.startsWith("hentai-confirm-")) {
+    const targetUserId = interaction.customId.slice("hentai-confirm-".length);
+    if (interaction.user.id !== targetUserId) {
+      await interaction.reply({ content: "❌ Ez a gomb nem neked szól — írd le te is a szót, hogy saját megerősítést kapj.", ephemeral: true });
+      return;
+    }
+    try {
+      const member = interaction.member || await interaction.guild.members.fetch(interaction.user.id);
+      if (member.roles.cache.has(MANAGEABLE_ROLES["Hentai"])) {
+        await interaction.reply({ content: "✅ Már megvan a rangod.", ephemeral: true });
+        return;
+      }
+      await member.roles.add(MANAGEABLE_ROLES["Hentai"]);
+      await interaction.reply({ content: "✅ Megerősítve, megkaptad a rangot.", ephemeral: true });
+    } catch (err) {
+      console.error("Hentai role grant hiba:", err.message);
+      await interaction.reply({ content: "❌ Hiba történt, próbáld újra később.", ephemeral: true }).catch(() => {});
+    }
+    return;
+  }
+
   if (!interaction.isChatInputCommand()) return;
   if (interaction.commandName !== "role-give" && interaction.commandName !== "role-remove") return;
 
