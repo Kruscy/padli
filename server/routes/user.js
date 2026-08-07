@@ -80,7 +80,7 @@ router.get("/me", async (req, res) => {
     const userId = req.session.user.id;
 
     const result = await pool.query(`
-      SELECT u.username, u.avatar, p.tier
+      SELECT u.username, u.avatar, u.email, u.email_verified, p.tier
       FROM users u
       LEFT JOIN patreon_status p ON p.user_id = u.id
       WHERE u.id = $1
@@ -94,6 +94,8 @@ router.get("/me", async (req, res) => {
       avatar: user.avatar || "https://padlizsanfansub.hu/assets/logo.png",
       tier: user.tier || null,
       role: req.session.user.role || "user",
+      email: user.email,
+      email_verified: user.email_verified,
     });
 
   } catch (err) {

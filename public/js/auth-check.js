@@ -54,6 +54,11 @@ async function loadUser() {
 
   wrapper.classList.add(tierClass);
 }
+
+    // ===== EMAIL MEGERŐSÍTÉS EMLÉKEZTETŐ =====
+    if (user.email_verified === false && typeof window.showEmailVerifyModal === "function") {
+      window.showEmailVerifyModal(user.email);
+    }
   } catch (err) {
     console.error("AUTH ERROR:", err);
     location.href = "/login.html";
