@@ -82,14 +82,23 @@ window.saveAvatar = async function () {
   const formData = new FormData();
   formData.append("avatar", blob);
 
-  const res = await fetch("/api/user/avatar", {
-    method: "POST",
-    body: formData
-  });
+  try {
+    const res = await fetch("/api/user/avatar", {
+      method: "POST",
+      body: formData
+    });
 
-  const data = await res.json();
+    const data = await res.json();
 
-  document.getElementById("avatar").src = data.avatar + "?t=" + Date.now();
+    if (!res.ok || !data.avatar) {
+      alert(data.error || "Nem sikerült feltölteni a profilképet, próbáld újra.");
+      return;
+    }
 
-  closeModal();
+    document.getElementById("avatar").src = data.avatar + "?t=" + Date.now();
+    closeModal();
+  } catch (err) {
+    console.error("Avatar upload error:", err);
+    alert("Nem sikerült feltölteni a profilképet, próbáld újra.");
+  }
 };

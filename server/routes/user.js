@@ -27,30 +27,49 @@ const upload = multer({
   },
 });
 
-router.post("/avatar", upload.single("avatar"), async (req, res) => {
-  if (!req.session.user) return res.sendStatus(401);
-  if (!req.file) return res.status(400).json({ error: "Nincs fájl" });
+router.post("/avatar", (req, res, next) => {
+  // Explicit hibakezelés a multerhez — enélkül egy fileFilter-elutasítás
+  // (rossz fájltípus) vagy méretlimit-túllépés a beépített Express
+  // HTML hibaoldalt küldte volna, amit a kliens res.json()-je nem tud
+  // feldolgozni (JSON parse hiba, néma/érthetetlen hiba a felhasználónak).
+  upload.single("avatar")(req, res, (err) => {
+    if (err) return res.status(400).json({ error: err.message || "Feltöltési hiba" });
+    next();
+  });
+}, async (req, res) => {
+  try {
+    if (!req.session.user) return res.sendStatus(401);
+    if (!req.file) return res.status(400).json({ error: "Nincs fájl" });
 
-  const userId = req.session.user.id;
+    const userId = req.session.user.id;
 
-  const webp = await sharp(req.file.buffer)
-    .resize(256, 256, { fit: "cover" })
-    .webp({ quality: 85 })
-    .toBuffer();
+    const webp = await sharp(req.file.buffer)
+      .resize(256, 256, { fit: "cover" })
+      .webp({ quality: 85 })
+      .toBuffer();
 
-  const key = `avatars/${userId}.webp`;
-  await r2.send(new PutObjectCommand({
-    Bucket: process.env.R2_BUCKET_NAME,
-    Key: key,
-    Body: webp,
-    ContentType: "image/webp",
-    CacheControl: "public, max-age=86400",
-  }));
+    const key = `avatars/${userId}.webp`;
+    await r2.send(new PutObjectCommand({
+      Bucket: process.env.R2_BUCKET_NAME,
+      Key: key,
+      Body: webp,
+      ContentType: "image/webp",
+      CacheControl: "public, max-age=86400",
+    }));
 
-  const avatarUrl = `${process.env.R2_PUBLIC_URL}/${key}`;
-  await pool.query(`UPDATE users SET avatar = $1 WHERE id = $2`, [avatarUrl, userId]);
+    const avatarUrl = `${process.env.R2_PUBLIC_URL}/${key}`;
+    await pool.query(`UPDATE users SET avatar = $1 WHERE id = $2`, [avatarUrl, userId]);
 
-  res.json({ success: true, avatar: avatarUrl });
+    res.json({ success: true, avatar: avatarUrl });
+  } catch (err) {
+    // Korábban itt nem volt try/catch: egy sérült kép (sharp hiba), R2
+    // átmeneti hiba vagy DB hiba esetén a kérés sosem válaszolt (Express 4
+    // nem kapja el automatikusan az async handlerből dobott hibát) — a
+    // felhasználó a feltöltő modallal ragadt, végtelen "töltés" közben,
+    // konkrét hibaüzenet nélkül.
+    console.error("Avatar upload error:", err);
+    res.status(500).json({ error: "Nem sikerült feltölteni a profilképet, próbáld újra." });
+  }
 });
 router.get("/me", async (req, res) => {
   try {
