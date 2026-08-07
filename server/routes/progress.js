@@ -12,6 +12,16 @@ function parseChapterNumber(str) {
   return m ? parseFloat(m[0]) : Infinity;
 }
 
+// A "legmagasabb olvasott fejezet" összehasonlításához: eltérően a fenti
+// parseChapterNumber-től (ami +Infinity-t ad vissza szám nélküli
+// fejezetnévre, hogy rendezéskor a lista végére kerüljön), itt -Infinity
+// kell fallbacknek — különben egy szám nélküli fejezetnév mindig "a
+// legmagasabbnak" tűnne, és tévesen felülírná a valódi legmagasabbat.
+function chapterCompareValue(str) {
+  const m = str.match(/\d+(\.\d+)?/);
+  return m ? parseFloat(m[0]) : -Infinity;
+}
+
 /* ===== SAVE PROGRESS ===== */
 router.post("/", async (req, res) => {
   const userId = req.session.user?.id;
@@ -33,19 +43,28 @@ router.post("/", async (req, res) => {
 
   const mangaId = manga.rows[0].id;
 
-  // Lekérjük az előző fejezetet
+  // Lekérjük az előző fejezetet és a legmagasabb olvasott fejezetet
   const prev = await pool.query(
-    `SELECT chapter FROM reading_progress WHERE user_id = $1 AND manga_id = $2`,
+    `SELECT chapter, highest_chapter FROM reading_progress WHERE user_id = $1 AND manga_id = $2`,
     [userId, mangaId]
   );
   const prevChapter = prev.rows[0]?.chapter || null;
+  const prevHighest = prev.rows[0]?.highest_chapter || null;
+
+  // A legmagasabb olvasott fejezet csak nőhet — akkor is megőrzi, hogy a
+  // user ténylegesen meddig jutott, ha most egy korábbi fejezetet nyit meg
+  // (pl. újraolvasás, keresés miatt visszalapozás).
+  const highestChapter = (!prevHighest || chapterCompareValue(chapter) > chapterCompareValue(prevHighest))
+    ? chapter
+    : prevHighest;
 
   await pool.query(
-    `INSERT INTO reading_progress (user_id, manga_id, chapter, page)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO reading_progress (user_id, manga_id, chapter, page, highest_chapter)
+     VALUES ($1, $2, $3, $4, $5)
      ON CONFLICT (user_id, manga_id)
-     DO UPDATE SET chapter = EXCLUDED.chapter, page = EXCLUDED.page, updated_at = now()`,
-    [userId, mangaId, chapter, page]
+     DO UPDATE SET chapter = EXCLUDED.chapter, page = EXCLUDED.page,
+                   highest_chapter = EXCLUDED.highest_chapter, updated_at = now()`,
+    [userId, mangaId, chapter, page, highestChapter]
   );
 
   // Chapter read log - csak ha fejezet változott (vagy első olvasás)
@@ -152,7 +171,7 @@ router.get("/:slug?", requireLogin, async (req, res) => {
   // előfordulhat, hogy a felhasználónak mindkettő alatt van külön
   // reading_progress sora — ilyenkor a legutóbb frissítettet vesszük.
   const { rows } = await pool.query(
-    `SELECT rp.chapter, rp.page, rp.updated_at
+    `SELECT rp.chapter, rp.page, rp.highest_chapter, rp.updated_at
      FROM reading_progress rp
      JOIN manga m ON m.id = rp.manga_id
      WHERE rp.user_id = $1 AND m.slug = $2

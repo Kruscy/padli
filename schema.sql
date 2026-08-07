@@ -156,11 +156,15 @@ CREATE TABLE IF NOT EXISTS public.recommendation (
 -- ─────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS public.reading_progress (
-    user_id    INTEGER NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-    manga_id   INTEGER NOT NULL REFERENCES public.manga(id) ON DELETE CASCADE,
-    chapter    TEXT NOT NULL,
-    page       INTEGER NOT NULL,
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    user_id         INTEGER NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    manga_id        INTEGER NOT NULL REFERENCES public.manga(id) ON DELETE CASCADE,
+    chapter         TEXT NOT NULL,
+    page            INTEGER NOT NULL,
+    -- Csak nőhet: a ténylegesen legmesszebb olvasott fejezetet őrzi meg,
+    -- akkor is, ha a user időközben visszalapoz egy korábbi fejezethez
+    -- (pl. újraolvasás vagy keresés miatt), ami a "chapter" mezőt felülírná.
+    highest_chapter TEXT,
+    updated_at      TIMESTAMPTZ DEFAULT NOW(),
     PRIMARY KEY (user_id, manga_id),
     UNIQUE (user_id, manga_id)
 );

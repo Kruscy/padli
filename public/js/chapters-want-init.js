@@ -25,9 +25,21 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (r.ok) {
       const p = await r.json();
       if (p) {
+        // A gyorsnavigáció a legmagasabb olvasott fejezet alapján ajánlja a
+        // folytatást, nem az utoljára megnyitottén — ha a user visszalapozott
+        // egy korábbi fejezethez, ne oda vigye vissza "folytatásként".
+        const target = p.highest_chapter || p.chapter;
+        const targetPage = target === p.chapter ? p.page : 1;
         continueBtn.classList.remove("hidden");
-        continueBtn.href = `/reader.html?slug=${encodeURIComponent(slug)}&chapter=${encodeURIComponent(p.chapter)}&page=${encodeURIComponent(p.page)}`;
+        continueBtn.href = `/reader.html?slug=${encodeURIComponent(slug)}&chapter=${encodeURIComponent(target)}&page=${encodeURIComponent(targetPage)}`;
         deleteProgressBtn.classList.remove("hidden");
+
+        if (p.highest_chapter) {
+          const badge = document.createElement("span");
+          badge.className = "manga-badge badge-progress";
+          badge.textContent = `📖 Eddig olvasva: ${p.highest_chapter}`;
+          document.getElementById("mangaInfoBar")?.appendChild(badge);
+        }
       }
     }
   } catch {}
