@@ -91,6 +91,7 @@ router.get("/recent-reading", async (req, res) => {
       SELECT
         rp.chapter,
         rp.page,
+        rp.highest_chapter,
         rp.updated_at,
         m.slug AS manga_slug,
         m.title,
@@ -118,10 +119,17 @@ router.get("/recent-reading", async (req, res) => {
         (a, b) => parseChapterNumber(a) - parseChapterNumber(b)
       );
 
-      const lastChapter = folders[folders.length - 1];
-      if (p.chapter === lastChapter) return null; // felzárkózott
+      // A "hol tart a user" mostantól a legmagasabb olvasott fejezet alapján
+      // dől el, nem az utoljára megnyitott alapján — így egy visszalapozás
+      // (újraolvasás, keresés) nem jelöli tévesen "van új rész"-nek azt, amit
+      // a user valójában már régen olvasott, és nem viszi vissza egy korábbi
+      // fejezethez "folytatásként".
+      const referenceChapter = p.highest_chapter || p.chapter;
 
-      const currentIndex = folders.indexOf(p.chapter);
+      const lastChapter = folders[folders.length - 1];
+      if (referenceChapter === lastChapter) return null; // felzárkózott
+
+      const currentIndex = folders.indexOf(referenceChapter);
       if (currentIndex === -1) return null;
 
       const hasNewChapter = currentIndex < folders.length - 1;
@@ -133,6 +141,7 @@ router.get("/recent-reading", async (req, res) => {
         cover_url: p.cover_url,
         library: p.library_name,
         chapter: p.chapter,
+        highest_chapter: referenceChapter,
         page: p.page,
         updated_at: p.updated_at,
         lastChapter,
