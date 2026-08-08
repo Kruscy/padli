@@ -267,7 +267,8 @@ bot.on("interactionCreate", async (interaction) => {
   }
 });
 
-bot.login(TOKEN);
+if (TOKEN) bot.login(TOKEN);
+else console.log("ℹ️ Discord bot disabled (no token set)");
 
 // Web → Discord (exportáljuk hogy a route használhassa)
 export async function sendNewChaptersEmbed(newChapters) {
