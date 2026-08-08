@@ -20,6 +20,14 @@ function injectEmailVerifyStyles() {
     .email-verify-resend-btn:disabled { opacity: 0.6; cursor: default; transform: none; }
     .email-verify-feedback { margin-top: 0.9rem; font-size: 0.85rem; font-weight: 600; min-height: 1.2em; }
     .email-verify-close { margin-top: 1.25rem; background: none; border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 8px 20px; border-radius: 8px; cursor: pointer; font-size: 0.88rem; font-family: inherit; display: block; margin-left: auto; margin-right: auto; }
+    .email-verify-change-link { display: inline-block; margin-top: 0.9rem; background: none; border: none; color: #93c5fd; font-size: 0.83rem; cursor: pointer; text-decoration: underline; font-family: inherit; }
+    .email-verify-change-form { margin-top: 1rem; text-align: left; }
+    .email-verify-change-form input { width: 100%; box-sizing: border-box; background: #14141f; border: 1px solid rgba(255,255,255,.15); color: #fff; border-radius: 9px; padding: 9px 12px; font-size: 0.9rem; font-family: inherit; margin-bottom: 8px; }
+    .email-verify-change-form input:focus { outline: none; border-color: #7c3aed; }
+    .email-verify-change-actions { display: flex; gap: 8px; }
+    .email-verify-save-btn { flex: 1; background: linear-gradient(135deg,#7c3aed,#5b21b6); color: #fff; border: none; padding: 10px; border-radius: 8px; font-weight: 700; font-size: 0.88rem; cursor: pointer; font-family: inherit; }
+    .email-verify-save-btn:disabled { opacity: 0.6; cursor: default; }
+    .email-verify-cancel-btn { background: none; border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-size: 0.88rem; font-family: inherit; }
   `;
   document.head.appendChild(style);
 }
@@ -35,6 +43,7 @@ window.showEmailVerifyModal = function (email) {
   if (document.getElementById("emailVerifyModal")) return;
 
   injectEmailVerifyStyles();
+  let currentEmail = email;
 
   const wrap = document.createElement("div");
   wrap.className = "email-verify-modal";
@@ -46,18 +55,29 @@ window.showEmailVerifyModal = function (email) {
       <p>A <span class="email-highlight"></span> címre korábban küldtünk egy megerősítő linket. Ha nem találod, kérhetsz egy újat.</p>
       <button type="button" class="email-verify-resend-btn" id="emailVerifyResendBtn">📧 Megerősítő email újraküldése</button>
       <div class="email-verify-feedback" id="emailVerifyFeedback"></div>
+      <button type="button" class="email-verify-change-link" id="emailVerifyChangeLink">✏️ Elgépelted, vagy már nem éred el ezt a címet?</button>
+      <div class="email-verify-change-form hidden" id="emailVerifyChangeForm">
+        <input type="email" id="emailVerifyNewEmail" placeholder="Új email cím">
+        <div class="email-verify-change-actions">
+          <button type="button" class="email-verify-save-btn" id="emailVerifySaveBtn">Mentés és megerősítés küldése</button>
+          <button type="button" class="email-verify-cancel-btn" id="emailVerifyCancelBtn">Mégse</button>
+        </div>
+      </div>
       <button type="button" class="email-verify-close" id="emailVerifyCloseBtn">Később</button>
     </div>
   `;
   document.body.appendChild(wrap);
-  wrap.querySelector(".email-highlight").textContent = email;
+  wrap.querySelector(".email-highlight").textContent = currentEmail;
+
+  const feedback = document.getElementById("emailVerifyFeedback");
+  const changeForm = document.getElementById("emailVerifyChangeForm");
+  const newEmailInput = document.getElementById("emailVerifyNewEmail");
 
   document.getElementById("emailVerifyBackdrop").addEventListener("click", closeEmailVerifyModal);
   document.getElementById("emailVerifyCloseBtn").addEventListener("click", closeEmailVerifyModal);
 
   document.getElementById("emailVerifyResendBtn").addEventListener("click", async (e) => {
     const btn = e.currentTarget;
-    const feedback = document.getElementById("emailVerifyFeedback");
     btn.disabled = true;
     feedback.style.color = "#aaa";
     feedback.textContent = "Küldés...";
@@ -65,7 +85,7 @@ window.showEmailVerifyModal = function (email) {
       const res = await fetch("/api/auth/resend-verification", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email: currentEmail }),
       });
       if (res.ok) {
         feedback.style.color = "#22c55e";
@@ -78,6 +98,60 @@ window.showEmailVerifyModal = function (email) {
     } catch {
       feedback.style.color = "#ef4444";
       feedback.textContent = "❌ Szerverrel nem sikerült kapcsolatba lépni.";
+      btn.disabled = false;
+    }
+  });
+
+  // ── Email cím javítása/cseréje, ha elgépelte vagy már nem éri el ──
+  document.getElementById("emailVerifyChangeLink").addEventListener("click", () => {
+    changeForm.classList.remove("hidden");
+    newEmailInput.value = currentEmail;
+    newEmailInput.focus();
+    document.getElementById("emailVerifyChangeLink").classList.add("hidden");
+  });
+
+  document.getElementById("emailVerifyCancelBtn").addEventListener("click", () => {
+    changeForm.classList.add("hidden");
+    document.getElementById("emailVerifyChangeLink").classList.remove("hidden");
+    feedback.textContent = "";
+  });
+
+  document.getElementById("emailVerifySaveBtn").addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    const newEmail = newEmailInput.value.trim();
+
+    if (!newEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
+      feedback.style.color = "#ef4444";
+      feedback.textContent = "❌ Adj meg egy érvényes email címet.";
+      return;
+    }
+
+    btn.disabled = true;
+    feedback.style.color = "#aaa";
+    feedback.textContent = "Mentés...";
+    try {
+      const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: newEmail }),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok && data.emailChanged) {
+        currentEmail = newEmail;
+        wrap.querySelector(".email-highlight").textContent = currentEmail;
+        changeForm.classList.add("hidden");
+        document.getElementById("emailVerifyChangeLink").classList.remove("hidden");
+        feedback.style.color = "#22c55e";
+        feedback.textContent = "✅ Email cím frissítve! Új megerősítő linket küldtünk az új címre.";
+      } else {
+        feedback.style.color = "#ef4444";
+        feedback.textContent = "❌ " + (data.error || "Nem sikerült menteni, próbáld újra.");
+      }
+    } catch {
+      feedback.style.color = "#ef4444";
+      feedback.textContent = "❌ Szerverrel nem sikerült kapcsolatba lépni.";
+    } finally {
       btn.disabled = false;
     }
   });
