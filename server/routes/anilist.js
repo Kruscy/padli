@@ -64,18 +64,27 @@ function writeLog(message) {
 // ===== 30 NAPOS TAKARÍTÁS =====
 function cleanOldLogs() {
   try {
-    const files = fs.readdirSync(LOG_DIR);
-
+    const entries = fs.readdirSync(LOG_DIR, { withFileTypes: true });
     const now = Date.now();
 
-    for (const file of files) {
-      const full = path.join(LOG_DIR, file);
-      const stat = fs.statSync(full);
+    for (const entry of entries) {
+      // Csak fájlokat törlünk — a LOG_DIR-ben lévő alkönyvtárakat (pl.
+      // padli-api/) unlinkSync nem tudja törölni (EISDIR), ez korábban
+      // minden egyes futásnál hibát dobott és megszakította a ciklust,
+      // emiatt a nála később listázott fájlok sosem lettek letakarítva.
+      if (!entry.isFile()) continue;
 
-      const ageDays = (now - stat.mtimeMs) / (1000 * 60 * 60 * 24);
-
-      if (ageDays > 30) {
-        fs.unlinkSync(full);
+      const full = path.join(LOG_DIR, entry.name);
+      try {
+        const stat = fs.statSync(full);
+        const ageDays = (now - stat.mtimeMs) / (1000 * 60 * 60 * 24);
+        if (ageDays > 30) {
+          fs.unlinkSync(full);
+        }
+      } catch (err) {
+        // Egy fájl hibája (pl. verseny-feltétel, jogosultság) ne
+        // szakítsa meg a többi fájl takarítását.
+        console.error(`CLEAN LOG ERROR (${entry.name}):`, err.message);
       }
     }
   } catch (err) {

@@ -74,6 +74,15 @@ async function handleCompromisedAccount(guild, user, messages) {
 const wss = new WebSocketServer({ port: parseInt(process.env.WS_PORT || "3001") });
 const clients = new Set();
 
+// Ha a port foglalt (pl. EADDRINUSE), a 'ws' csomag 'error' eseményt emittál
+// a szerveren — Node EventEmitter-szabály szerint egy kezeletlen 'error'
+// esemény kezelő nélkül elszállítja a TELJES folyamatot. Ez ugyanaz a
+// hibaosztály, mint a korábban javított bot.login(TOKEN) — egy védtelen,
+// induláskori erőforrás-foglalás képes lett volna leállítani mindent.
+wss.on("error", err => {
+  console.error("WebSocket szerver hiba (port foglalt vagy egyéb induló hiba):", err.message);
+});
+
 wss.on("connection", ws => {
   clients.add(ws);
   ws.on("close", () => clients.delete(ws));
@@ -170,11 +179,19 @@ bot.on("messageCreate", async msg => {
     content = [content, ...attachmentUrls].filter(Boolean).join("\n");
   }
 
-  await pool.query(
-    `INSERT INTO chat_messages (source, author, display_name, avatar, content)
-     VALUES ('discord', $1, $2, $3, $4)`,
-    [msg.author.username, displayName, msg.author.displayAvatarURL({ size: 32 }), content]
-  );
+  // Ha a DB-írás elszáll (pl. átmeneti kapcsolati hiba), az ne akassza meg
+  // az üzenet feldolgozását — a broadcast és a Padli AI válasz enélkül is
+  // fusson tovább, csak a webes chat-előzmény marad ki erre az egy
+  // üzenetre.
+  try {
+    await pool.query(
+      `INSERT INTO chat_messages (source, author, display_name, avatar, content)
+       VALUES ('discord', $1, $2, $3, $4)`,
+      [msg.author.username, displayName, msg.author.displayAvatarURL({ size: 32 }), content]
+    );
+  } catch (err) {
+    console.error("Discord chat mentési hiba:", err.message);
+  }
 
   broadcast({
     type: "message",
@@ -230,6 +247,14 @@ bot.on("interactionCreate", async (interaction) => {
 
   if (!interaction.isChatInputCommand()) return;
   if (interaction.commandName !== "role-give" && interaction.commandName !== "role-remove") return;
+
+  // interaction.member ritka esetben null lehet (pl. nem guild-kontextusú
+  // interakció, vagy még be nem melegedett cache) — enélkül a null-check
+  // nélkül a .roles elérése kezeletlen TypeError-t dobna.
+  if (!interaction.member) {
+    await interaction.reply({ content: "❌ Ez a parancs csak szerveren belül használható.", ephemeral: true });
+    return;
+  }
 
   const isAllowed = interaction.member.roles.cache.has(ADMIN_ROLE_ID) || interaction.member.roles.cache.has(MOD_ROLE_ID);
   if (!isAllowed) {
