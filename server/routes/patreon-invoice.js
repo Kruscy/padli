@@ -16,7 +16,7 @@ const PATREON_PARTNER = {
   name: "Patreon, Inc.",
   emails: [],
   send_email: false,
-  taxcode: "",
+  taxcode: "46-3115122",
   address: {
     country_code: "US",
     post_code:    "94103",
