@@ -14,8 +14,8 @@ const invoiceRateLimit = rateLimit({
 
 const PATREON_PARTNER = {
   name: "Patreon, Inc.",
-  emails: [],
-  send_email: false,
+  emails: ["accountspayable@patreon.com"],
+  send_email: true,
   taxcode: "46-3115122",
   address: {
     country_code: "US",
@@ -89,7 +89,7 @@ router.post("/", invoiceRateLimit, requireAdmin, async (req, res) => {
         unit:            "db",
         vat:             "HO",
       }],
-      settings: { should_send_email: false },
+      settings: { should_send_email: true },
     });
 
     console.log(`[PatreonInvoice] ✅ ${invoice.invoice_number} | ${nettoAr} Ft | ${itemName}`);
