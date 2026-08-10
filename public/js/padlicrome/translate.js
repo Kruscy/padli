@@ -1,7 +1,7 @@
 /* padlicrome/translate.js – Fordítás queue */
 
-import { api, state, showStatus, updatePointsDisplay } from "./app.js";
-import { renderGallery, updateTranslateBar, updateDownloadPanel, translateOneWithGemini, showGeminiResultsModal, showGeminiLoading } from "./gallery.js";
+import { api, state, showStatus, updatePointsDisplay } from "./app.js?v=20260810";
+import { renderGallery, updateTranslateBar, updateDownloadPanel, translateOneWithGemini, showGeminiResultsModal, showGeminiLoading } from "./gallery.js?v=20260810";
 
 /* ── MÓD VÁLTÓ (Normál / Teszt) ──────────────────────────── */
 export function initModeToggle() {

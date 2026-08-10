@@ -1,9 +1,9 @@
-import { init, state, showStatus, startProjectFromUrl } from "/js/padlicrome/app.js";
-import { initDropzone } from "/js/padlicrome/upload.js";
-import { loadProject, renderGallery, toggleAll, updateTranslateBar } from "/js/padlicrome/gallery.js";
-import { startTranslation, requestStop, requestForceStop, initModeToggle } from "/js/padlicrome/translate.js";
-import { openMergeModal } from "/js/padlicrome/merge.js";
-import { downloadAllZip } from "/js/padlicrome/download.js";
+import { init, state, showStatus, startProjectFromUrl } from "/js/padlicrome/app.js?v=20260810";
+import { initDropzone } from "/js/padlicrome/upload.js?v=20260810";
+import { loadProject, renderGallery, toggleAll, updateTranslateBar } from "/js/padlicrome/gallery.js?v=20260810";
+import { startTranslation, requestStop, requestForceStop, initModeToggle } from "/js/padlicrome/translate.js?v=20260810";
+import { openMergeModal } from "/js/padlicrome/merge.js?v=20260810";
+import { downloadAllZip } from "/js/padlicrome/download.js?v=20260810";
 
 window.startTranslation = startTranslation;
 window.requestStop = requestStop;

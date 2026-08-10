@@ -1,7 +1,7 @@
 /* padlicrome/merge.js – Összefűzés (előfizető funkció) */
 
-import { api, state, showStatus } from "./app.js";
-import { loadProject } from "./gallery.js";
+import { api, state, showStatus } from "./app.js?v=20260810";
+import { loadProject } from "./gallery.js?v=20260810";
 
 /* ── MERGE INDÍTÁSA ──────────────────────────────────────── */
 export async function openMergeModal() {

@@ -1,6 +1,6 @@
 /* padlicrome/download.js – Letöltés és ZIP */
 
-import { state } from "./app.js";
+import { state } from "./app.js?v=20260810";
 
 const API = "/api/padlicrome";
 

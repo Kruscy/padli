@@ -1,6 +1,6 @@
 /* padlicrome/gallery.js - Galéria kezelés */
 
-import { api, state, showStatus, updatePointsDisplay } from "./app.js";
+import { api, state, showStatus, updatePointsDisplay } from "./app.js?v=20260810";
 
 const API = "/api/padlicrome";
 
