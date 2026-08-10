@@ -1,7 +1,7 @@
 import { init, state, showStatus, startProjectFromUrl } from "/js/padlicrome/app.js";
 import { initDropzone } from "/js/padlicrome/upload.js";
 import { loadProject, renderGallery, toggleAll, updateTranslateBar } from "/js/padlicrome/gallery.js";
-import { startTranslation, requestStop, requestForceStop } from "/js/padlicrome/translate.js";
+import { startTranslation, requestStop, requestForceStop, initModeToggle } from "/js/padlicrome/translate.js";
 import { openMergeModal } from "/js/padlicrome/merge.js";
 import { downloadAllZip } from "/js/padlicrome/download.js";
 
@@ -74,6 +74,7 @@ async function pollDownloadProgress() {
 }
 
 await init();
+initModeToggle();
 initDropzone();
 await loadProject();
 checkAlreadyFixedImages();

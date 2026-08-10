@@ -13,6 +13,7 @@ import fs       from "fs";
 import path     from "path";
 import { pool } from "../db.js";
 import { localPathToR2Key, listFiles } from "../r2.js";
+import { callGemini } from "../lib/gemini-client.js";
 
 const router = express.Router();
 
@@ -515,6 +516,69 @@ router.post("/translate/:id", requireAuth, async (req, res) => {
     writeProject(userId, project);
     console.error("[PADLICROME] translate:", err);
     res.status(500).json({ error: "Szerver hiba" });
+  }
+});
+
+/* ── POST /translate-gemini/:id - KÍSÉRLETI Gemini-alapú fordítás ──
+   Nem helyettesíti a fenti /translate/:id-t (ami a manga-image-translator
+   szolgáltatást hívja és renderelt, kép-visszaírt eredményt ad) — ez csak
+   szöveg-kinyerést + fordítást ad vissza JSON-ban, minőség-összehasonlításhoz.
+   Nincs pontlevonás, mert kísérleti/teszt funkció. ── */
+router.post("/translate-gemini/:id", requireAuth, async (req, res) => {
+  const userId = req.authUser.id;
+  const project = readProject(userId);
+  if (!project) return res.status(404).json({ error: "Nincs projekt" });
+  const img = project.images.find(i => i.id === req.params.id);
+  if (!img) return res.status(404).json({ error: "Kép nem található" });
+
+  try {
+    const origPath = path.join(originalsDir(userId), img.filename);
+    if (!fs.existsSync(origPath)) return res.status(404).json({ error: "Eredeti kép hiányzik" });
+
+    const imgBuffer = fs.readFileSync(origPath);
+    const mimeType = img.filename.toLowerCase().endsWith(".png") ? "image/png" : "image/jpeg";
+    const base64 = imgBuffer.toString("base64");
+
+    const prompt = `Ez egy manga/manhwa oldal képe. Azonosíts minden szövegbuborékot és hangeffektust (SFX) a képen, és fordítsd le magyarra természetes, olvasható stílusban.
+
+Válaszolj KIZÁRÓLAG egy JSON tömbbel, más szöveg vagy magyarázat nélkül. Minden elem formátuma:
+{"original": "eredeti szöveg", "translation": "magyar fordítás", "location": "rövid leírás, hol van a képen (pl. 'bal felső buborék', 'jobb oldali SFX')"}
+
+Ha nincs szöveg a képen, üres tömböt ([]) adj vissza.`;
+
+    const data = await callGemini(
+      "gemini-3.1-flash-lite",
+      {
+        contents: [{
+          role: "user",
+          parts: [
+            { text: prompt },
+            { inlineData: { mimeType, data: base64 } },
+          ],
+        }],
+        generationConfig: { temperature: 0.2, maxOutputTokens: 2000 },
+      },
+      45000,
+      "padlicrome-translate-gemini-test"
+    );
+
+    const text = data?.candidates?.[0]?.content?.parts?.map(p => p.text).join("") || "";
+    const match = text.match(/\[[\s\S]*\]/);
+    if (!match) {
+      return res.status(502).json({ error: "Nem sikerült JSON-t kinyerni a Gemini válaszból", raw: text.slice(0, 500) });
+    }
+
+    let segments;
+    try {
+      segments = JSON.parse(match[0]);
+    } catch {
+      return res.status(502).json({ error: "Érvénytelen JSON a Gemini válaszban", raw: text.slice(0, 500) });
+    }
+
+    res.json({ ok: true, segments });
+  } catch (err) {
+    console.error("[PADLICROME] translate-gemini:", err);
+    res.status(500).json({ error: "Szerver hiba: " + err.message });
   }
 });
 

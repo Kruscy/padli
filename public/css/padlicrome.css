@@ -528,6 +528,82 @@
   justify-content: flex-end;
 }
 
+/* ── FORDÍTÁS MÓD VÁLTÓ (Normál / Teszt) ─────────────────── */
+.pc-mode-toggle {
+  display: flex;
+  border: 1px solid var(--pc-border);
+  border-radius: 10px;
+  overflow: hidden;
+  width: fit-content;
+}
+
+.pc-mode-btn {
+  background: transparent;
+  border: none;
+  color: var(--pc-muted);
+  font-size: .85rem;
+  font-weight: 600;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: background .15s, color .15s;
+  font-family: inherit;
+}
+
+.pc-mode-btn:not(:last-child) {
+  border-right: 1px solid var(--pc-border);
+}
+
+.pc-mode-btn.active {
+  background: var(--pc-purple);
+  color: #fff;
+}
+
+/* ── GEMINI FORDÍTÁS-TESZT EREDMÉNY ──────────────────────── */
+.pc-gemini-image-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.pc-gemini-image-block:not(:last-child) {
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--pc-border);
+}
+
+.pc-gemini-image-name {
+  font-size: .8rem;
+  font-weight: 700;
+  color: var(--pc-text);
+}
+
+.pc-gemini-segment {
+  background: rgba(255,255,255,.03);
+  border: 1px solid var(--pc-border);
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+
+.pc-gemini-location {
+  font-size: .72rem;
+  color: var(--pc-muted);
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  margin-bottom: 4px;
+}
+
+.pc-gemini-original {
+  font-size: .85rem;
+  color: var(--pc-muted);
+}
+
+.pc-gemini-translation {
+  font-size: .92rem;
+  color: var(--pc-text);
+  font-weight: 600;
+  margin-top: 2px;
+}
+
 /* ── SPINNER ─────────────────────────────────────────────── */
 @keyframes pc-spin { to { transform: rotate(360deg); } }
 

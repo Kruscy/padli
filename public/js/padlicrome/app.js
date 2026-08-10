@@ -11,6 +11,7 @@ export const state = {
   translating: false,
   stopRequested: false,
   forceStop: false,
+  translateMode: "normal", // "normal" = manga-image-translator, "test" = kísérleti Gemini szöveg-kinyerés
 };
 
 /* ── API WRAPPER ─────────────────────────────────────────── */

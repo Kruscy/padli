@@ -1,7 +1,19 @@
 /* padlicrome/translate.js – Fordítás queue */
 
 import { api, state, showStatus, updatePointsDisplay } from "./app.js";
-import { renderGallery, updateTranslateBar, updateDownloadPanel } from "./gallery.js";
+import { renderGallery, updateTranslateBar, updateDownloadPanel, translateOneWithGemini, showGeminiResultsModal, showGeminiLoading } from "./gallery.js";
+
+/* ── MÓD VÁLTÓ (Normál / Teszt) ──────────────────────────── */
+export function initModeToggle() {
+  const toggle = document.getElementById("pcModeToggle");
+  if (!toggle) return;
+  toggle.querySelectorAll(".pc-mode-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      state.translateMode = btn.dataset.mode;
+      toggle.querySelectorAll(".pc-mode-btn").forEach(b => b.classList.toggle("active", b === btn));
+    });
+  });
+}
 
 /* ── FORDÍTÁS INDÍTÁSA ───────────────────────────────────── */
 export async function startTranslation() {
@@ -12,6 +24,14 @@ export async function startTranslation() {
 
   if (!toTranslate.length) {
     showStatus("Nincs fordítandó kép.", "info");
+    return;
+  }
+
+  // Teszt mód: Gemini-alapú szöveg-kinyerés, nincs pontlevonás, nincs
+  // kép-visszaírás — csak a felismert+fordított szöveget mutatja meg
+  // összehasonlításhoz.
+  if (state.translateMode === "test") {
+    await runGeminiTestBatch(toTranslate);
     return;
   }
 
@@ -28,6 +48,25 @@ export async function startTranslation() {
   }
 
   await runTranslation(toTranslate);
+}
+
+async function runGeminiTestBatch(images) {
+  state.translating = true;
+  showTranslateControls(true);
+
+  const results = [];
+  for (let i = 0; i < images.length; i++) {
+    if (state.forceStop || state.stopRequested) break;
+    showGeminiLoading(i + 1, images.length);
+    results.push(await translateOneWithGemini(images[i]));
+  }
+
+  showGeminiResultsModal(results);
+
+  state.translating = false;
+  state.stopRequested = false;
+  state.forceStop = false;
+  showTranslateControls(false);
 }
 
 export async function startTranslationUntilEmpty() {

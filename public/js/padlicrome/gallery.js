@@ -147,6 +147,67 @@ export function viewTranslated(img) {
   modal.style.display = "flex";
 }
 
+/* ── KÍSÉRLETI GEMINI FORDÍTÁS-TESZT ──────────────────────── */
+// Egy kép lekérdezése Geminivel — hibát nem dob, {name, segments} vagy
+// {name, error} objektumot ad vissza, hogy a hívó (translate.js bulk ciklusa)
+// egy hiba miatt ne akadjon el a többi képnél.
+export async function translateOneWithGemini(img) {
+  try {
+    const result = await api("POST", `/translate-gemini/${img.id}`);
+    return { name: img.name, segments: result.segments || [] };
+  } catch (err) {
+    return { name: img.name, error: err.message };
+  }
+}
+
+export function showGeminiResultsModal(results) {
+  const modal = document.getElementById("pcGeminiModal");
+  const body = document.getElementById("pcGeminiModalBody");
+  if (!modal || !body) return;
+
+  body.innerHTML = results.map(r => {
+    if (r.error) {
+      return `
+        <div class="pc-gemini-image-block">
+          <div class="pc-gemini-image-name">${escapeHtml(r.name)}</div>
+          <p style="color:#f87171">❌ Hiba: ${escapeHtml(r.error)}</p>
+        </div>`;
+    }
+    if (!r.segments.length) {
+      return `
+        <div class="pc-gemini-image-block">
+          <div class="pc-gemini-image-name">${escapeHtml(r.name)}</div>
+          <p>Nem talált szöveget ezen a képen.</p>
+        </div>`;
+    }
+    return `
+      <div class="pc-gemini-image-block">
+        <div class="pc-gemini-image-name">${escapeHtml(r.name)}</div>
+        ${r.segments.map(s => `
+          <div class="pc-gemini-segment">
+            <div class="pc-gemini-location">${escapeHtml(s.location || "")}</div>
+            <div class="pc-gemini-original">${escapeHtml(s.original || "")}</div>
+            <div class="pc-gemini-translation">➜ ${escapeHtml(s.translation || "")}</div>
+          </div>
+        `).join("")}
+      </div>`;
+  }).join("");
+
+  modal.style.display = "flex";
+}
+
+export function showGeminiLoading(current, total) {
+  const modal = document.getElementById("pcGeminiModal");
+  const body = document.getElementById("pcGeminiModalBody");
+  if (!modal || !body) return;
+  body.innerHTML = `<p>⏳ Gemini elemzi a képeket... (${current}/${total})</p>`;
+  modal.style.display = "flex";
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
 /* ── TRANSLATE BAR FRISSÍTÉS ─────────────────────────────── */
 export function updateTranslateBar() {
   const images = state.project?.images || [];

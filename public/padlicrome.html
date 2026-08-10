@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="/css/main.css?v=20260619">
   <link rel="stylesheet" href="/css/sidebar.css?v=20260119">
   <link rel="stylesheet" href="/css/footer.css?v=20260405">
-  <link rel="stylesheet" href="/css/padlicrome.css?v=20260619">
+  <link rel="stylesheet" href="/css/padlicrome.css?v=20260810">
 </head>
 <body>
 
@@ -161,6 +161,11 @@
           <span class="pc-panel-title">🔮 Fordítás</span>
         </div>
         <div class="pc-panel-body">
+          <div class="pc-mode-toggle" id="pcModeToggle" style="margin-bottom:14px">
+            <button type="button" class="pc-mode-btn active" data-mode="normal">🖼️ Normál</button>
+            <button type="button" class="pc-mode-btn" data-mode="test">🧪 Teszt (Gemini)</button>
+          </div>
+
           <div id="pcProgressWrap" class="pc-progress-wrap" style="display:none">
             <div class="pc-progress-label">
               <span>Haladás</span>
@@ -264,6 +269,18 @@
   </div>
 </div>
 
+<!-- Kísérleti Gemini fordítás-teszt eredménye -->
+<div class="pc-modal-overlay" id="pcGeminiModal" style="display:none" onclick="if(event.target===this) this.style.display='none'">
+  <div class="pc-modal" style="max-width:560px;max-height:80vh;overflow:auto">
+    <h3>🧪 Gemini fordítás-teszt</h3>
+    <p style="color:#888;font-size:.82rem;margin-top:-8px">Csak szöveg-kinyerés + fordítás, minőség-összehasonlításhoz — nem ír vissza képet.</p>
+    <div id="pcGeminiModalBody" style="display:flex;flex-direction:column;gap:10px;margin:14px 0"></div>
+    <div class="pc-modal-actions">
+      <button class="pc-btn pc-btn-secondary" onclick="document.getElementById('pcGeminiModal').style.display='none'">✕ Bezárás</button>
+    </div>
+  </div>
+</div>
+
 <div id="footer"></div>
 <script src="/js/footer.js?v=20260619"></script>
 <script type="module" src="/js/layout-loader.js?v=20260713"></script>
@@ -271,7 +288,7 @@
 <script src="/js/email-verify-modal.js?v=20260808"></script>
 <script src="/js/auth-check.js?v=20260323"></script>
 
-<script type="module" src="/js/padlicrome-main-init.js?v=20260619"></script>
+<script type="module" src="/js/padlicrome-main-init.js?v=20260810"></script>
 
 
 </body>
