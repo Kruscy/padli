@@ -19,7 +19,8 @@ const router = express.Router();
 
 /* ── KONFIG ──────────────────────────────────────────────── */
 const JWT_SECRET     = process.env.MANGA_JWT_SECRET;
-const TRANSLATOR_URL = process.env.MANGA_TRANSLATOR_URL;
+const TORII_API_KEY  = process.env.TORII_API_KEY;
+const TORII_API_URL  = "https://api.toriitranslate.com/api/v2/upload";
 const PROJECT_ROOT   = "/mnt/manga2/padlicrome";
 const MAX_IMAGES     = 30;
 const MAX_FILE_SIZE  = 5 * 1024 * 1024;       // 5MB
@@ -142,6 +143,38 @@ async function downloadImage(url, refererOverride) {
   const buf = await resp.buffer();
   if (buf.length > MAX_FILE_SIZE) throw new Error(`Túl nagy fájl: ${Math.round(buf.length/1024)}KB (max 5MB)`);
   return buf;
+}
+
+/* ── TORII TRANSLATE (Gemini-alapú, felhő API) ───────────── */
+async function translateViaTorii(imageBuffer, filename) {
+  if (!TORII_API_KEY) throw new Error("Nincs beállítva TORII_API_KEY a szerveren");
+
+  const form = new FormData();
+  form.append("file", imageBuffer, { filename, contentType: "image/jpeg" });
+  form.append("target_lang", "hu");
+  form.append("translator", "gemini-3.1-flash-lite");
+  form.append("font", "wildwords");
+  form.append("text_align", "auto");
+  form.append("stroke_disabled", "false");
+  form.append("min_font_size", "6");
+  form.append("bubbles_only", "false");
+
+  const resp = await fetch(TORII_API_URL, {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${TORII_API_KEY}`, ...form.getHeaders() },
+    body: form,
+    timeout: 180000,
+  });
+
+  if (resp.headers.get("success") !== "true") {
+    const errText = await resp.text().catch(() => "");
+    throw new Error(`Torii API hiba: ${errText.slice(0, 300)}`);
+  }
+
+  const data = await resp.json();
+  const imageBase64 = (data.image || "").split(",")[1];
+  if (!imageBase64) throw new Error("Torii API: hiányzó kép a válaszban");
+  return Buffer.from(imageBase64, "base64");
 }
 
 /* ── CHAPTER SCRAPER ─────────────────────────────────────── */
@@ -485,20 +518,7 @@ router.post("/translate/:id", requireAuth, async (req, res) => {
     const origPath = path.join(originalsDir(userId), img.filename);
     if (!fs.existsSync(origPath)) return res.status(404).json({ error: "Eredeti kép hiányzik" });
 
-    const form = new FormData();
-    form.append("image", fs.createReadStream(origPath), { filename: img.filename, contentType: "image/jpeg" });
-
-    const translateRes = await fetch(`${TRANSLATOR_URL}/translate/with-form/image`, {
-      method: "POST", body: form, headers: form.getHeaders(), timeout: 180000,
-    });
-
-    if (!translateRes.ok) {
-      img.translating = false;
-      writeProject(userId, project);
-      return res.status(502).json({ error: "Fordítási hiba" });
-    }
-
-    const pngBuf = await translateRes.buffer();
+    const pngBuf = await translateViaTorii(fs.readFileSync(origPath), img.filename);
     const jpgBuf = await sharp(pngBuf).jpeg({ quality: 92 }).toBuffer();
     fs.writeFileSync(path.join(translatedDir(userId), img.filename), jpgBuf);
 
@@ -514,7 +534,7 @@ router.post("/translate/:id", requireAuth, async (req, res) => {
   } catch (err) {
     img.translating = false;
     writeProject(userId, project);
-    console.error("[PADLICROME] translate:", err);
+    console.error("[PADLICROME] translate:", err.message);
     res.status(500).json({ error: "Szerver hiba" });
   }
 });
@@ -582,7 +602,11 @@ Ha nincs szöveg a képen, üres tömböt ([]) adj vissza.`;
   }
 });
 
-/* ── POST /merge - összefűzés (előfizető, min 2, max 25) ── */
+/* ── POST /merge - összefűzés (előfizető, min 2, max 25) ──
+   A kijelölt képeket sorrendben csoportokba osztja úgy, hogy egyik
+   csoport se lépje túl a MAX_IMG_HEIGHT magasságot (amit a fordító
+   szolgáltatás még elfogad) — így nagyobb kijelölésnél automatikusan
+   több kimeneti kép készül, nem egy óriási. ── */
 router.post("/merge", requireAuth, async (req, res) => {
   const userId = req.authUser.id;
   if (!(await isSubscriber(userId)))
@@ -609,54 +633,87 @@ router.post("/merge", requireAuth, async (req, res) => {
       if (!fs.existsSync(filePath)) continue;
       const meta = await sharp(filePath).metadata();
       if (meta.width > maxWidth) maxWidth = meta.width;
-      metas.push({ filePath, width: meta.width, height: meta.height });
+      metas.push({ img, filePath, width: meta.width, height: meta.height });
     }
 
-    if (!metas.length) return res.status(400).json({ error: "Nincs érvényes kép" });
+    if (metas.length < 2) return res.status(400).json({ error: "Nincs elég érvényes kép" });
 
-    const resized = [];
-    let totalHeight = 0;
     for (const m of metas) {
-      let buf, h;
-      if (m.width !== maxWidth) {
-        h = Math.round(m.height * maxWidth / m.width);
-        buf = await sharp(m.filePath).resize(maxWidth, h).jpeg({ quality: 92 }).toBuffer();
-      } else {
-        buf = fs.readFileSync(m.filePath);
-        h = m.height;
+      m.normHeight = m.width !== maxWidth ? Math.round(m.height * maxWidth / m.width) : m.height;
+    }
+
+    // Sorrendben csoportosítás — egyik csoport se lépje túl a magasság-limitet
+    const batches = [];
+    let current = [];
+    let currentHeight = 0;
+    for (const m of metas) {
+      if (current.length && currentHeight + m.normHeight > MAX_IMG_HEIGHT) {
+        batches.push(current);
+        current = [];
+        currentHeight = 0;
       }
-      resized.push({ buf, h });
-      totalHeight += h;
+      current.push(m);
+      currentHeight += m.normHeight;
+    }
+    if (current.length) batches.push(current);
+
+    const mergedImages = [];
+    const skipped = [];
+
+    for (const batch of batches) {
+      if (batch.length < 2) {
+        // Egyedül maradt kép egy csoportban — nincs mit összefűzni vele, marad ahogy van
+        skipped.push(batch[0].img.name);
+        continue;
+      }
+
+      const resized = [];
+      let totalHeight = 0;
+      for (const m of batch) {
+        let buf, h;
+        if (m.width !== maxWidth) {
+          h = m.normHeight;
+          buf = await sharp(m.filePath).resize(maxWidth, h).jpeg({ quality: 92 }).toBuffer();
+        } else {
+          buf = fs.readFileSync(m.filePath);
+          h = m.height;
+        }
+        resized.push({ buf, h });
+        totalHeight += h;
+      }
+
+      const composite = [];
+      let y = 0;
+      for (const r of resized) {
+        composite.push({ input: r.buf, left: 0, top: y });
+        y += r.h;
+      }
+
+      const mergedBuf = await sharp({
+        create: { width: maxWidth, height: totalHeight, channels: 3, background: { r: 255, g: 255, b: 255 } }
+      }).composite(composite).jpeg({ quality: 92 }).toBuffer();
+
+      const mergedId = Date.now() + "_merged_" + Math.random().toString(36).slice(2, 6);
+      const mergedFilename = mergedId + ".jpg";
+      fs.writeFileSync(path.join(mergedDir(userId), mergedFilename), mergedBuf);
+
+      const batchIds = batch.map(m => m.img.id);
+      const mergedImg = {
+        id: mergedId, filename: mergedFilename,
+        name: `merged_${batch.length}x.jpg`,
+        active: true, translated: false, merged: true,
+        mergedFrom: batchIds,
+      };
+      project.images.push(mergedImg);
+      batchIds.forEach(id => {
+        const img = project.images.find(i => i.id === id);
+        if (img) img.active = false;
+      });
+      mergedImages.push(mergedImg);
     }
 
-    const composite = [];
-    let y = 0;
-    for (const r of resized) {
-      composite.push({ input: r.buf, left: 0, top: y });
-      y += r.h;
-    }
-
-    const mergedBuf = await sharp({
-      create: { width: maxWidth, height: totalHeight, channels: 3, background: { r: 255, g: 255, b: 255 } }
-    }).composite(composite).jpeg({ quality: 92 }).toBuffer();
-
-    const mergedId = Date.now() + "_merged";
-    const mergedFilename = mergedId + ".jpg";
-    fs.writeFileSync(path.join(mergedDir(userId), mergedFilename), mergedBuf);
-
-    const mergedImg = {
-      id: mergedId, filename: mergedFilename,
-      name: `merged_${images.length}x.jpg`,
-      active: true, translated: false, merged: true,
-      mergedFrom: imageIds,
-    };
-    project.images.push(mergedImg);
-    imageIds.forEach(id => {
-      const img = project.images.find(i => i.id === id);
-      if (img) img.active = false;
-    });
     writeProject(userId, project);
-    res.json({ ok: true, image: mergedImg });
+    res.json({ ok: true, images: mergedImages, batchCount: batches.length, skipped });
   } catch (err) {
     console.error("[PADLICROME] merge:", err);
     res.status(500).json({ error: "Összefűzési hiba" });
@@ -697,18 +754,13 @@ router.post("/translate", requireAuth, upload.single("image"), async (req, res) 
   if (points < 1) return res.status(402).json({ error: "Nincs elég pont" });
 
   try {
-    const form = new FormData();
-    form.append("image", imageBuffer, { filename: "image.jpg", contentType: "image/jpeg" });
-    const translateRes = await fetch(`${TRANSLATOR_URL}/translate/with-form/image`, {
-      method: "POST", body: form, headers: form.getHeaders(), timeout: 180000,
-    });
-    if (!translateRes.ok) return res.status(502).json({ error: "Fordítási hiba" });
+    const imageData = await translateViaTorii(imageBuffer, "image.jpg");
     await deductPoint(userId);
-    const imageData = await translateRes.buffer();
     res.setHeader("Content-Type", "image/png");
     res.setHeader("X-Points-Remaining", points - 1);
     res.send(imageData);
   } catch (err) {
+    console.error("[PADLICROME] translate (addon):", err.message);
     res.status(500).json({ error: "Szerver hiba" });
   }
 });

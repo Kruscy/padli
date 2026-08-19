@@ -59,7 +59,11 @@ async function doMerge(imageIds) {
 
   try {
     const result = await api("POST", "/merge", { imageIds });
-    showStatus(`✅ Összefűzés kész! (${imageIds.length} képből 1 lett)`, "success");
+    const n = result.images?.length ?? 1;
+    const msg = n > 1
+      ? `✅ Összefűzés kész! (${imageIds.length} képből ${n} lett — a mérethatár miatt automatikusan szétosztva)`
+      : `✅ Összefűzés kész! (${imageIds.length} képből 1 lett)`;
+    showStatus(msg, "success");
     await loadProject();
   } catch (err) {
     showStatus(`❌ Összefűzési hiba: ${err.message}`, "error");
