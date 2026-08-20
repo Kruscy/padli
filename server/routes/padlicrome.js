@@ -253,16 +253,45 @@ async function scrapeGenericWordPress(chapterUrl) {
   }
 
   // 4. Általános img src - CDN URL-ek szűrésével
+  // (modern, nem klasszikus WP-manga sablonú oldalaknál, pl. asurascans.com,
+  // ez a fallback nemcsak a fejezet-oldalakat találja meg, hanem elszórt
+  // egyéb képeket is — pl. borító-thumbnail egy ajánló/breadcrumb widgetben.
+  // Ezeket a könyvtár-csoportosítással szűrjük ki lentebb.)
   if (imageUrls.size === 0) {
     const allImgs = html.matchAll(/<img[^>]+src="(https?:\/\/[^"]+)"/gi);
+    const candidates = [];
+    const seen = new Set();
     for (const m of allImgs) {
-      if (isImageUrl(m[1]) && isCdnUrl(m[1], chapterUrl)) imageUrls.add(m[1]);
+      if (isImageUrl(m[1]) && isCdnUrl(m[1], chapterUrl) && !seen.has(m[1])) {
+        seen.add(m[1]);
+        candidates.push(m[1]);
+      }
     }
+    filterByDirectoryGroup(candidates).forEach(u => imageUrls.add(u));
   }
 
   if (imageUrls.size === 0) throw new Error("Nem találtam képeket az oldalon. Lehet hogy JavaScript-tel rendereli a képeket.");
 
   return [...imageUrls];
+}
+
+// Kiszűri az elszórt (más mappából jövő, pl. borító-thumbnail) képeket:
+// ha van legalább egy olyan mappa, ahonnan több kép is jött (ez lesz a
+// tényleges fejezet-mappa), csak azokat tartjuk meg.
+function filterByDirectoryGroup(urls) {
+  const dirCounts = new Map();
+  const dirOf = new Map();
+  for (const u of urls) {
+    try {
+      const p = new URL(u).pathname;
+      const dir = p.slice(0, p.lastIndexOf("/"));
+      dirOf.set(u, dir);
+      dirCounts.set(dir, (dirCounts.get(dir) || 0) + 1);
+    } catch { dirOf.set(u, null); }
+  }
+  const hasMultiImageGroup = [...dirCounts.values()].some(c => c > 1);
+  if (!hasMultiImageGroup) return urls;
+  return urls.filter(u => (dirCounts.get(dirOf.get(u)) || 0) > 1);
 }
 
 function isImageUrl(url) {
