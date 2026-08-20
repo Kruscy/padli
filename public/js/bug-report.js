@@ -7,6 +7,7 @@ let allChapterBugs = [];
 window.currentUser = window.currentUser || null;
 let activeTab = 'open';
 let activeTypeFilter = '';
+let activeTranslatorFilter = '';
 let expandedManga = {};
 let expandedChapterBugs = {};
 let expandedReports = {};
@@ -105,6 +106,7 @@ function closeImageLightbox() {
   });
 
   await Promise.all([loadBugReports(), loadChapterBugs()]);
+  populateTranslatorFilter();
 
   // Ha URL-ben van id, nyissa ki azt a reportot
   const urlId = new URLSearchParams(location.search).get('id');
@@ -157,6 +159,7 @@ function filterByTab(reports) {
   if (activeTab === 'fixed')  filtered = filtered.filter(r => !r.is_closed &&  (r.fixes?.length > 0));
   if (activeTab === 'closed') filtered = filtered.filter(r =>  r.is_closed);
   if (activeTypeFilter) filtered = filtered.filter(r => (r.type || 'other') === activeTypeFilter);
+  if (activeTranslatorFilter) filtered = filtered.filter(r => (r.translator || []).includes(activeTranslatorFilter));
   return filtered;
 }
 
@@ -166,6 +169,27 @@ window.setTypeFilter = function(value) {
   if (sel) sel.value = value;
   renderBugReports();
 };
+
+window.setTranslatorFilter = function(value) {
+  activeTranslatorFilter = value;
+  const sel = document.getElementById('translatorFilterSelect');
+  if (sel) sel.value = value;
+  renderBugReports();
+};
+
+/* Fordítók legördülő feltöltése az összes betöltött hibajegyből/hibás részből */
+function populateTranslatorFilter() {
+  const sel = document.getElementById('translatorFilterSelect');
+  if (!sel) return;
+  const names = new Set();
+  allBugReports.forEach(r => (r.translator || []).forEach(t => names.add(t)));
+  allChapterBugs.forEach(r => (r.translator || []).forEach(t => names.add(t)));
+  const sorted = [...names].sort((a, b) => a.localeCompare(b, 'hu'));
+  const current = sel.value;
+  sel.innerHTML = '<option value="">Összes fordító</option>' +
+    sorted.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+  if (sorted.includes(current)) sel.value = current;
+}
 
 /* ──────────────────────────────────────────────────────────
    CSOPORTOSÍTÁS
@@ -203,6 +227,7 @@ function renderBugReports() {
     const isAdmin = window.currentUser?.role === 'admin';
     let chapterFixed = allChapterBugs.filter(r => !r.is_fixed && (r.fixes || []).length > 0);
     if (activeTypeFilter) chapterFixed = chapterFixed.filter(r => (r.type || 'other') === activeTypeFilter);
+    if (activeTranslatorFilter) chapterFixed = chapterFixed.filter(r => (r.translator || []).includes(activeTranslatorFilter));
     if (chapterFixed.length) {
       html += `<div class="section-header" style="margin:20px 0 10px;color:#a78bfa;font-size:.9rem;">📕 Egész rész javítások (jóváhagyásra várnak)</div>`;
       chapterFixed.forEach(r => { html += renderChapterBugCard(r, isAdmin, true); });
@@ -229,6 +254,7 @@ function renderChapterBugReports(container) {
   const isAdmin = window.currentUser?.role === 'admin';
   let all = allChapterBugs.filter(r => !r.is_fixed);
   if (activeTypeFilter) all = all.filter(r => (r.type || 'other') === activeTypeFilter);
+  if (activeTranslatorFilter) all = all.filter(r => (r.translator || []).includes(activeTranslatorFilter));
 
   if (!all.length) {
     container.innerHTML = `<div class="empty"><div class="empty-icon">📭</div><p>Nincs rész szintű hibajegy</p></div>`;

@@ -30,6 +30,7 @@ router.get("/", requireLogin, async (req, res) => {
     const { manga_slug, chapter, fixed, type } = req.query;
     let query = `
       SELECT cbr.*, m.title AS manga_title_db, u.username AS fixed_by_name_db, l.name AS library_name,
+        COALESCE(m.uploaders, '{}') AS translator,
         COALESCE((
           SELECT json_agg(json_build_object(
             'id', bf.id,

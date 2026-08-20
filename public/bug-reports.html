@@ -52,13 +52,16 @@
     </button>
   </div>
 
-  <!-- Típus szűrő -->
-  <div style="margin:10px 0 4px">
+  <!-- Típus + fordító szűrő -->
+  <div style="margin:10px 0 4px;display:flex;gap:8px;flex-wrap:wrap">
     <select id="typeFilterSelect" onchange="setTypeFilter(this.value)" style="background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:8px;padding:6px 10px;font-size:.85rem">
       <option value="">Összes típus</option>
       <option value="english_remained">🇬🇧 Angol maradt</option>
       <option value="wrong_chapter">❌ Rossz fejezet</option>
       <option value="other">💬 Egyéb</option>
+    </select>
+    <select id="translatorFilterSelect" onchange="setTranslatorFilter(this.value)" style="background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:8px;padding:6px 10px;font-size:.85rem">
+      <option value="">Összes fordító</option>
     </select>
   </div>
 
@@ -100,7 +103,7 @@
 <script src="/js/sidebar.js?v=20260204"></script>
 <script src="/js/email-verify-modal.js?v=20260808"></script>
 <script src="/js/auth-check.js?v=20260323"></script>
-<script src="/js/bug-report.js?v=20260713f"></script>
+<script src="/js/bug-report.js?v=20260820"></script>
 <script src="/js/bug-reports-init.js?v=20260619"></script>
 
 <!-- PONTRENDSZER MODAL -->
