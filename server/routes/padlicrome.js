@@ -24,7 +24,7 @@ const TORII_API_URL  = "https://api.toriitranslate.com/api/v2/upload";
 const PROJECT_ROOT   = "/mnt/manga2/padlicrome";
 const MAX_IMAGES     = 30;
 const MAX_FILE_SIZE  = 5 * 1024 * 1024;       // 5MB
-const MAX_IMG_HEIGHT = 20000;                  // px - manhwa 2x ésszerű max
+const MAX_IMG_HEIGHT = 65000;                  // px - a JPEG formátum kemény határa 65535px, ez alatt biztonsági ráhagyással; Torii API-val élesben tesztelve idáig működik
 const MAX_IMG_WIDTH  = 10000;                  // px
 
 const USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
@@ -35,6 +35,12 @@ const originalsDir  = id => path.join(userDir(id), "originals");
 const translatedDir = id => path.join(userDir(id), "translated");
 const mergedDir     = id => path.join(userDir(id), "merged");
 const projectFile   = id => path.join(userDir(id), "project.json");
+
+// Egy kép forrás-elérési útja: összefűzött kép esetén a merged/ mappában van,
+// egyébként az originals/-ban.
+function sourcePath(userId, img) {
+  return path.join(img.merged ? mergedDir(userId) : originalsDir(userId), img.filename);
+}
 
 function ensureUserDirs(userId) {
   [userDir(userId), originalsDir(userId), translatedDir(userId), mergedDir(userId)]
@@ -544,7 +550,7 @@ router.post("/translate/:id", requireAuth, async (req, res) => {
   writeProject(userId, project);
 
   try {
-    const origPath = path.join(originalsDir(userId), img.filename);
+    const origPath = sourcePath(userId, img);
     if (!fs.existsSync(origPath)) return res.status(404).json({ error: "Eredeti kép hiányzik" });
 
     const pngBuf = await translateViaTorii(fs.readFileSync(origPath), img.filename);
@@ -581,7 +587,7 @@ router.post("/translate-gemini/:id", requireAuth, async (req, res) => {
   if (!img) return res.status(404).json({ error: "Kép nem található" });
 
   try {
-    const origPath = path.join(originalsDir(userId), img.filename);
+    const origPath = sourcePath(userId, img);
     if (!fs.existsSync(origPath)) return res.status(404).json({ error: "Eredeti kép hiányzik" });
 
     const imgBuffer = fs.readFileSync(origPath);
@@ -657,8 +663,7 @@ router.post("/merge", requireAuth, async (req, res) => {
     const metas = [];
     for (const img of images) {
       const transPath = path.join(translatedDir(userId), img.filename);
-      const origPath  = path.join(originalsDir(userId), img.filename);
-      const filePath  = fs.existsSync(transPath) ? transPath : origPath;
+      const filePath  = fs.existsSync(transPath) ? transPath : sourcePath(userId, img);
       if (!fs.existsSync(filePath)) continue;
       const meta = await sharp(filePath).metadata();
       if (meta.width > maxWidth) maxWidth = meta.width;
@@ -970,8 +975,7 @@ router.post("/submit-bug-fix", requireAuth, async (req, res) => {
 
     // Fordított verzió preferált, ha nincs akkor az eredeti
     const translatedPath = path.join(translatedDir(userId), img.filename);
-    const originalPath   = path.join(originalsDir(userId), img.filename);
-    const srcPath = fs.existsSync(translatedPath) ? translatedPath : originalPath;
+    const srcPath = fs.existsSync(translatedPath) ? translatedPath : sourcePath(userId, img);
     if (!fs.existsSync(srcPath)) return res.status(404).json({ error: "Forráskép nem található" });
 
     let fixId = null;

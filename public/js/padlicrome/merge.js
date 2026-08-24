@@ -59,11 +59,23 @@ async function doMerge(imageIds) {
 
   try {
     const result = await api("POST", "/merge", { imageIds });
-    const n = result.images?.length ?? 1;
-    const msg = n > 1
-      ? `✅ Összefűzés kész! (${imageIds.length} képből ${n} lett — a mérethatár miatt automatikusan szétosztva)`
-      : `✅ Összefűzés kész! (${imageIds.length} képből 1 lett)`;
-    showStatus(msg, "success");
+    const n = result.images?.length ?? 0;
+    let msg, kind;
+    if (n === 0) {
+      msg = `⚠️ Egyik kiválasztott kép sem fér bele párban sem a mérethatárba (túl magasak egyenként is) — nem sikerült összefűzni semmit, a képek változatlanok maradtak.`;
+      kind = "warn";
+    } else if (n > 1) {
+      msg = `✅ Összefűzés kész! (${imageIds.length} képből ${n} lett — a mérethatár miatt automatikusan szétosztva)`;
+      kind = "success";
+    } else {
+      const mergedCount = result.images[0]?.mergedFrom?.length || imageIds.length;
+      msg = `✅ Összefűzés kész! (${mergedCount} képből 1 lett)`;
+      kind = "success";
+    }
+    if (result.skipped?.length && n > 0) {
+      msg += ` (${result.skipped.length} kép önmagában túl magas volt egy társhoz, változatlan maradt)`;
+    }
+    showStatus(msg, kind);
     await loadProject();
   } catch (err) {
     showStatus(`❌ Összefűzési hiba: ${err.message}`, "error");

@@ -16,9 +16,10 @@ export async function downloadAllZip() {
   if (btn) { btn.disabled = true; btn.textContent = "⏳ ZIP készítés..."; }
 
   try {
-    // Dinamikusan betöltjük a JSZip-et ha kell
+    // Dinamikusan betöltjük a JSZip-et ha kell (saját szerverről — a külső
+    // CDN-t a CSP script-src blokkolta volna, "ZIP hiba: undefined"-et okozva)
     if (!window.JSZip) {
-      await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js");
+      await loadScript("/js/vendor/jszip.min.js?v=20260824");
     }
 
     const zip = new JSZip();
@@ -42,7 +43,7 @@ export async function downloadAllZip() {
     a.click();
     URL.revokeObjectURL(a.href);
   } catch (err) {
-    alert("ZIP hiba: " + err.message);
+    alert("ZIP hiba: " + (err?.message || "nem sikerült betölteni a ZIP-készítő könyvtárat, próbáld frissíteni az oldalt"));
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = "📦 ZIP letöltés"; }
   }
