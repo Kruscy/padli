@@ -7,6 +7,7 @@
     bug_rejected: { icon: "❌" },
     patreon_gift: { icon: "🎁" },
     patreon_won:  { icon: "🏆" },
+    points_gift:  { icon: "🎁" },
     default:      { icon: "🔔" },
   };
 
