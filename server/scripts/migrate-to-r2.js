@@ -25,8 +25,34 @@ const pool = new pg.Pool({
   password: process.env.PGPASSWORD,
 });
 
-const CONCURRENCY = 30; // párhuzamos feltöltések száma
+const CONCURRENCY = 6; // párhuzamos feltöltések száma (3GB-os konténeren 30 túl sok volt)
 const BUCKET = process.env.R2_BUCKET_NAME;
+
+/* ================= LOCK ================= */
+// Kizárja, hogy két migrate-to-r2 példány fusson egyszerre, és amíg ez a
+// lock él, a fő szerver saját R2 sync sora (uploader.js) sem indít új
+// feltöltést — a kettő együtt vitte a memóriát a padlóra.
+const LOCK = "/tmp/padlizsanfansub.r2migrate.lock";
+
+if (fs.existsSync(LOCK)) {
+  const pid = parseInt(fs.readFileSync(LOCK, "utf8").trim(), 10);
+  try {
+    process.kill(pid, 0); // létezik-e még a folyamat
+    console.log("⏳ migrate-to-r2 már fut, kilépek");
+    process.exit(0);
+  } catch {
+    fs.unlinkSync(LOCK); // stale lock
+  }
+}
+
+fs.writeFileSync(LOCK, process.pid.toString());
+
+const cleanupLock = () => {
+  if (fs.existsSync(LOCK)) fs.unlinkSync(LOCK);
+};
+process.on("exit", cleanupLock);
+process.on("SIGINT", () => process.exit(0));
+process.on("SIGTERM", () => process.exit(0));
 const IMAGE_EXTS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"]);
 
 const r2 = new S3Client({

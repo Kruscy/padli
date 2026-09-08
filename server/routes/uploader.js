@@ -39,12 +39,18 @@ const r2SyncQueue = [];
 let r2SyncActive = 0;
 const R2_SYNC_CONCURRENCY = 2;
 
+// A scan.js által indított teljes-könyvtár migráció (migrate-to-r2.js) ezt a
+// lock fájlt tartja fenn, amíg fut. Amíg él, itt nem indítunk új feltöltést,
+// hogy a két folyamat ne terhelje egyszerre a memóriát/hálózatot.
+const R2_MIGRATE_LOCK = "/tmp/padlizsanfansub.r2migrate.lock";
+
 function enqueueR2Sync(task) {
   r2SyncQueue.push(task);
   drainR2Queue();
 }
 
 function drainR2Queue() {
+  if (fs.existsSync(R2_MIGRATE_LOCK)) return; // migrate-to-r2.js fut, várunk
   while (r2SyncActive < R2_SYNC_CONCURRENCY && r2SyncQueue.length > 0) {
     const task = r2SyncQueue.shift();
     r2SyncActive++;
@@ -54,6 +60,10 @@ function drainR2Queue() {
     });
   }
 }
+
+// Ha a migráció lock-ja miatt állt meg a sor, új feltöltés hiányában is
+// induljon újra, amint a lock felszabadul.
+setInterval(drainR2Queue, 10_000);
 
 const router = express.Router();
 const BASE_DIR = "/mnt/manga/Kavita";
