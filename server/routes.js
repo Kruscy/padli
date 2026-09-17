@@ -12,6 +12,7 @@ import settingsRoutes from "./routes/settings.js";
 import patreonRoutes from "./routes/patreon.js";
 import { getNewReleasesCache, setNewReleasesCache, clearNewReleasesCache} from "./cache/new-releases.js";
 import { getNewMangaCache } from "./cache/new-manga.js";
+import { resolveAdultMode, ADULT_GENRE_EXISTS_SQL } from "./lib/age.js";
 import mangaRoutes from "./routes/manga.js";
 import releasesRoutes from "./routes/releases.js";
 import pollRoutes from "./routes/polls.js";
@@ -455,7 +456,22 @@ router.post("/want/:slug", requireLogin, async (req, res) => {
 router.use("/", mangaRoutes);          // /manga, /chapters stb
 router.use("/", animeSubtitlesRoutes); // /anime, /admin/anime stb
 router.use(releasesRoutes);       // /new-releases
-router.get("/new-manga", (req, res) => {
+router.get("/new-manga", async (req, res) => {
+  // A cache alapból NEM tartalmaz felnőtt (Hentai/Ecchi) mangát (lásd
+  // server/scan.js buildNewMangaCache). 18+ módban (?adult=1, csak
+  // igazoltan 18+ usernek) élő lekérdezéssel adjuk vissza CSAK a felnőtt
+  // legújabb mangákat, nem a cache-t.
+  const adultMode = await resolveAdultMode(pool, req);
+  if (adultMode) {
+    const { rows } = await pool.query(`
+      SELECT m.slug, m.title, m.cover_url
+      FROM manga m
+      WHERE ${ADULT_GENRE_EXISTS_SQL}
+      ORDER BY m.id DESC
+      LIMIT 30
+    `);
+    return res.json(rows);
+  }
   const data = getNewMangaCache();
   res.json(data || []);
 });

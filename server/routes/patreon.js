@@ -74,24 +74,36 @@ router.get("/status", async (req, res) => {
   const userId = req.session.user.id;
 
   const { rows } = await pool.query(
-    `SELECT tier, active, payment_source, access_token
+    `SELECT tier, active, payment_source, access_token, patreon_raw_active, patreon_raw_tier
      FROM patreon_status WHERE user_id = $1 LIMIT 1`,
     [userId]
   );
 
   if (!rows.length) {
-    return res.json({ connected: false });
+    return res.json({ connected: false, hasRecord: false });
   }
 
   const row = rows[0];
   // Patreon-osan összekapcsoltnak csak akkor számít, ha van access_token (OAuth)
   const patreonConnected = !!row.access_token;
 
+  // stripeActive / patreonRealActive: két FÜGGETLEN csatorna állapota — az
+  // "active" mező csak azt mondja meg, melyik adja jelenleg a site-hozzáférést
+  // (lásd patreon-sync.js payment_source logika), nem azt, hogy a másik
+  // csatornán is fut-e párhuzamosan egy fizetés.
+  const stripeActive = row.payment_source === "stripe" && !!row.active;
+  const patreonRealActive = !!row.patreon_raw_active;
+
   res.json({
     connected: patreonConnected,
+    hasRecord: true,
     tier: row.tier,
     active: row.active,
     payment_source: row.payment_source,
+    stripeActive,
+    patreonRealActive,
+    patreonRealTier: row.patreon_raw_tier,
+    doublePayment: stripeActive && patreonRealActive,
   });
 });
 
@@ -123,23 +135,23 @@ router.get("/callback", async (req, res) => {
     console.error("❌ No session in callback");
     return res.redirect("/login.html");
   }
- 
+
   const { code, error } = req.query;
   const userId = req.session.user.id;
-  
+
   if (error) {
     console.error("❌ Patreon OAuth error:", error);
     return res.redirect(`/settings.html?patreon=error&reason=${encodeURIComponent(error)}`);
   }
-  
+
   if (!code) {
     console.error("❌ No code parameter");
     return res.redirect("/settings.html?patreon=error&reason=no_code");
   }
- 
+
   try {
     console.log("🔵 Patreon callback started for user:", userId);
- 
+
     /* TOKEN EXCHANGE */
     const tokenRes = await fetch("https://www.patreon.com/api/oauth2/token", {
       method: "POST",
@@ -152,18 +164,18 @@ router.get("/callback", async (req, res) => {
         redirect_uri: `${process.env.BASE_URL}/api/patreon/callback`
       })
     });
- 
+
     if (!tokenRes.ok) {
       const errorText = await tokenRes.text();
       console.error("❌ Token exchange failed:", errorText);
       return res.redirect("/settings.html?patreon=error&reason=token_exchange");
     }
- 
+
     const tokenData = await tokenRes.json();
     const accessToken = tokenData.access_token;
- 
+
     console.log("✅ Access token received");
- 
+
     /* USER IDENTITY */
     const meRes = await fetch(
       "https://www.patreon.com/api/oauth2/v2/identity",
@@ -189,6 +201,19 @@ router.get("/callback", async (req, res) => {
         `UPDATE patreon_status SET access_token = $1, last_sync = NOW() WHERE user_id = $2`,
         [accessToken, userId]
       );
+    } else if (existingRows.length) {
+      // A usernek már VAN (nem Stripe) Patreon-sora — pl. korábban egy
+      // másik Patreon-fiókot kötött össze, most egy másikkal csatlakozik
+      // újra. A user_id-n van UNIQUE index, ezért itt a meglévő sort kell
+      // frissíteni (nem plain INSERT-tel próbálkozni — az "ON CONFLICT
+      // (patreon_user_id)" lent csak az ellenkező esetet, egy már máshoz
+      // rendelt patreon_user_id-t kezelné, nem ezt).
+      await pool.query(
+        `UPDATE patreon_status
+         SET patreon_user_id = $1, active = $2, tier = $3, access_token = $4, last_sync = NOW()
+         WHERE user_id = $5`,
+        [patreonUserId, active, tier, accessToken, userId]
+      );
     } else {
       await pool.query(
         `INSERT INTO patreon_status (patreon_user_id, user_id, active, tier, access_token, last_sync)
@@ -206,7 +231,7 @@ router.get("/callback", async (req, res) => {
     console.log("✅ PATREON CALLBACK SUCCESS");
 
     res.redirect("/settings.html?patreon=connected");
- 
+
   } catch (err) {
     console.error("❌ PATREON CALLBACK ERROR:", err);
     console.error("   Stack:", err.stack);
@@ -231,6 +256,14 @@ router.post("/sync", async (req, res) => {
 
   try {
     const { active, tier } = await fetchMembershipWithToken(rows[0].access_token);
+
+    // A nyers Patreon-állapotot payment_source-tól függetlenül mindig frissítjük,
+    // hogy a settings oldal dupla-fizetés figyelmeztetése ne csak az óránkénti
+    // cronra várjon, amikor a user saját kérésre kattint a frissítésre.
+    await pool.query(
+      `UPDATE patreon_status SET patreon_raw_active = $1, patreon_raw_tier = $2 WHERE user_id = $3`,
+      [active, tier, req.session.user.id]
+    );
 
     // Csak Patreon fizetőknél frissítjük az active/tier mezőt (ne írjuk felül a Stripe tier-t)
     if (rows[0].payment_source !== "stripe") {

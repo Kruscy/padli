@@ -6,6 +6,7 @@
     <a href="/" class="logo">
       <img src="/assets/logo.png" alt="PadlizsanFanSub">
       <span>PadlizsanFanSub</span>
+      <span id="adultBadge" class="logo-adult-badge hidden" title="18+ tartalom mód">18</span>
     </a>
   </div>
 
@@ -22,10 +23,17 @@
   <div class="topbar-right">
 
     <!-- Patreon (asztali, ha van hely) -->
-    <a href="https://patreon.com/Padlizsanfansub" target="_blank" rel="noopener" class="topbar-community-btn topbar-patreon">
+    <a id="topbarPatreonBtn" href="https://patreon.com/Padlizsanfansub" target="_blank" rel="noopener" class="topbar-community-btn topbar-patreon">
       <img src="/assets/pat2.png" alt="Patreon">
       <span>Patreon</span>
     </a>
+
+    <!-- 18+ kapcsoló — csak igazolt 18+ usereknek, a Patreon gomb helyén -->
+    <label id="adultModeToggle" class="topbar-adult-toggle hidden" title="18+ tartalom mutatása">
+      <input type="checkbox" id="adultModeCheckbox">
+      <span class="adult-toggle-track"><span class="adult-toggle-thumb"></span></span>
+      <span class="adult-toggle-label">18+</span>
+    </label>
 
     <!-- Discord (asztali, ha van hely) -->
     <a href="https://discord.gg/Hq6SysgZXC" target="_blank" rel="noopener" class="topbar-community-btn topbar-discord">
@@ -85,6 +93,13 @@
         <!-- UPLOADER -->
         <button id="uploaderBtn" type="button" class="settings-action hidden">📤 Feltöltő</button>
         <button id="scanBtn" class="settings-action hidden" type="button">🔄 Scan library</button>
+
+        <!-- 18+ kapcsoló — csak igazolt 18+ usereknek (mobil, dropdown menü) -->
+        <label id="adultModeToggleMobile" class="settings-menu-item adult-toggle-mobile hidden">
+          <span>🔞 18+ tartalom</span>
+          <input type="checkbox" id="adultModeCheckboxMobile">
+          <span class="adult-toggle-track"><span class="adult-toggle-thumb"></span></span>
+        </label>
 
         <!-- Közösség (dropdown-ban is marad mobilra) -->
         <div class="settings-divider"></div>

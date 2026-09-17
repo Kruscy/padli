@@ -401,7 +401,7 @@ async function searchLocalDB(searchTerm) {
   if (cached !== null) return cached;
   try {
     const { rows } = await dbPool.query(
-      "SELECT m.title, m.slug, m.status, m.average_score, COUNT(DISTINCT c.id) AS chapter_count " +
+      "SELECT m.title, m.slug, m.status, m.average_score, m.description, COUNT(DISTINCT c.id) AS chapter_count " +
       "FROM manga m LEFT JOIN chapter c ON c.manga_id = m.id " +
       "WHERE m.title ILIKE $1 GROUP BY m.id LIMIT 1",
       ["%" + searchTerm + "%"]
@@ -424,7 +424,7 @@ async function searchLocalDBFuzzy(searchTerm) {
       ? config.search.fuzzyThresholdShort
       : config.search.fuzzyThreshold;
     const { rows } = await dbPool.query(
-      "SELECT m.title, m.slug, m.status, m.average_score, COUNT(DISTINCT c.id) AS chapter_count, " +
+      "SELECT m.title, m.slug, m.status, m.average_score, m.description, COUNT(DISTINCT c.id) AS chapter_count, " +
       "similarity(m.title, $1) AS sim FROM manga m LEFT JOIN chapter c ON c.manga_id = m.id " +
       "WHERE similarity(m.title, $1) > " + threshold + " GROUP BY m.id ORDER BY sim DESC LIMIT 1",
       [searchTerm]
@@ -903,7 +903,8 @@ function buildContext(local, anilist, jikan, mangadex, kitsu, shikimori) {
   if (local) {
     const chaps = local.chapter_count > 0 ? local.chapter_count + " fejezet olvasható nálunk" : "nincs feltöltve fejezet";
     const score = local.average_score ? " | " + (local.average_score / 10).toFixed(1) + "/10" : "";
-    ctx += "\n[PadliDB (SAJÁT OLDALUNK): \"" + local.title + "\" MEGVAN – " + chaps + " | " + (local.status || "") + score + "]";
+    const localDesc = local.description ? " | Leírás: " + local.description.slice(0, 400) : "";
+    ctx += "\n[PadliDB (SAJÁT OLDALUNK): \"" + local.title + "\" MEGVAN – " + chaps + " | " + (local.status || "") + score + localDesc + "]";
   }
   const aniItem = anilist?.anime || anilist?.manga;
   if (aniItem) {
@@ -912,7 +913,7 @@ function buildContext(local, anilist, jikan, mangadex, kitsu, shikimori) {
     const score = aniItem.averageScore ? (aniItem.averageScore / 10).toFixed(1) + "/10" : "N/A";
     const format = aniItem.format ? " [" + aniItem.format + "]" : "";
     const count = aniItem.episodes ? aniItem.episodes + " ep" : aniItem.chapters ? aniItem.chapters + " fejezet" : "";
-    const desc = (aniItem.description || "").substring(0, 120);
+    const desc = (aniItem.description || "").substring(0, 250);
     ctx += "\n[AniList: " + type + format + " – \"" + title + "\" | " + score + " | " + count + " | " + aniItem.status + " | " + (aniItem.genres || []).slice(0, 3).join(", ") + " | " + desc + "...]";
   }
   if (jikan)     ctx += "\n[MAL: " + jikan.type + " – \"" + jikan.title + "\" | " + jikan.score + " | " + jikan.count + " | " + jikan.status + "]";
@@ -1383,14 +1384,21 @@ export async function handleChatMessageForAI(msg, broadcastFn) {
     console.log(LOG + " Cooldown: " + author); return;
   }
 
-  const isOffTopic = !config.mangaAnimeKeywords.some(w => content.toLowerCase().includes(w));
+  // A "padli" szó maga is szerepel a mangaAnimeKeywords listában (pl. "mennyi
+  // van fent a padlin" jogos manga-utalás) — de egy közvetlen megszólításnál
+  // a szöveg szinte mindig tartalmazza a megszólító "padli" szót, ami emiatt
+  // önmagában mindig on-topic-nak minősítené, és a beszélgetés soha nem
+  // futhatna a lazább off-topic ágon. A topic-ellenőrzéshez ezért a
+  // megszólító prefixet levágjuk a szövegből.
+  const contentForTopicCheck = content.replace(/padli[,]?\s*/gi, "").trim();
+  const isOffTopic = !config.mangaAnimeKeywords.some(w => contentForTopicCheck.toLowerCase().includes(w));
 
   if (isDirectMention(content)) {
     if (isOffTopic) {
       padliLog({ event: "offtopic", query: content, author });
       // Off-topic: ne fix szöveg, hanem az Ollama lazán reagál
       const offReply = await askLLM([
-        { role: "system", content: getSystemPrompt() + "\nHa nem manga/anime témáról kérdeznek: lazán reagálj, hülyéskedj ha kell, tereld vissza a témára. NE ismételd vissza amit a user írt. Max 1-2 mondat." },
+        { role: "system", content: getSystemPrompt() + "\nHa nem manga/anime témáról kérdeznek: reagálj rá lazán és természetesen, mint egy normális beszélgetésben, hülyéskedj ha kell – NE erőltesd vissza mindig a mangát/manhwát. NE ismételd vissza amit a user írt. Max 1-2 mondat." },
         { role: "user", content: "Reagálj erre természetesen és lazán, NE idézd vissza: " + content.replace(/padli[,]?\s*/gi,"").trim() }
       ]);
       if (offReply) {

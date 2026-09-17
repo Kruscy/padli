@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="/css/sidebar.css?v=20260119">
 <link rel="stylesheet" href="/css/search.css?v=20260619">
 <link rel="stylesheet" href="/css/grid.css?v=20260119">
-<link rel="stylesheet" href="/css/header.css?v=20260619">
+<link rel="stylesheet" href="/css/header.css?v=20260915e">
 <link rel="stylesheet" href="/css/settings.css?v=20260619">
 <link rel="stylesheet" href="/css/footer.css?v=20260405">
 
@@ -75,6 +75,15 @@
 <section id="tab-patreon" class="tab active">
   <h2>💜 Előfizetés</h2>
   <p style="color:#a0a0b0;margin-bottom:20px">Támogasd az oldalt és kapj exkluzív hozzáférést!</p>
+
+  <!-- ÁTTEKINTÉS: melyik csatornán aktív az előfizetés -->
+  <div id="sub-overview-box" class="patreon-box hidden" style="margin-bottom:16px">
+    <p style="margin:0 0 8px"><b>💳 Bankkártyás (Stripe) előfizetés:</b> <span id="ovStripeStatus"></span></p>
+    <p style="margin:0"><b>💜 Valódi Patreon-oldali tagság:</b> <span id="ovPatreonStatus"></span></p>
+  </div>
+  <div id="double-payment-warning" class="hidden" style="background:#3a2a10;border:1px solid #f59e0b;border-radius:10px;padding:14px 18px;margin-bottom:20px;color:#fbbf24;font-size:0.88rem;line-height:1.6">
+    ⚠️ <b>Úgy tűnik, kétszer fizetsz elő!</b> Jelenleg mind a bankkártyás (Stripe), mind a valódi Patreon-oldali előfizetésed aktív. A juttatásokhoz csak egyre van szükség — mondd le az egyiket, hogy ne fizess feleslegesen duplán.
+  </div>
 
   <!-- STRIPE ELŐFIZETÉS -->
   <div style="margin-bottom:28px">
@@ -202,7 +211,7 @@
 <script src="/js/anilist-settings.js?v=20260325"></script>
 <script src="/js/patreon-settings.js?v=20260619"></script>
 <script src="/js/stripe-settings.js?v=20260619"></script>
-<script type="module" src="/js/layout-loader.js?v=20260713"></script>
+<script type="module" src="/js/layout-loader.js?v=20260915d"></script>
 <script src="/js/sidebar.js?v=20260204"></script>
 <script src="/js/email-verify-modal.js?v=20260808"></script>
 <script src="/js/auth-check.js?v=20260323"></script>

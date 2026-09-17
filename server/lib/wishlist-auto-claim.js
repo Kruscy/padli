@@ -26,18 +26,34 @@ export async function resolveUploaderUserId(uploaderName) {
   return null;
 }
 
-/* ── Automatikus claim: ha egy manga anilist_id-je egyezik egy
-   kívánságlista-tétellel, a manga.uploaders feltöltőit (ha
-   feloldhatók egy users.id-ra) automatikusan "dolgozik rajta"
-   státuszba tesszük, és értesítjük a kérőt + lájkolókat — pont
-   úgy, mintha egy admin claimelte volna. ── */
+/* ── Automatikus claim: ha egy manga anilist_id/mal_id/mangadex_id-je
+   egyezik egy kívánságlista-tétellel (attól függően, melyik forrásból
+   származik a manga metaadata, ill. a wishlist-tétel), a
+   manga.uploaders feltöltőit (ha feloldhatók egy users.id-ra)
+   automatikusan "dolgozik rajta" státuszba tesszük, és értesítjük a
+   kérőt + lájkolókat — pont úgy, mintha egy admin claimelte volna. ── */
 export async function autoClaimWishlistForManga(manga) {
   const result = { claimed: [], skipped: [], noWishlistMatch: false };
-  if (!manga.anilist_id || !manga.uploaders?.length) return result;
+  if ((!manga.anilist_id && !manga.mal_id && !manga.mangadex_id) || !manga.uploaders?.length) return result;
+
+  const conditions = [];
+  const params = [];
+  if (manga.anilist_id) {
+    params.push(manga.anilist_id);
+    conditions.push(`(source = 'anilist' AND anilist_id = $${params.length})`);
+  }
+  if (manga.mal_id) {
+    params.push(manga.mal_id);
+    conditions.push(`(source = 'jikan' AND mal_id = $${params.length})`);
+  }
+  if (manga.mangadex_id) {
+    params.push(manga.mangadex_id);
+    conditions.push(`(source = 'mangadex' AND mangadex_id = $${params.length})`);
+  }
 
   const { rows: wlRows } = await pool.query(
-    `SELECT id, title FROM wishlist WHERE anilist_id = $1`,
-    [manga.anilist_id]
+    `SELECT id, title FROM wishlist WHERE ${conditions.join(" OR ")}`,
+    params
   );
   if (!wlRows.length) {
     result.noWishlistMatch = true;

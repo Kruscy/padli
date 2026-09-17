@@ -1,5 +1,7 @@
 let isAdmin = false;
 let anilistToSlug = {};
+let malToSlug = {};
+let mangadexToSlug = {};
 let allWishlistData = [];
 
 /* ================= INIT ================= */
@@ -12,12 +14,14 @@ let allWishlistData = [];
       isAdmin = true;
     }
   }
-  
+
   try {
     const mlRes = await fetch("/api/manga-list");
     const mlData = await mlRes.json();
     Object.entries(mlData).forEach(([slug, data]) => {
       if (data.anilist_id) anilistToSlug[data.anilist_id] = slug;
+      if (data.mal_id) malToSlug[data.mal_id] = slug;
+      if (data.mangadex_id) mangadexToSlug[data.mangadex_id] = slug;
     });
   } catch {}
 
@@ -175,38 +179,56 @@ input.addEventListener("input", () => {
 });
 
 async function search(q) {
-  const res = await fetch(`/api/anilist/search?q=${encodeURIComponent(q)}`);
+  // Kívánságlista-specifikus végpont: ha az AniList hibázik/rate-limitel,
+  // szerver oldalon Jikan (MAL) fallback-kel ad találatokat.
+  const res = await fetch(`/api/anilist/search-wishlist?q=${encodeURIComponent(q)}`);
   const data = await res.json();
 
   resultsBox.innerHTML = "";
 
-  data.forEach(m => {
+  if (data.unavailable) {
+    resultsBox.innerHTML = `
+      <div style="padding:14px; color:#9ca3af; text-align:center; font-size:14px;">
+        ⚠️ A keresés jelenleg nem elérhető (AniList/MAL/MangaDex kiesés) — próbáld később
+      </div>
+    `;
+    return;
+  }
+
+  const SOURCE_BADGE = { jikan: "MAL", mangadex: "MangaDex" };
+
+  (data.results || []).forEach(m => {
     const div = document.createElement("div");
     div.className = "search-item";
+
+    const badge = SOURCE_BADGE[m.source];
 
     div.innerHTML = `
       <img src="${m.coverImage?.medium}">
       <div>
-        <div>${m.title.english || m.title.romaji}</div>
+        <div>${m.title.english || m.title.romaji}${badge ? ` <small style="opacity:.6">(${badge})</small>` : ''}</div>
         <small>${m.chapters || "?"} fejezet</small>
       </div>
     `;
 
-    div.onclick = () => addFromSearch(m.id);
+    div.onclick = () => addFromSearch(m.id, m.source);
     resultsBox.appendChild(div);
   });
 }
 
-async function addFromSearch(id) {
-  if (anilistToSlug[id]) {
-    window.location.href = `/chapters.html?slug=${anilistToSlug[id]}`;
+const SLUG_MAP_BY_SOURCE = { anilist: () => anilistToSlug, jikan: () => malToSlug, mangadex: () => mangadexToSlug };
+
+async function addFromSearch(id, source) {
+  const slugMap = (SLUG_MAP_BY_SOURCE[source] || SLUG_MAP_BY_SOURCE.anilist)();
+  if (slugMap[id]) {
+    window.location.href = `/chapters.html?slug=${slugMap[id]}`;
     return;
   }
-  
+
   const res = await fetch("/api/wishlist", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ url: `https://anilist.co/manga/${id}` })
+    body: JSON.stringify({ source, id })
   });
 
   const data = await res.json();

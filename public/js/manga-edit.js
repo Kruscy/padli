@@ -10,6 +10,16 @@ let allTags = [];
 let originalAnilistId = null;
 let anilistDebounce = null;
 
+// A megjelenítéshez használt státuszok (a chapters-init.js STATUS_HU-jával
+// egyezően) — a select ebből épül fel.
+const EDIT_STATUS_OPTIONS = [
+  { value: "RELEASING",        label: "Folyamatban" },
+  { value: "FINISHED",         label: "Befejezett" },
+  { value: "HIATUS",           label: "Szünetel" },
+  { value: "CANCELLED",        label: "Megszakadt" },
+  { value: "NOT_YET_RELEASED", label: "Hamarosan" },
+];
+
 async function initMangaEdit(slug, manga) {
   editSlug = slug;
   editGenres = [...(manga.genres || [])];
@@ -71,6 +81,17 @@ function renderEditModal(manga) {
         <div class="manga-edit-section-title">Cím</div>
         <label class="manga-edit-label">Megjelenített cím</label>
         <input class="manga-edit-input" id="editTitle" value="${escapeAttr(manga.title || "")}">
+      </div>
+
+      <div class="manga-edit-section">
+        <div class="manga-edit-section-title">Státusz</div>
+        <label class="manga-edit-label">Megjelenés állapota</label>
+        <select class="manga-edit-input" id="editStatus">
+          <option value="">— nincs megadva —</option>
+          ${EDIT_STATUS_OPTIONS.map(o => `
+            <option value="${o.value}"${manga.status === o.value ? " selected" : ""}>${o.label}</option>
+          `).join("")}
+        </select>
       </div>
 
       <div class="manga-edit-section">
@@ -369,6 +390,30 @@ function selectAnilistEdit(id, title, coverUrl) {
   }
 }
 
+// A fejléc státusz-badge-ét frissíti mentés után, hogy ne kelljen újratölteni
+// az oldalt. Ha korábban nem volt státusz, a badge-et létre is hozza.
+function applyStatusBadge(status) {
+  const infoBar = document.getElementById("mangaInfoBar");
+  if (!infoBar) return;
+  let badge = document.getElementById("statusBadge");
+
+  if (!status) {
+    if (badge) badge.remove();
+    return;
+  }
+
+  const map = (typeof STATUS_HU !== "undefined") ? STATUS_HU : {};
+  const s = map[status] || { label: status, cls: "" };
+
+  if (!badge) {
+    badge = document.createElement("span");
+    badge.id = "statusBadge";
+    infoBar.prepend(badge);
+  }
+  badge.className = `manga-badge badge-status ${s.cls}`;
+  badge.textContent = s.label;
+}
+
 function closeMangaEdit() {
   const modal = document.getElementById("mangaEditModal");
   if (modal) modal.classList.add("hidden");
@@ -410,6 +455,7 @@ async function saveMangaEdit() {
   try {
     const slug = editSlug;
     const title = document.getElementById("editTitle").value.trim();
+    const status = document.getElementById("editStatus").value;
     const description = document.getElementById("editDescription").value.trim();
     const anilistIdVal = document.getElementById("editAnilistId").value;
     const newAnilistId = anilistIdVal ? parseInt(anilistIdVal) : null;
@@ -455,6 +501,7 @@ async function saveMangaEdit() {
         genres: editGenres,
         tags: editTags,
         uploaders: editUploaders,
+        status: status || null,
         anilist_id: newAnilistId,
         refresh_metadata: isNewAnilist
       })
@@ -478,6 +525,8 @@ async function saveMangaEdit() {
     }
 
     // Oldal frissítése
+    applyStatusBadge(status);
+    if (currentManga) currentManga.status = status || null;
     if (title) document.getElementById("mangaTitle").textContent = title;
     if (coverUrl) document.getElementById("coverImg").src = coverUrl;
     if (description) document.getElementById("description").innerHTML = description;

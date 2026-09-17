@@ -341,10 +341,10 @@ async function buildNewMangaCache() {
         m.cover_url
       FROM manga m
       WHERE NOT EXISTS (
-        SELECT 1 
-        FROM manga_genre mg 
-        WHERE mg.manga_id = m.id 
-        AND mg.genre_id = 113
+        SELECT 1
+        FROM manga_genre mg JOIN genre g ON g.id = mg.genre_id
+        WHERE mg.manga_id = m.id
+        AND g.name IN ('Hentai','Ecchi')
       )
       ORDER BY m.id DESC
       LIMIT 30

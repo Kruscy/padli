@@ -39,6 +39,7 @@ function createWidget() {
         <span>💬 Társalgó</span>
         <button id="chatCloseBtn" class="chat-close">✕</button>
       </div>
+      <div id="chatDebugInfo" style="font-size:9px;color:#f59e0b;padding:2px 8px;background:#000;word-break:break-all"></div>
       <div id="chatMessages" class="chat-messages"></div>
       <div id="emojiPicker" class="emoji-picker hidden"></div>
       <div class="chat-input-row">
@@ -105,6 +106,53 @@ function renderEmojiPicker() {
   });
 }
 
+/* Mobil eszközökön a position:fixed néha a látható képernyőnél szélesebb
+   "layout viewporthoz" igazodik (ha az oldalon bárhol van egy kicsit
+   szélesebb elem), emiatt a panel a képernyő szélén kívülre csúszhat —
+   ezt a CSS önmagában nem tudja garantáltan kivédeni. A visualViewport API
+   a ténylegesen látható területet adja vissza, ettől a hibától függetlenül,
+   ezért mobilon ezzel pozicionáljuk a panelt közvetlenül. */
+function repositionDialogForMobile() {
+  const box = document.getElementById("chatDialogBox");
+  if (!box) return;
+
+  if (window.innerWidth > 900 || !window.visualViewport) return;
+  const vv = window.visualViewport;
+  const margin = 12;
+  box.style.position = "fixed";
+  box.style.left = (vv.offsetLeft + margin) + "px";
+  box.style.top = (vv.offsetTop + margin) + "px";
+  box.style.right = "auto";
+  box.style.bottom = "auto";
+  box.style.width = (vv.width - margin * 2) + "px";
+  box.style.height = (vv.height - margin - 84) + "px";
+
+  // IDEIGLENES DIAGNOSZTIKA — mobil chat-pozíció hibakereséshez, eltávolítandó.
+  // A megadott (kiszámolt) left/width mellett most a ténylegesen renderelt
+  // getBoundingClientRect()-et is kiírjuk, hogy lássuk, a böngésző tényleg
+  // oda rakta-e a dobozt, ahova mondtuk neki — ha a kettő eltér, valami
+  // felülírja a stílust vagy a fixed doboz nem a viewporthoz igazodik.
+  const dbg = document.getElementById("chatDebugInfo");
+  if (dbg) {
+    const rect = box.getBoundingClientRect();
+    let ancestorTransform = "none";
+    let el = box.parentElement;
+    while (el) {
+      const cs = getComputedStyle(el);
+      if (cs.transform !== "none" || cs.filter !== "none" || cs.perspective !== "none" || cs.willChange.includes("transform")) {
+        ancestorTransform = `${el.tagName}${el.id ? "#" + el.id : ""}(transform=${cs.transform},filter=${cs.filter})`;
+        break;
+      }
+      el = el.parentElement;
+    }
+    dbg.textContent =
+      `iw=${window.innerWidth} vvw=${vv.width} vvol=${vv.offsetLeft} vvscale=${vv.scale} dpr=${window.devicePixelRatio} scrollX=${window.scrollX} ` +
+      `| set left=${box.style.left} width=${box.style.width} ` +
+      `| rect left=${rect.left.toFixed(1)} width=${rect.width.toFixed(1)} right=${rect.right.toFixed(1)} ` +
+      `| ancestorTransform=${ancestorTransform}`;
+  }
+}
+
 function toggleChat() {
   isOpen = !isOpen;
   const box = document.getElementById("chatDialogBox");
@@ -115,12 +163,22 @@ function toggleChat() {
     badge.classList.add("hidden");
     badge.textContent = "0";
     unreadCount = 0;
+    repositionDialogForMobile();
     document.getElementById("chatInput")?.focus();
     scrollToBottom();
   } else {
     box.classList.add("hidden");
     document.getElementById("emojiPicker")?.classList.add("hidden");
   }
+}
+
+if (window.visualViewport) {
+  window.visualViewport.addEventListener("resize", () => {
+    if (isOpen) repositionDialogForMobile();
+  });
+  window.visualViewport.addEventListener("scroll", () => {
+    if (isOpen) repositionDialogForMobile();
+  });
 }
 
 let unreadCount = 0;

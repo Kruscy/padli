@@ -11,6 +11,13 @@ import { createInvoice } from "../billingo.js";
 const router = express.Router();
 
 const stripe          = new Stripe(process.env.STRIPE_SECRET_KEY);
+
+// A Stripe API egy újabb verziójában (2026-04-22.dahlia) a subscription
+// "current_period_end" mezője megszűnt, helyette az egyes tételek
+// (items.data[].current_period_end) alatt érkezik.
+function getCurrentPeriodEnd(sub) {
+  return sub?.current_period_end ?? sub?.items?.data?.[0]?.current_period_end ?? null;
+}
 const WEBHOOK_SECRET  = process.env.STRIPE_WEBHOOK_SECRET;
 const SITE_URL        = process.env.SITE_URL || "https://padlizsanfansub.hu";
 
@@ -315,10 +322,15 @@ router.post("/webhook", async (req, res) => {
       /* ── Előfizetés törlése / lejárat ─── */
       case "customer.subscription.deleted": {
         const sub = event.data.object;
+        // payment_source is itt NULL-ra kerül (nem marad 'stripe'), mert a
+        // patreon-sync.js csak a NULL/'patreon' payment_source-ú sorokat
+        // frissíti — ha itt 'stripe' maradna, egy alatta lévő valódi (nem
+        // Stripe-on futó) Patreon-tagság már soha nem tudna újra
+        // szinkronizálódni ennél a usernél (lásd afarkas_b eset, 2026-09-13).
         await pool.query(`
           UPDATE patreon_status
           SET tier = NULL, active = false, stripe_subscription_id = NULL,
-              stripe_period_end = NULL
+              stripe_period_end = NULL, payment_source = NULL
           WHERE stripe_subscription_id = $1 AND payment_source = 'stripe'
         `, [sub.id]);
         console.log(`[SHOP] Előfizetés törölve: ${sub.id}`);
@@ -330,7 +342,17 @@ router.post("/webhook", async (req, res) => {
         const inv = event.data.object;
         if (inv.billing_reason === "subscription_create") break; // első aktiváláskor már kezeltük
 
-        const sub = await stripe.subscriptions.retrieve(inv.subscription, {
+        // A Stripe API egy újabb verziójában (2026-04-22.dahlia) az invoice
+        // "subscription" mezője megszűnt, helyette "parent.subscription_details.subscription"
+        // alatt érkezik — a régi mezőt is megtartjuk fallback-ként, ha egy
+        // korábbi API-verziójú esemény jönne.
+        const subscriptionId = inv.subscription || inv.parent?.subscription_details?.subscription;
+        if (!subscriptionId) {
+          console.error("[SHOP] invoice.payment_succeeded: nincs subscription ID az eseményben", inv.id);
+          break;
+        }
+
+        const sub = await stripe.subscriptions.retrieve(subscriptionId, {
           expand: ["default_payment_method"],
         });
         const customerId = sub.customer;
@@ -342,7 +364,7 @@ router.post("/webhook", async (req, res) => {
         const user = rows[0];
 
         // Periódus frissítés
-        const periodEnd = new Date(sub.current_period_end * 1000);
+        const periodEnd = new Date(getCurrentPeriodEnd(sub) * 1000);
         await pool.query(`
           UPDATE patreon_status SET stripe_period_end = $1, active = true
           WHERE user_id = $2 AND payment_source = 'stripe'
@@ -353,7 +375,8 @@ router.post("/webhook", async (req, res) => {
         // NEM a Stripe-nál beírt (nem megbízható, bárhogy kitölthető) nevet.
         const tierMeta = sub.metadata?.tierName;
         if (tierMeta && user.email) {
-          const amountHuf = inv.amount_paid;
+          // Stripe-on a HUF összeg 2 nullával több, mint a valódi forintérték
+          const amountHuf = inv.amount_paid / 100;
           createInvoice({
             email:   user.email,
             name:    user.billing_name || user.username,
@@ -431,7 +454,7 @@ async function handleSubscriptionActivated(session, meta, userId) {
     }).catch(() => {});
   }
 
-  const periodEndTs = stripeSub?.current_period_end;
+  const periodEndTs = getCurrentPeriodEnd(stripeSub);
   const periodEnd = (periodEndTs && !isNaN(periodEndTs))
     ? new Date(periodEndTs * 1000)
     : null;

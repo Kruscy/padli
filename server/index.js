@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import { Readable } from "stream";
 import { fileURLToPath } from "url";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
@@ -149,6 +150,28 @@ app.use("/api", billingAddressGate);
 app.use("/api", routes);
 app.use("/api/user", userRoutes);
 app.use("/uploads", express.static("uploads"));
+// R2-fallback: ha a fájl nincs meg helyben (pl. a migrate-to-r2.js már
+// feltöltötte és törölte a helyi másolatát), az express.static next()-tel
+// idáig enged — ilyenkor R2-ről proxyzzuk ugyanazt a relatív útvonalat
+// (uploads/<path> kulcs alatt, lásd server/r2.js localPathToR2Key).
+app.get("/uploads/*", async (req, res) => {
+  // req.params[0] a "*" által elfogott RELATÍV rész (pl. "avatars/1.png"),
+  // NEM req.path — az a teljes "/uploads/avatars/1.png"-t adná vissza,
+  // ami duplázott "uploads/uploads/..." R2-kulcsot eredményezne.
+  const rel = req.params[0] || "";
+  if (rel.includes("..")) return res.status(400).end();
+  const R2_PUBLIC = process.env.R2_PUBLIC_URL;
+  const key = `uploads/${rel}`;
+  try {
+    const r2Res = await fetch(`${R2_PUBLIC}/${key}`);
+    if (!r2Res.ok) return res.status(404).end();
+    res.setHeader("Content-Type", r2Res.headers.get("content-type") || "application/octet-stream");
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    Readable.fromWeb(r2Res.body).pipe(res);
+  } catch {
+    res.status(404).end();
+  }
+});
 
 /* ===== SPA FALLBACK ===== */
 // Blog statikus oldalak – NE irányítsa át az index.html-re

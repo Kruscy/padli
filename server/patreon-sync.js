@@ -129,8 +129,13 @@ if (userRes.rows.length) {
   isAdmin = roleRes.rows[0]?.role === "admin";
 }
 
-// ACTIVE státusz
-let active =
+// VALÓDI (nyers) Patreon-státusz — ez payment_source-tól függetlenül mindig
+// a tényleges patreon.com-i állapotot tükrözi, admin-felülírás NÉLKÜL.
+// Azért kell külön, mert ha a user Stripe-on is fizet, a lenti active/tier
+// mezőt a payment_source='stripe' miatt nem frissítjük — de a felhasználónak
+// (és a settings oldalnak) tudnia kell, hogy közben a valódi Patreonon is
+// aktív-e, különben nem veszi észre, hogy duplán fizet.
+const rawActive =
   m.attributes?.patron_status === "active_patron";
 // Tier ID
 const rawTierId =
@@ -138,12 +143,11 @@ const rawTierId =
 if (rawTierId && !TIER_MAP[rawTierId]) {
   console.log("UNKNOWN TIER ID:", rawTierId);
 }
-// TIER LOGIKA
-let tier = null;
+const rawTier = rawActive ? (TIER_MAP[rawTierId] || null) : null;
 
-if (active) {
-  tier = TIER_MAP[rawTierId] || null;
-}
+// ACTIVE státusz (ez a site-hozzáférést vezérli)
+let active = rawActive;
+let tier = rawTier;
 
 // ADMIN FELÜLÍRÁS
 if (isAdmin) {
@@ -152,6 +156,12 @@ if (isAdmin) {
 }
       activeIds.add(patreonUserId);
 
+      // Nyers Patreon-állapot mentése MINDEN linkelt sorra, payment_source-tól
+      // függetlenül (lásd fenti indoklás).
+      await pool.query(
+        `UPDATE patreon_status SET patreon_raw_active = $1, patreon_raw_tier = $2 WHERE patreon_user_id = $3`,
+        [rawActive, rawTier, patreonUserId]
+      );
 
       await pool.query(
         `

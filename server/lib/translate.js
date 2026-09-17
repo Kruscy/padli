@@ -58,22 +58,12 @@ async function translateWithGemini(text) {
   return translated;
 }
 
-/* ── Magyar fordítás DeepL-lel, Gemini fallback-kel ─────────────
-   Elsőként a DeepL free API-t próbáljuk (jobb minőség, de havi
-   karakterkvótája van). Ha az elfogyott vagy bármi okból hibázik,
-   automatikusan átvált Geminire (ami maga is 3 kulcs között rotál),
-   hogy a leírás így is lefordítva kerüljön az oldalra, ne maradjon
-   angolul. ── */
+/* ── Magyar fordítás Geminivel ─────────────
+   A DeepL-t szándékosan nem használjuk itt (a havi ingyenes kvótája
+   máshova van fenntartva), mindig Geminit hívunk (ami maga is 3 kulcs
+   között rotál). ── */
 export async function translateToHungarian(text) {
   if (!text) return text;
-
-  if (DEEPL_API_KEY) {
-    try {
-      return await translateWithDeepL(text);
-    } catch (err) {
-      console.error("DeepL fordítási hiba (" + err.message + ") – Gemini fallback...");
-    }
-  }
 
   try {
     return await translateWithGemini(text);

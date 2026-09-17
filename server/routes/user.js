@@ -6,6 +6,7 @@ import sharp from "sharp";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { requireLogin } from "../middleware/auth.js";
 import { validateHungarianAddress, validateRealName } from "../lib/address-validate.js";
+import { isAdultVerified } from "../lib/age.js";
 
 const router = express.Router();
 
@@ -111,10 +112,13 @@ router.get("/me", async (req, res) => {
 // vissza (pl. "1998-11-11" → "1998-11-10T23:00:00.000Z").
 router.get("/birth-date", requireLogin, async (req, res) => {
   const { rows } = await pool.query(
-    `SELECT TO_CHAR(birth_date, 'YYYY-MM-DD') AS birth_date FROM users WHERE id = $1`,
+    `SELECT birth_date, TO_CHAR(birth_date, 'YYYY-MM-DD') AS birth_date_str FROM users WHERE id = $1`,
     [req.session.user.id]
   );
-  res.json({ birth_date: rows[0]?.birth_date || null });
+  res.json({
+    birth_date: rows[0]?.birth_date_str || null,
+    adult_eligible: isAdultVerified(rows[0]?.birth_date || null),
+  });
 });
 
 // Születési dátum mentése

@@ -1,6 +1,7 @@
 (async function () {
   try {
-    const res = await fetch("/api/new-releases");
+    const adultMode = localStorage.getItem("adultMode") === "1";
+    const res = await fetch(adultMode ? "/api/new-releases?adult=1" : "/api/new-releases");
     const items = await res.json();
 
     if (!items || items.length === 0) {

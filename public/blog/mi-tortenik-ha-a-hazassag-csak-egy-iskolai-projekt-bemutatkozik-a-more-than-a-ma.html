@@ -15,8 +15,8 @@
   <meta property="og:url" content="https://padlizsanfansub.hu/blog/mi-tortenik-ha-a-hazassag-csak-egy-iskolai-projekt-bemutatkozik-a-more-than-a-ma.html">
   <meta property="og:locale" content="hu_HU">
   <meta property="og:site_name" content="PadlizsanFanSub">
-  <meta property="article:published_time" content="Thu Apr 09 2026 16:35:39 GMT+0000 (Coordinated Universal Time)">
-  <meta property="article:modified_time" content="Sun May 03 2026 10:23:59 GMT+0000 (Coordinated Universal Time)">
+  <meta property="article:published_time" content="Thu Apr 09 2026 18:35:39 GMT+0200 (Central European Summer Time)">
+  <meta property="article:modified_time" content="Sun May 03 2026 12:23:59 GMT+0200 (Central European Summer Time)">
   <meta property="article:tag" content="Manga">
   <meta property="article:tag" content="manga magyarul">
   <meta property="article:tag" content="magyar manga">
@@ -51,8 +51,8 @@
   <div class="blog-container post-container">
 
     <article class="blog-post" itemscope itemtype="https://schema.org/BlogPosting">
-      <meta itemprop="datePublished" content="Thu Apr 09 2026 16:35:39 GMT+0000 (Coordinated Universal Time)">
-      <meta itemprop="dateModified" content="Sun May 03 2026 10:23:59 GMT+0000 (Coordinated Universal Time)">
+      <meta itemprop="datePublished" content="Thu Apr 09 2026 18:35:39 GMT+0200 (Central European Summer Time)">
+      <meta itemprop="dateModified" content="Sun May 03 2026 12:23:59 GMT+0200 (Central European Summer Time)">
 
       <nav class="post-breadcrumb" aria-label="breadcrumb">
         <a href="/">Főoldal</a>
@@ -65,7 +65,7 @@
       <header class="post-header">
         <div class="post-meta-top">
           <span class="post-category">Ajánló</span>
-          <time class="post-date" datetime="Thu Apr 09 2026 16:35:39 GMT+0000 (Coordinated Universal Time)" itemprop="datePublished">2026. április 9.</time>
+          <time class="post-date" datetime="Thu Apr 09 2026 18:35:39 GMT+0200 (Central European Summer Time)" itemprop="datePublished">2026. április 9.</time>
           <span class="post-author" itemprop="author">✍️ Joker</span>
         </div>
         <h1 itemprop="headline">Mi történik, ha a házasság csak egy iskolai projekt?  Bemutatkozik a More Than a Married Couple, But Not Lovers</h1>
@@ -95,7 +95,25 @@
 
 <div id="footer"></div>
 <script src="/js/footer.js"></script>
-<script src="/js/blog-nav.js"></script>
+<script>
+// Nav bejelentkezés gomb
+(async function() {
+  const nav = document.getElementById("blogNavRight");
+  const home = Object.assign(document.createElement("a"), { href: "/", className: "nav-home-btn", textContent: "Főoldal" });
+  nav.appendChild(home);
+  try {
+    const r = await fetch("/api/auth/me");
+    if (r.ok) {
+      const u = await r.json();
+      const s = Object.assign(document.createElement("span"), { className: "nav-user-name", textContent: "👤 " + u.username });
+      nav.insertBefore(s, home);
+    } else throw 0;
+  } catch {
+    const btn = Object.assign(document.createElement("a"), { href: "/login.html", className: "nav-login-btn", textContent: "Bejelentkezés" });
+    nav.insertBefore(btn, home);
+  }
+})();
+</script>
 
 </body>
 </html>

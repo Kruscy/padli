@@ -82,7 +82,17 @@ router.post("/scan", (req, res) => {
 /* ================= UPDATE MANGA META ================= */
 router.post("/manga/:slug", async (req, res) => {
   const { slug } = req.params;
-  const { cover_url, description, title, genres, tags, uploaders, anilist_id } = req.body;
+  const { cover_url, description, title, genres, tags, uploaders, anilist_id, status } = req.body;
+
+  // Státusz csak a fix, AniList-kompatibilis értékek közül jöhet — ismeretlen
+  // értéket nem írunk az adatbázisba (a badge különben nyers stringet mutatna).
+  const ALLOWED_STATUS = ["RELEASING", "FINISHED", "HIATUS", "CANCELLED", "NOT_YET_RELEASED"];
+  if (status !== undefined && status !== null && status !== "" && !ALLOWED_STATUS.includes(status)) {
+    return res.status(400).json({ error: "Invalid status" });
+  }
+  // undefined  → nem érkezett a mezo, marad a jelenlegi
+  // "" / null  → a szerkesztő kiürítette, töröljük
+  const statusValue = (status === undefined) ? undefined : (status || null);
 
   try {
     // Duplikált slug esetén ugyanazt a kanonikus bejegyzést válasszuk,
@@ -107,10 +117,12 @@ await pool.query(
     description = COALESCE($2, description),
     title = COALESCE($3, title),
     uploaders = $4::text[],
-    anilist_id = CASE WHEN $5::int IS NOT NULL THEN $5::int ELSE anilist_id END
-   WHERE id = $6`,
+    anilist_id = CASE WHEN $5::int IS NOT NULL THEN $5::int ELSE anilist_id END,
+    status = CASE WHEN $6::boolean THEN $7::text ELSE status END
+   WHERE id = $8`,
   [cover_url || null, description || null, title || null,
-   uploaders || [], anilist_id || null, mangaId]
+   uploaders || [], anilist_id || null,
+   statusValue !== undefined, statusValue ?? null, mangaId]
 );
     if (genres) {
       await pool.query(`DELETE FROM manga_genre WHERE manga_id = $1`, [mangaId]);
@@ -742,6 +754,48 @@ router.get("/api-usage", async (req, res) => {
     });
   } catch (err) {
     console.error("api-usage hiba:", err);
+    res.status(500).json({ error: "Szerver hiba" });
+  }
+});
+
+/* ================= 192.168.0.90 (OCR / LaMa) HASZNÁLAT ================= */
+router.get("/remote-usage", async (req, res) => {
+  try {
+    const totals = await pool.query(`
+      SELECT service,
+        COUNT(*) FILTER (WHERE created_at >= CURRENT_DATE)::int AS today,
+        COUNT(*) FILTER (WHERE created_at >= date_trunc('month', now()))::int AS this_month,
+        COUNT(*) FILTER (WHERE created_at >= date_trunc('month', now()) AND success = false)::int AS this_month_failures,
+        AVG(duration_ms) FILTER (WHERE created_at >= date_trunc('month', now()) AND success = true)::int AS avg_duration_ms
+      FROM remote_service_usage
+      GROUP BY service
+    `);
+
+    const daily = await pool.query(`
+      SELECT service, date_trunc('day', created_at)::date AS day,
+        COUNT(*)::int AS count,
+        COUNT(*) FILTER (WHERE success = false)::int AS failures
+      FROM remote_service_usage
+      WHERE created_at >= now() - interval '14 days'
+      GROUP BY service, day
+      ORDER BY day
+    `);
+
+    const recentErrors = await pool.query(`
+      SELECT service, status_code, error_message, created_at
+      FROM remote_service_usage
+      WHERE success = false
+      ORDER BY created_at DESC
+      LIMIT 20
+    `);
+
+    res.json({
+      totals: totals.rows,
+      daily: daily.rows,
+      recentErrors: recentErrors.rows,
+    });
+  } catch (err) {
+    console.error("remote-usage hiba:", err);
     res.status(500).json({ error: "Szerver hiba" });
   }
 });

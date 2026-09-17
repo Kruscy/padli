@@ -3,8 +3,10 @@
 let allMangas = [];
 let mangaGenres = {};
 let mangaTags = {};
+let mangaUploaders = {};
 let selectedGenres = new Set();
 let selectedTags = new Set();
+let selectedUploaders = new Set();
 let sortChaptersState = 0; // 0=default, 1=desc (legtöbb), 2=asc (legkevesebb)
 
 async function init() {
@@ -14,7 +16,8 @@ async function init() {
 
 async function loadMangas() {
   try {
-    const res = await fetch("/api/manga");
+    const adultMode = localStorage.getItem("adultMode") === "1";
+    const res = await fetch(adultMode ? "/api/manga?adult=1" : "/api/manga");
     allMangas = await res.json();
 
     const progressMap = {};
@@ -90,6 +93,7 @@ async function loadMangaFilter() {
     allMangas.forEach(m => {
       mangaGenres[m.slug] = data[m.slug]?.genres || [];
       mangaTags[m.slug] = data[m.slug]?.tags || [];
+      mangaUploaders[m.slug] = data[m.slug]?.uploaders || [];
     });
   } catch (e) {
     console.error("Filter load error", e);
@@ -103,6 +107,7 @@ function buildFilterUI() {
 
   const allGenres = [...new Set(Object.values(mangaGenres).flat())].sort();
   const allTags = [...new Set(Object.values(mangaTags).flat())].sort();
+  const allUploaders = [...new Set(Object.values(mangaUploaders).flat())].sort((a, b) => a.localeCompare(b, "hu"));
 
   panel.innerHTML = `
     <div class="filter-section open" id="genreSection">
@@ -128,6 +133,20 @@ function buildFilterUI() {
         ${allTags.map(t => `
           <button class="filter-tag-btn" data-tag="${t}" onclick="toggleTag('${t.replace(/'/g, "\\'")}')">
             ${t}
+          </button>
+        `).join("")}
+      </div>
+    </div>
+
+    <div class="filter-section" id="uploaderSection">
+      <div class="filter-section-header" onclick="toggleFilterSection('uploaderSection')">
+        <span>✍️ Fordító</span>
+        <span class="filter-toggle-icon">▶</span>
+      </div>
+      <div class="filter-tags collapsed" id="uploaderTags">
+        ${allUploaders.map(u => `
+          <button class="filter-uploader-btn" data-uploader="${u}" onclick="toggleUploader('${u.replace(/'/g, "\\'")}')">
+            ${u}
           </button>
         `).join("")}
       </div>
@@ -162,9 +181,20 @@ function toggleTag(tag) {
   applyFilter();
 }
 
+function toggleUploader(uploader) {
+  if (selectedUploaders.has(uploader)) {
+    selectedUploaders.delete(uploader);
+  } else {
+    selectedUploaders.add(uploader);
+  }
+  updateFilterUI();
+  applyFilter();
+}
+
 function clearFilters() {
   selectedGenres.clear();
   selectedTags.clear();
+  selectedUploaders.clear();
   updateFilterUI();
   applyFilter();
 }
@@ -206,8 +236,12 @@ function updateFilterUI() {
     btn.classList.toggle("selected", selectedTags.has(btn.dataset.tag));
   });
 
+  document.querySelectorAll(".filter-uploader-btn").forEach(btn => {
+    btn.classList.toggle("selected", selectedUploaders.has(btn.dataset.uploader));
+  });
+
   const summary = document.getElementById("filterSummary");
-  const total = selectedGenres.size + selectedTags.size;
+  const total = selectedGenres.size + selectedTags.size + selectedUploaders.size;
 
   if (total === 0) {
     summary.innerHTML = "";
@@ -217,7 +251,8 @@ function updateFilterUI() {
 
   const labels = [
     ...[...selectedGenres].map(g => `<span style="color:#7dd3fc">${g}</span>`),
-    ...[...selectedTags].map(t => `<span style="color:#a78bfa">${t}</span>`)
+    ...[...selectedTags].map(t => `<span style="color:#a78bfa">${t}</span>`),
+    ...[...selectedUploaders].map(u => `<span style="color:#6ee7b7">${u}</span>`)
   ].join(", ");
 
   summary.innerHTML = `
@@ -238,6 +273,7 @@ function applyFilter() {
 
     const genres = mangaGenres[slug] || [];
     const tags = mangaTags[slug] || [];
+    const uploaders = mangaUploaders[slug] || [];
 
     const genreMatch = selectedGenres.size === 0 ||
       [...selectedGenres].every(g => genres.includes(g));
@@ -245,7 +281,10 @@ function applyFilter() {
     const tagMatch = selectedTags.size === 0 ||
       [...selectedTags].every(t => tags.includes(t));
 
-    const show = genreMatch && tagMatch;
+    const uploaderMatch = selectedUploaders.size === 0 ||
+      [...selectedUploaders].every(u => uploaders.includes(u));
+
+    const show = genreMatch && tagMatch && uploaderMatch;
     card.style.display = show ? "" : "none";
     if (show) visible++;
   });
@@ -280,5 +319,8 @@ function waitForAuth() {
     setTimeout(waitForAuth, 100);
   }
 }
+
+// A 18+ kapcsoló ezt hívja, hogy a rács újratöltődjön a váltott módban.
+window.reloadMangaGrid = loadMangas;
 
 document.addEventListener("DOMContentLoaded", waitForAuth);

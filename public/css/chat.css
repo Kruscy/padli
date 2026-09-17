@@ -45,7 +45,9 @@
   bottom: 68px;
   right: 0;
   width: 340px;
+  max-width: calc(100vw - 32px);
   height: 480px;
+  max-height: 70vh;
   background: #0f1220;
   border-radius: 16px;
   border: 1px solid #2a2a3e;
@@ -53,6 +55,29 @@
   flex-direction: column;
   box-shadow: 0 8px 40px rgba(0,0,0,0.5);
   overflow: hidden;
+}
+
+@media (max-width: 420px) {
+  #chatWidget {
+    right: 12px;
+    bottom: 16px;
+  }
+  .chat-dialog-box {
+    /* Mobilon a panelt mind a 4 oldalról rögzítjük (top/left/right/bottom),
+       szélesség/magasság megadása nélkül — így a méretét kizárólag a
+       böngésző számolja ki a tényleges látható viewportból, semmilyen
+       vw/calc-alapú számolás vagy jobbra/balra igazítás nem okozhat
+       kilógást vagy levágást. */
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    right: 12px;
+    bottom: 84px;
+    width: auto;
+    height: auto;
+    max-width: none;
+    max-height: none;
+  }
 }
 
 .chat-header {
@@ -81,6 +106,7 @@
 .chat-messages {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 12px;
   display: flex;
   flex-direction: column;
@@ -97,6 +123,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
 }
 
 .chat-avatar {
@@ -104,6 +131,7 @@
   height: 24px;
   border-radius: 50%;
   object-fit: cover;
+  flex-shrink: 0;
 }
 .chat-dialog-box.hidden {
   display: none !important;
@@ -112,6 +140,10 @@
   font-size: 0.78rem;
   font-weight: 700;
   color: #c4b5fd;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 .chat-discord { color: #5865f2; }

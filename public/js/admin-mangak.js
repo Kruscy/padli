@@ -57,6 +57,7 @@ function initTabs() {
       if (btn.dataset.tab === "tab-libraries") loadUploaderRoots();
       if (btn.dataset.tab === "tab-gifts") loadGifts();
       if (btn.dataset.tab === "tab-api-usage") loadApiUsage();
+      if (btn.dataset.tab === "tab-remote-usage") loadRemoteUsage();
       if (btn.dataset.tab === "tab-subtitle-requests") loadSubtitleRequests();
       if (btn.dataset.tab === "tab-anime-catalog") loadAnimeCatalog();
     });
@@ -610,6 +611,82 @@ async function deleteGeminiKey(id, label) {
   const res = await fetch(`/api/admin/gemini-keys/${id}`, { method: "DELETE" });
   if (!res.ok) { alert("Törlés sikertelen"); return; }
   loadApiUsage();
+}
+
+/* ===== 192.168.0.90 HASZNÁLAT (OCR / LaMa) ===== */
+const REMOTE_SERVICE_LABELS = { ocr: "🔤 OCR (:8001)", inpaint: "🖌️ Inpaint / LaMa (:8080)" };
+
+async function loadRemoteUsage() {
+  const listEl = document.getElementById("remoteUsageList");
+  if (!listEl) return;
+  listEl.innerHTML = "<p style='color:#888'>Betöltés...</p>";
+
+  const res = await fetch("/api/admin/remote-usage");
+  if (!res.ok) { listEl.innerHTML = "<p style='color:#ef4444'>Betöltési hiba</p>"; return; }
+  const data = await res.json();
+
+  const cardStyle = "background:#0f172a;border-radius:10px;padding:14px 18px;margin-bottom:14px;max-width:640px";
+  const services = ["ocr", "inpaint"];
+
+  const cards = services.map(service => {
+    const t = data.totals.find(r => r.service === service);
+    const today = t?.today ?? 0;
+    const thisMonth = t?.this_month ?? 0;
+    const failures = t?.this_month_failures ?? 0;
+    const avgMs = t?.avg_duration_ms ?? null;
+    const days = data.daily.filter(d => d.service === service);
+    const maxCount = Math.max(1, ...days.map(d => d.count));
+
+    const bars = days.map(d => {
+      const h = Math.max(3, Math.round((d.count / maxCount) * 40));
+      const hasFail = d.failures > 0;
+      const dayLabel = new Date(d.day).toLocaleDateString("hu-HU", { month: "2-digit", day: "2-digit" });
+      return `<div title="${dayLabel}: ${d.count} hívás${hasFail ? `, ${d.failures} hiba` : ""}"
+        style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px">
+        <div style="width:100%;max-width:18px;height:${h}px;background:${hasFail ? "#f59e0b" : "#7c3aed"};border-radius:2px"></div>
+      </div>`;
+    }).join("");
+
+    return `<div style="${cardStyle}">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <strong style="color:#e2e8f0">${REMOTE_SERVICE_LABELS[service] || service}</strong>
+        ${failures > 0
+          ? `<span style="background:#7f1d1d33;color:#f87171;padding:2px 10px;border-radius:20px;font-size:.75rem;font-weight:700">⚠️ ${failures} hiba e hónapban</span>`
+          : `<span style="background:#14532d33;color:#86efac;padding:2px 10px;border-radius:20px;font-size:.75rem;font-weight:700">✅ OK</span>`}
+      </div>
+      <div style="color:#94a3b8;font-size:.85rem;margin-bottom:12px">
+        Ma: <strong style="color:#e2e8f0">${today}</strong> hívás &nbsp;•&nbsp;
+        E hónapban: <strong style="color:#e2e8f0">${thisMonth}</strong> hívás &nbsp;•&nbsp;
+        Átlag válaszidő: <strong style="color:#e2e8f0">${avgMs != null ? (avgMs / 1000).toFixed(1) + " mp" : "–"}</strong>
+      </div>
+      <div style="display:flex;align-items:flex-end;gap:3px;height:44px">${bars || "<span style='color:#64748b;font-size:.8rem'>Nincs adat</span>"}</div>
+      <div style="color:#64748b;font-size:.72rem;margin-top:4px">utolsó 14 nap</div>
+    </div>`;
+  }).join("");
+
+  const errorRows = data.recentErrors.map(e => `
+    <tr>
+      <td style="padding:5px 10px;color:#94a3b8">${new Date(e.created_at).toLocaleString("hu-HU")}</td>
+      <td style="padding:5px 10px;color:#e2e8f0">${REMOTE_SERVICE_LABELS[e.service] || e.service}</td>
+      <td style="padding:5px 10px;color:#f87171">${e.status_code ?? "–"}</td>
+      <td style="padding:5px 10px;color:#64748b;font-size:.8rem">${escHtml((e.error_message || "").slice(0, 120))}</td>
+    </tr>
+  `).join("");
+
+  const errorsTable = data.recentErrors.length
+    ? `<div style="${cardStyle};max-width:900px;overflow-x:auto">
+        <strong style="color:#e2e8f0;display:block;margin-bottom:8px">Legutóbbi hibák</strong>
+        <table style="width:100%;border-collapse:collapse;font-size:.85rem">
+          <thead><tr style="text-align:left;color:#64748b">
+            <th style="padding:5px 10px">Időpont</th><th style="padding:5px 10px">Szolgáltatás</th>
+            <th style="padding:5px 10px">Kód</th><th style="padding:5px 10px">Hiba</th>
+          </tr></thead>
+          <tbody>${errorRows}</tbody>
+        </table>
+      </div>`
+    : "";
+
+  listEl.innerHTML = cards + errorsTable;
 }
 
 /* ===== FELIRAT-KÉRÉSEK ===== */

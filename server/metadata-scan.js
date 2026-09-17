@@ -3,6 +3,7 @@ import fetch from "node-fetch";
 import dotenv from "dotenv";
 import { autoClaimWishlistForManga } from "./lib/wishlist-auto-claim.js";
 import { translateToHungarian } from "./lib/translate.js";
+import { fetchMangaMetadata, TransientMetadataError } from "./lib/metadata-source.js";
 dotenv.config();
 
 /* ================= CONFIG ================= */
@@ -95,11 +96,11 @@ async function scanMetadata() {
   console.log("🧠 Starting AniList metadata scan\n");
 
   const mangas = await pool.query(`
-    SELECT id, title, anilist_id, uploaders
+    SELECT id, title, anilist_id, mal_id, mangadex_id, uploaders
     FROM manga
     WHERE anilist_failed = FALSE
       AND (
-        anilist_id IS NULL
+        (anilist_id IS NULL AND mal_id IS NULL AND mangadex_id IS NULL)
         OR cover_url IS NULL
         OR description IS NULL
         OR status IS NULL
@@ -118,25 +119,27 @@ async function scanMetadata() {
   for (const manga of mangas.rows) {
     processed++;
     const hadNoAnilistId = manga.anilist_id == null;
+    const hadNoMalId = manga.mal_id == null;
+    const hadNoMangadexId = manga.mangadex_id == null;
     const searchTitle = cleanTitle(manga.title);
 
     console.log(`\n[${processed}/${total}] 🔍 Searching: "${searchTitle}"`);
 
     try {
-      const json = await fetchWithRetry({
-        query: QUERY,
-        variables: { search: searchTitle }
+      const result = await fetchMangaMetadata({
+        searchTitle,
+        anilistId: manga.anilist_id,
+        malId: manga.mal_id,
+        mangadexId: manga.mangadex_id,
       });
-
-      const media = json?.data?.Media;
 
       await pool.query(
         `UPDATE manga SET anilist_last_try = now() WHERE id = $1`,
         [manga.id]
       );
 
-      if (!media) {
-        console.log("⚠️ No match found → marking as failed");
+      if (!result) {
+        console.log("⚠️ No match found on any source → marking as failed");
         await pool.query(
           `UPDATE manga SET anilist_failed = TRUE WHERE id = $1`,
           [manga.id]
@@ -145,6 +148,9 @@ async function scanMetadata() {
         await sleep(REQUEST_DELAY_MS);
         continue;
       }
+
+      const { source, media } = result;
+      console.log(`📡 Forrás: ${source}`);
 
       /* ===== TRANSLATE DESCRIPTION ===== */
       let description = null;
@@ -156,16 +162,22 @@ async function scanMetadata() {
       /* ===== SAVE MAIN DATA ===== */
       await pool.query(
         `UPDATE manga
-         SET anilist_id = $1,
-             cover_url = COALESCE(cover_url, $2),
-             description = COALESCE(description, $3),
-             status = COALESCE(status, $4),
-             average_score = COALESCE(average_score, $5),
-             total_chapters = COALESCE(total_chapters, $6),
+         SET anilist_id = COALESCE($1, anilist_id),
+             mal_id = COALESCE($2, mal_id),
+             mangadex_id = COALESCE($3, mangadex_id),
+             metadata_source = $4,
+             cover_url = COALESCE(cover_url, $5),
+             description = COALESCE(description, $6),
+             status = COALESCE(status, $7),
+             average_score = COALESCE(average_score, $8),
+             total_chapters = COALESCE(total_chapters, $9),
              anilist_failed = FALSE
-         WHERE id = $7`,
+         WHERE id = $10`,
         [
-          media.id,
+          source === "anilist" ? media.id : null,
+          source === "jikan" ? media.id : null,
+          source === "mangadex" ? media.id : null,
+          source,
           media.coverImage?.extraLarge || media.coverImage?.large || null,
           description,
           media.status || null,
@@ -226,11 +238,20 @@ async function scanMetadata() {
         );
       }
 
-      /* ===== KÍVÁNSÁGLISTA AUTO-CLAIM ===== */
-      if (hadNoAnilistId && media.id) {
+      /* ===== KÍVÁNSÁGLISTA AUTO-CLAIM =====
+         Csak akkor fut, ha a manga ÉPP MOST kapta meg ELŐSZÖR az adott
+         forrás ID-ját — a wishlist-auto-claim mindhárom ID-teret (AniList,
+         MAL, MangaDex) tudja már egyeztetni. */
+      const gotNewId =
+        (source === "anilist" && hadNoAnilistId) ||
+        (source === "jikan" && hadNoMalId) ||
+        (source === "mangadex" && hadNoMangadexId);
+      if (gotNewId && media.id) {
         try {
           const claimResult = await autoClaimWishlistForManga({
-            anilist_id: media.id,
+            anilist_id: source === "anilist" ? media.id : null,
+            mal_id: source === "jikan" ? media.id : null,
+            mangadex_id: source === "mangadex" ? media.id : null,
             uploaders: manga.uploaders,
           });
           if (claimResult.claimed.length) {
@@ -245,14 +266,22 @@ async function scanMetadata() {
       success++;
 
     } catch (err) {
-      console.log("❌ Permanent failure → marking as failed");
-      await pool.query(
-        `UPDATE manga
-         SET anilist_failed = TRUE,
-             anilist_last_try = now()
-         WHERE id = $1`,
-        [manga.id]
-      );
+      if (err instanceof TransientMetadataError) {
+        // Átmeneti hiba (pl. AniList jelenlegi túlterheltsége) — NEM
+        // jelöljük véglegesen sikertelennek, a következő scan újra
+        // megpróbálja majd.
+        console.log(`⏳ Átmeneti hiba, újrapróbáljuk legközelebb: ${err.message}`);
+        await pool.query(
+          `UPDATE manga SET anilist_last_try = now() WHERE id = $1`,
+          [manga.id]
+        );
+      } else {
+        console.log(`❌ Váratlan hiba mentés közben: ${err.message}`);
+        await pool.query(
+          `UPDATE manga SET anilist_last_try = now() WHERE id = $1`,
+          [manga.id]
+        );
+      }
       failed++;
     }
 

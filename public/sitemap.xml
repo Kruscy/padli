@@ -3,65 +3,161 @@
 
   <url>
     <loc>https://padlizsanfansub.hu/</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-09-16</lastmod>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/blog/</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-09-16</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/login.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-09-16</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/register.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-09-16</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/leaderboard.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-09-16</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/polls.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-09-16</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/partners.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-09-16</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.4</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/impressum.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-09-16</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/privacy.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-09-16</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/aszf.html</loc>
-    <lastmod>2026-08-07</lastmod>
+    <lastmod>2026-09-16</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
 
+  <url>
+    <loc>https://padlizsanfansub.hu/blog/hunter-vadaszos-manhwa-ajanlok.html</loc>
+    <lastmod>2026-09-16</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://padlizsanfansub.hu/blog/akademia-varazsiskola-manga-ajanlok.html</loc>
+    <lastmod>2026-09-14</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://padlizsanfansub.hu/blog/gyenge-hosbol-erossa-manhwa-ajanlok.html</loc>
+    <lastmod>2026-09-11</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://padlizsanfansub.hu/blog/bosszu-temaju-manga-manhwa-ajanlok.html</loc>
+    <lastmod>2026-09-09</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://padlizsanfansub.hu/blog/regresszios-idohurok-manhwa-ajanlok.html</loc>
+    <lastmod>2026-09-07</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://padlizsanfansub.hu/blog/rendszer-litrpg-manhwa-ajanlok.html</loc>
+    <lastmod>2026-09-04</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://padlizsanfansub.hu/blog/murim-cultivation-manhwa-ajanlok.html</loc>
+    <lastmod>2026-09-02</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://padlizsanfansub.hu/blog/rejtely-nyomozos-manga-ajanlok.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://padlizsanfansub.hu/blog/pszichologiai-thriller-manga-ajanlok.html</loc>
+    <lastmod>2026-08-26</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://padlizsanfansub.hu/blog/vigjatek-humoros-manga-ajanlok.html</loc>
+    <lastmod>2026-08-24</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://padlizsanfansub.hu/blog/sport-manga-ajanlok-magyarul.html</loc>
+    <lastmod>2026-08-21</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://padlizsanfansub.hu/blog/horror-manga-ajanlok-magyarul.html</loc>
+    <lastmod>2026-08-19</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://padlizsanfansub.hu/blog/sci-fi-manga-manhwa-ajanlok.html</loc>
+    <lastmod>2026-08-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://padlizsanfansub.hu/blog/josei-manga-ajanlok-magyarul.html</loc>
+    <lastmod>2026-08-14</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://padlizsanfansub.hu/blog/shoujo-manga-ajanlok-magyarul.html</loc>
+    <lastmod>2026-08-12</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://padlizsanfansub.hu/blog/seinen-manga-ajanlok-magyarul.html</loc>
+    <lastmod>2026-08-10</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
   <url>
     <loc>https://padlizsanfansub.hu/blog/shounen-manga-ajanlok-magyarul.html</loc>
     <lastmod>2026-08-07</lastmod>

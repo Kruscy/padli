@@ -1,6 +1,7 @@
 import express from "express";
 import { pool } from "../db.js";
 import { requireLogin } from "../middleware/auth.js";
+import { resolveAdultMode, ADULT_GENRE_EXISTS_SQL } from "../lib/age.js";
 import fs from "fs";
 import path from "path";
 
@@ -85,6 +86,7 @@ router.get("/recent-reading", async (req, res) => {
     if (!req.session?.user) return res.json([]);
 
     const userId = req.session.user.id;
+    const adultMode = await resolveAdultMode(pool, req);
 
     // Progress + az összes fejezet DB-ből egy lekérdezésben
     const { rows } = await pool.query(`
@@ -106,8 +108,9 @@ router.get("/recent-reading", async (req, res) => {
       LEFT JOIN chapter pc ON pc.manga_id = m.id AND pc.folder = rp.chapter
       LEFT JOIN library l ON l.id = COALESCE(pc.library_id, m.library_id)
       WHERE rp.user_id = $1
+        AND ${ADULT_GENRE_EXISTS_SQL} = $2
       ORDER BY rp.updated_at DESC
-    `, [userId]);
+    `, [userId, adultMode]);
 
     if (!rows.length) return res.json([]);
 

@@ -45,7 +45,8 @@
         voted: false
       }));
 
-    const res = await fetch("/api/featured");
+    const adultMode = localStorage.getItem("adultMode") === "1";
+    const res = await fetch(adultMode ? "/api/featured?adult=1" : "/api/featured");
     const featured = res.ok ? await res.json() : [];
     const mangaSlides = featured.map(m => ({ type: "manga", ...m }));
 

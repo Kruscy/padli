@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="/css/sidebar.css?v=20260119">
 <link rel="stylesheet" href="/css/admin.css?v=20260722">
 <link rel="stylesheet" href="/css/main.css?v=20260619">
-<link rel="stylesheet" href="/css/header.css?v=20260619">
+<link rel="stylesheet" href="/css/header.css?v=20260915e">
 <link rel="stylesheet" href="/css/footer.css?v=20260405">
 <link rel="stylesheet" href="/css/users.css?v=20260208">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -26,6 +26,7 @@
   <button class="tab-btn" data-tab="tab-blog">✍️ Blog</button>
   <button class="tab-btn" data-tab="tab-padli">🤖 Padli AI</button>
   <button class="tab-btn" data-tab="tab-api-usage">🔑 API kulcsok</button>
+  <button class="tab-btn" data-tab="tab-remote-usage">🖥️ 192.168.0.90</button>
   <button class="tab-btn" data-tab="tab-subtitle-requests">🎬 Felirat-kérések</button>
   <button class="tab-btn" data-tab="tab-anime-catalog">📼 Anime katalógus</button>
   <button class="tab-btn" data-tab="tab-libraries">📁 Könyvtárak</button>
@@ -385,6 +386,14 @@
   <div id="apiUsageList">Betöltés...</div>
 </div>
 
+<div id="tab-remote-usage" class="tab-panel">
+  <h2 style="margin-bottom:6px">🖥️ 192.168.0.8 (CT108) használat</h2>
+  <p style="color:#888;font-size:.88rem;margin-bottom:20px">
+    Az OCR (:8081, EasyOCR) és a LaMa inpaint (:8082, IOPaint-alapú) szolgáltatás hívásai a CT108 gépen — ezeket a mi szerverünk hívja.
+  </p>
+  <div id="remoteUsageList">Betöltés...</div>
+</div>
+
 <div id="tab-subtitle-requests" class="tab-panel">
   <h2 style="margin-bottom:6px">🎬 Felirat-fordítás kérések</h2>
   <p style="color:#888;font-size:.88rem;margin-bottom:20px">
@@ -518,7 +527,7 @@
 
 <div id="footer"></div>
 <script src="/js/footer.js?v=20260619"></script>
-<script type="module" src="/js/layout-loader.js?v=20260713"></script>
+<script type="module" src="/js/layout-loader.js?v=20260915d"></script>
 <script src="/js/sidebar.js?v=20260204"></script>
 <script src="/js/email-verify-modal.js?v=20260808"></script>
 <script src="/js/auth-check.js?v=20260323"></script>

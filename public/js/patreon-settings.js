@@ -88,6 +88,8 @@ async function loadPatreonStatus() {
     const data = await res.json();
     logSuccess("Status lekérdezés sikeres", data);
 
+    renderSubOverview(data);
+
     const connected = document.getElementById("patreon-connected");
     const disconnected = document.getElementById("patreon-disconnected");
 
@@ -132,6 +134,35 @@ async function loadPatreonStatus() {
     logError("loadPatreonStatus() catch block", err);
     showDebugInfo(`❌ Hiba: ${err.message}`);
   }
+}
+
+/* ══════════════════════════════════════════════════════════
+   ÁTTEKINTÉS: melyik csatornán aktív az előfizetés
+   (Stripe és a valódi Patreon-tagság egymástól függetlenül)
+   ══════════════════════════════════════════════════════════ */
+
+function renderSubOverview(data) {
+  const box = document.getElementById("sub-overview-box");
+  const stripeEl = document.getElementById("ovStripeStatus");
+  const patreonEl = document.getElementById("ovPatreonStatus");
+  const warn = document.getElementById("double-payment-warning");
+  if (!box || !stripeEl || !patreonEl) return;
+
+  if (!data.hasRecord) {
+    box.classList.add("hidden");
+    if (warn) warn.classList.add("hidden");
+    return;
+  }
+
+  box.classList.remove("hidden");
+  stripeEl.textContent = data.stripeActive
+    ? `Aktív ✅ (${data.tier || "—"})`
+    : "Nincs aktív előfizetés";
+  patreonEl.textContent = data.patreonRealActive
+    ? `Aktív ✅ (${data.patreonRealTier || "—"})`
+    : "Nincs aktív tagság";
+
+  if (warn) warn.classList.toggle("hidden", !data.doublePayment);
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -272,6 +303,10 @@ if (syncBtn) {
           syncStatus.textContent = "✅ Frissítve";
         }
         logSuccess("Patreon sync sikeres", data);
+        // Frissítjük a Stripe/Patreon áttekintést és a dupla-fizetés
+        // figyelmeztetést is, mert ez a saját OAuth-fiókos sync útvonal,
+        // ami a fenti /status válaszban nem szerepel.
+        loadPatreonStatus();
       } else {
         if (syncStatus) {
           syncStatus.style.color = "#f87171";

@@ -2,6 +2,9 @@ import express from "express";
 import fetch from "node-fetch";
 import { pool } from "../db.js";
 import { requireLogin } from "../middleware/auth.js";
+import { getMangaById as getJikanMangaById, searchMangaByTitle as searchJikanByTitle } from "../lib/jikan.js";
+import { getMangaById as getMangaDexMangaById, searchMangaByTitle as searchMangaDexByTitle } from "../lib/mangadex.js";
+import { titlesMatch } from "../lib/title-match.js";
 
 const router = express.Router();
 
@@ -41,24 +44,48 @@ export async function notifyWishlistWatchers(wishlistId, actingUser, type, build
 /* ================= ADD ================= */
 router.post("/", requireLogin, async (req, res) => {
   try {
-    const { url } = req.body;
+    const { url, source: bodySource, id: bodyId } = req.body;
 
-    if (!url.includes("anilist.co")) {
-      return res.status(400).json({ error: "Csak AniList link" });
+    // Két hívási forma:
+    //  1) { url: "https://anilist.co/manga/<id>" }                        — AniList (régi/kompatibilis)
+    //  2) { source: "anilist"|"jikan"|"mangadex", id }                    — a kereső dropdown-ból, forrás-jelöléssel
+    let source, sourceId;
+    if (bodySource && bodyId) {
+      source = bodySource;
+      sourceId = String(bodyId);
+    } else if (url && url.includes("anilist.co")) {
+      const match = url.match(/anime\/(\d+)/) || url.match(/manga\/(\d+)/);
+      if (!match) return res.status(400).json({ error: "Hibás link" });
+      source = "anilist";
+      sourceId = match[1];
+    } else {
+      return res.status(400).json({ error: "Csak AniList link vagy source+id" });
     }
 
-    const match = url.match(/anime\/(\d+)/) || url.match(/manga\/(\d+)/);
-    if (!match) {
-      return res.status(400).json({ error: "Hibás link" });
+    if (!["anilist", "jikan", "mangadex"].includes(source)) {
+      return res.status(400).json({ error: "Ismeretlen forrás" });
     }
 
-    const anilistId = match[1];
+    const anilistId = source === "anilist" ? sourceId : null;
+    const malId = source === "jikan" ? sourceId : null;
+    const mangadexId = source === "mangadex" ? sourceId : null; // UUID string, nem szám
 
-    // DUPLIKÁCIÓ CHECK
+    // DUPLIKÁCIÓ CHECK — forrás-függetlenül: bármelyik meglévő tétel
+    // egyezhet, akármelyik forrásból is került fel eredetileg, amíg a
+    // kereszt-azonosítója (mal_id/mangadex_id) fel van töltve rajta
+    // (l. server/scripts/backfill-wishlist-external-ids.js). Külön
+    // paraméter forrásonként, mert a mangadex_id TEXT, az anilist_id/
+    // mal_id INTEGER, egy közös paraméter típusütközést okozna.
     const exists = await pool.query(`
       SELECT id FROM wishlist
-      WHERE anilist_id = $1
-    `, [anilistId]);
+      WHERE (anilist_id  IS NOT NULL AND anilist_id  = $1)
+         OR (mal_id      IS NOT NULL AND mal_id      = $2)
+         OR (mangadex_id IS NOT NULL AND mangadex_id = $3)
+    `, [
+      anilistId ? parseInt(anilistId) : null,
+      malId ? parseInt(malId) : null,
+      mangadexId,
+    ]);
 
     if (exists.rowCount) {
       const wishId = exists.rows[0].id;
@@ -92,47 +119,103 @@ router.post("/", requireLogin, async (req, res) => {
       });
     }
 
-    /* ===== AniList ===== */
-    const query = `
-      query ($id: Int) {
-        Media(id: $id, type: MANGA) {
-          id
-          title { english romaji native }
-          coverImage { large }
-          chapters
+    /* ===== Metaadat lekérés a forrás szerint ===== */
+    let title, coverUrl, chapters;
+
+    if (source === "anilist") {
+      const query = `
+        query ($id: Int) {
+          Media(id: $id, type: MANGA) {
+            id
+            title { english romaji native }
+            coverImage { large }
+            chapters
+          }
         }
-      }
-    `;
+      `;
+      const api = await fetch("https://graphql.anilist.co", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query, variables: { id: parseInt(anilistId) } })
+      });
+      const json = await api.json();
+      const m = json.data?.Media;
+      if (!m) return res.status(400).json({ error: "Nem található" });
 
-    const api = await fetch("https://graphql.anilist.co", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        query,
-        variables: { id: parseInt(anilistId) }
-      })
-    });
+      title = m.title.english || m.title.romaji || m.title.native;
+      coverUrl = m.coverImage?.large;
+      chapters = m.chapters;
+    } else if (source === "jikan") {
+      const m = await getJikanMangaById(malId);
+      if (!m) return res.status(400).json({ error: "Nem található" });
 
-    const json = await api.json();
-    const m = json.data?.Media;
+      title = m.title.english || m.title.romaji || m.title.native;
+      coverUrl = m.coverImage.large || m.coverImage.extraLarge;
+      chapters = m.chapters;
+    } else {
+      // source === "mangadex"
+      const m = await getMangaDexMangaById(mangadexId);
+      if (!m) return res.status(400).json({ error: "Nem található" });
 
-    if (!m) {
-      return res.status(400).json({ error: "Nem található" });
+      title = m.title.english || m.title.romaji || m.title.native;
+      coverUrl = m.coverImage.large || m.coverImage.extraLarge;
+      chapters = m.chapters;
     }
 
-    const title = m.title.english || m.title.romaji || m.title.native;
     if (!title) return res.status(400).json({ error: "Nem található cím" });
 
+    /* ===== Kereszt-azonosítók feltöltése (best effort) =====
+       Amelyik forrásból nem jött az elsődleges adat, ott is megpróbáljuk
+       cím alapján megtalálni a megfelelő ID-t, hogy a jövőbeli
+       duplikáció-ellenőrzés forrás-függetlenül is működjön erre a
+       tételre. Hiba esetén egyszerűen null marad — nem blokkolja a
+       hozzáadást, legfeljebb a backfill script pótolja majd később. */
+    let crossAnilistId = anilistId ? parseInt(anilistId) : null;
+    let crossMalId = malId ? parseInt(malId) : null;
+    let crossMangadexId = mangadexId;
+
+    if (crossAnilistId == null) {
+      try {
+        const q = `query ($search: String) { Media(search: $search, type: MANGA) { id title { english romaji } } }`;
+        const api = await fetch("https://graphql.anilist.co", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: q, variables: { search: title } }),
+        });
+        const json = await api.json();
+        const m = json.data?.Media;
+        const matchTitle = m?.title?.english || m?.title?.romaji;
+        if (m && titlesMatch(title, matchTitle)) crossAnilistId = m.id;
+      } catch {}
+    }
+    if (crossMalId == null) {
+      try {
+        const m = await searchJikanByTitle(title);
+        const matchTitle = m?.title?.english || m?.title?.romaji;
+        if (m && titlesMatch(title, matchTitle)) crossMalId = m.id;
+      } catch {}
+    }
+    if (crossMangadexId == null) {
+      try {
+        const m = await searchMangaDexByTitle(title);
+        const matchTitle = m?.title?.english || m?.title?.romaji;
+        if (m && titlesMatch(title, matchTitle)) crossMangadexId = m.id;
+      } catch {}
+    }
+
     const result = await pool.query(`
-      INSERT INTO wishlist (user_id, anilist_id, title, cover_url, episodes)
-      VALUES ($1,$2,$3,$4,$5)
+      INSERT INTO wishlist (user_id, anilist_id, mal_id, mangadex_id, source, title, cover_url, episodes)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
       RETURNING *
     `, [
       req.session.user.id,
-      m.id,
+      crossAnilistId,
+      crossMalId,
+      crossMangadexId,
+      source,
       title,
-      m.coverImage?.large,
-      m.chapters
+      coverUrl,
+      chapters
     ]);
 
     res.json(result.rows[0]);

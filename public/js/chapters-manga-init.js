@@ -18,6 +18,7 @@ let currentManga = null;
   if (currentManga.status) {
     const s = STATUS_HU[currentManga.status] || { label: currentManga.status, cls: "" };
     const badge = document.createElement("span");
+    badge.id = "statusBadge";
     badge.className = `manga-badge badge-status ${s.cls}`;
     badge.textContent = s.label;
     infoBar.appendChild(badge);

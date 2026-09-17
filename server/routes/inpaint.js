@@ -1,13 +1,22 @@
 // server/routes/inpaint.js - LaMa Cleaner 1.2.5
 import express from "express";
 import fetch   from "node-fetch";
+import { pool } from "../db.js";
 
 const router   = express.Router();
 const LAMA_URL = process.env.LAMA_URL || "http://192.168.0.90:8080";
 
+function logUsage(success, statusCode, durationMs, errorMessage) {
+  pool.query(
+    `INSERT INTO remote_service_usage (service, success, status_code, duration_ms, error_message) VALUES ('inpaint',$1,$2,$3,$4)`,
+    [success, statusCode, durationMs, errorMessage]
+  ).catch(err => console.error("remote_service_usage log hiba:", err.message));
+}
+
 router.post("/", async (req, res) => {
   req.setTimeout(660000);
   res.setTimeout(660000);
+  const startedAt = Date.now();
 
   try {
     const { imageBase64, maskBase64 } = req.body;
@@ -83,20 +92,24 @@ router.post("/", async (req, res) => {
       clearTimeout(timeoutId);
     } catch (e) {
       clearTimeout(timeoutId);
+      logUsage(false, 504, Date.now() - startedAt, "timeout: " + e.message);
       return res.status(504).json({ error: "LaMa timeout: " + e.message });
     }
 
     if (!lamaRes.ok) {
       const errText = await lamaRes.text().catch(() => "?");
+      logUsage(false, lamaRes.status, Date.now() - startedAt, errText.slice(0, 300));
       return res.status(500).json({ error: "LaMa hiba (" + lamaRes.status + "): " + errText.slice(0, 300) });
     }
 
     const imgBuffer = await lamaRes.buffer();
     const b64 = "data:image/png;base64," + imgBuffer.toString("base64");
+    logUsage(true, lamaRes.status, Date.now() - startedAt, null);
     return res.json({ image: b64 });
 
   } catch (e) {
     console.error("[inpaint]", e);
+    logUsage(false, null, Date.now() - startedAt, e.message);
     return res.status(500).json({ error: e.message });
   }
 });

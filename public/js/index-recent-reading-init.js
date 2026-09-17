@@ -1,6 +1,7 @@
 (async function () {
   try {
-    const res = await fetch("/api/progress/recent-reading");
+    const adultMode = localStorage.getItem("adultMode") === "1";
+    const res = await fetch(adultMode ? "/api/progress/recent-reading?adult=1" : "/api/progress/recent-reading");
     const items = await res.json();
 
     if (!items || items.length === 0) {

@@ -98,6 +98,9 @@ async function requireUploader(req, res, next) {
   } catch { return res.status(500).json({ error: "Auth hiba" }); }
 }
 
+/* ── Fejezet-mappa a gyökérben tiltva (ch015, ch15, chapter15, chapters, stb.) ── */
+const CHAPTER_FOLDER_RE = /^(chapters?|ch)[\s._-]*\d*$/i;
+
 /* ── Path security ──────────────────────────────────────── */
 function safeUserPath(uploaderRoot, relativePath = "") {
   const userBase = uploaderRoot.startsWith("/")
@@ -229,6 +232,13 @@ router.post("/upload", requireUploader, upload.single("file"), async (req, res) 
 
   if (!req.file) return res.status(400).json({ error: "Nincs fájl" });
 
+  const topFolder = relativePath.replace(/\\/g, "/").split("/").filter(Boolean)[0];
+  if (topFolder && CHAPTER_FOLDER_RE.test(topFolder)) {
+    return res.status(400).json({
+      error: `"${topFolder}" nevű mappa nem hozható létre a gyökérben — ez fejezet-mappának tűnik, egy manga/sorozat mappáján belül kell lennie.`,
+    });
+  }
+
   const fullPath = safeUserPath(uploaderRoot, relativePath);
   if (!fullPath) return res.status(400).json({ error: "Érvénytelen útvonal" });
 
@@ -299,6 +309,14 @@ router.post("/mkdir", requireUploader, express.json(), async (req, res) => {
   const relativePath = req.body.path || "";
 
   if (!relativePath) return res.status(400).json({ error: "Hiányzó útvonal" });
+
+  const segments = path.normalize(relativePath).split(/[\\/]/).filter(Boolean);
+  const folderName = segments[segments.length - 1] || "";
+  if (segments.length === 1 && CHAPTER_FOLDER_RE.test(folderName)) {
+    return res.status(400).json({
+      error: `"${folderName}" nevű mappa nem hozható létre a gyökérben — ez fejezet-mappának tűnik, egy manga/sorozat mappáján belül kell létrehozni.`,
+    });
+  }
 
   const fullPath = safeUserPath(uploaderRoot, relativePath);
   if (!fullPath) return res.status(400).json({ error: "Érvénytelen útvonal" });

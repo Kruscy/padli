@@ -88,6 +88,27 @@
   background: #2d1b69;
 }
 
+/* Uploader (fordító) btn */
+.filter-uploader-btn {
+  padding: 4px 14px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  background: #12281f;
+  color: #6ee7b7;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  font-family: Poppins, sans-serif;
+}
+
+.filter-uploader-btn:hover { background: #1a3d2c; }
+
+.filter-uploader-btn.selected {
+  border-color: #6ee7b7;
+  background: #16452f;
+}
+
 /* Active filter summary */
 .filter-summary {
   display: flex;

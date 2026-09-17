@@ -127,11 +127,65 @@ usersBtn.addEventListener("click", () => {
 }
 
 
+/* ================= 18+ KAPCSOLÓ (Patreon gomb helyén) ================= */
+async function initAdultModeToggle() {
+  const toggle = document.getElementById("adultModeToggle");
+  const checkbox = document.getElementById("adultModeCheckbox");
+  const patreonBtn = document.getElementById("topbarPatreonBtn");
+  // Mobil (avatar lenyíló menü) változat — 900px alatt a desktop kapcsoló
+  // CSS-ből rejtve van, ez helyettesíti.
+  const toggleMobile = document.getElementById("adultModeToggleMobile");
+  const checkboxMobile = document.getElementById("adultModeCheckboxMobile");
+  if (!toggle || !checkbox) return;
+
+  try {
+    const res = await fetch("/api/user/birth-date");
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data.adult_eligible) return; // marad a Patreon gomb, a kapcsoló rejtve
+
+    patreonBtn?.classList.add("hidden");
+    toggle.classList.remove("hidden");
+    toggleMobile?.classList.remove("hidden");
+
+    const isOn = localStorage.getItem("adultMode") === "1";
+    checkbox.checked = isOn;
+    if (checkboxMobile) checkboxMobile.checked = isOn;
+
+    const onChange = (checked) => {
+      localStorage.setItem("adultMode", checked ? "1" : "0");
+      // A tartalmat betöltő scriptek (filter.js grid-je, a kezdőlap
+      // kártya-szekciói: index-new-manga-init.js, hero.js, stb.) csak
+      // oldalbetöltéskor olvassák ki a localStorage-t — egyszerűbb és
+      // minden oldalon megbízható egy teljes újratöltés, mint mindegyiket
+      // külön-külön bekötni egy élő frissítésbe.
+      location.reload();
+    };
+
+    checkbox.addEventListener("change", () => onChange(checkbox.checked));
+    checkboxMobile?.addEventListener("change", () => onChange(checkboxMobile.checked));
+  } catch (err) {
+    console.error("18+ kapcsoló init hiba:", err);
+  }
+}
+
+// A logó melletti "18" jelvény — csak azt jelzi, hogy JELENLEG 18+ módban
+// vagyunk-e (localStorage), nem jogosultság-ellenőrzés (azt a szerver
+// mindenhol külön, a valódi lekérdezéseknél végzi el).
+function updateAdultBadge() {
+  const badge = document.getElementById("adultBadge");
+  if (!badge) return;
+  badge.classList.toggle("hidden", localStorage.getItem("adultMode") !== "1");
+}
+
 /* ================= LAYOUT INIT ================= */
 
 async function loadLayout() {
   await loadPartial("header-root", "/partials/header.html");
   await loadPartial("sidebar-root", "/partials/sidebar.html");
+
+  // "18" jelvény a logó mellett, ha épp 18+ módban vagyunk
+  updateAdultBadge();
 
   // search CSAK header után
   initSearch();
@@ -142,6 +196,9 @@ async function loadLayout() {
 
   // admin gombok
   initAdminControls();
+
+  // 18+ kapcsoló (csak igazolt 18+ usereknek jelenik meg, a Patreon gomb helyén)
+  initAdultModeToggle();
 
   // logout
   document.getElementById("logoutBtn")?.addEventListener("click", async () => {
@@ -175,12 +232,12 @@ document.body.appendChild(birthJS);
   // Chat widget betöltése
   const chatCSS = document.createElement("link");
   chatCSS.rel = "stylesheet";
-  chatCSS.href = "/css/chat.css";
+  chatCSS.href = "/css/chat.css?v=20260824b";
   document.head.appendChild(chatCSS);
 
 if (!document.getElementById("chatWidget")) {
   const chatJS = document.createElement("script");
-  chatJS.src = "/js/chat.js";
+  chatJS.src = "/js/chat.js?v=20260828a";
   chatJS.onload = () => {
   if (typeof initChat === "function") initChat();
   };

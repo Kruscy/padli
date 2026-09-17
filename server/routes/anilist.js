@@ -2,6 +2,8 @@ import { pool } from "../db.js";
 import express from "express";
 import fetch from "node-fetch";
 import { requireLogin } from "../middleware/auth.js";
+import { searchMangaList } from "../lib/jikan.js";
+import { searchMangaList as searchMangaDexList } from "../lib/mangadex.js";
 
 const router = express.Router();
 import fs from "fs";
@@ -165,6 +167,97 @@ if (!json.data) {
   }
 });
 
+// Csak a kívánságlista keresője használja — ha az AniList hibázik/rate-limitel,
+// Jikan (MyAnimeList) majd MangaDex fallback-kel ad találatokat, hogy a
+// keresés akkor se haljon el csendben. A /search-t (admin, anime-felirat)
+// ez nem érinti.
+router.get("/search-wishlist", requireLogin, async (req, res) => {
+  try {
+    const q = req.query.q;
+    if (!q || q.length < 2) return res.json({ results: [], unavailable: false });
+
+    let media = null;
+    try {
+      const query = `
+        query ($search: String) {
+          Page(perPage: 5) {
+            media(search: $search, type: MANGA) {
+              id
+              title { romaji english }
+              coverImage { medium }
+              chapters
+            }
+          }
+        }
+      `;
+      const api = await fetch("https://graphql.anilist.co", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query, variables: { search: q } }),
+      });
+      const json = await api.json();
+      if (json.data) media = json.data.Page.media;
+      else console.error("ANILIST SEARCH-WISHLIST BAD RESPONSE:", json);
+    } catch (err) {
+      console.error("ANILIST SEARCH-WISHLIST ERROR:", err);
+    }
+
+    if (media) {
+      return res.json({ results: media.map(m => ({ ...m, source: "anilist" })), unavailable: false });
+    }
+
+    // AniList hibázott → Jikan (MAL) fallback
+    console.log("↪️ Kívánságlista keresés: AniList hibázott — Jikan fallback...");
+    let jikanResults = null;
+    try {
+      jikanResults = await searchMangaList(q, 5);
+    } catch (err) {
+      console.error("JIKAN SEARCH-WISHLIST ERROR:", err);
+    }
+
+    if (jikanResults) {
+      return res.json({
+        results: jikanResults.map(m => ({
+          id: m.id,
+          title: { romaji: m.title.romaji, english: m.title.english },
+          coverImage: { medium: m.coverImage.large || m.coverImage.extraLarge },
+          chapters: m.chapters,
+          source: "jikan",
+        })),
+        unavailable: false,
+      });
+    }
+
+    // Jikan is hibázott → MangaDex fallback
+    console.log("↪️ Jikan is hibázott — MangaDex fallback...");
+    let mangadexResults = null;
+    try {
+      mangadexResults = await searchMangaDexList(q, 5);
+    } catch (err) {
+      console.error("MANGADEX SEARCH-WISHLIST ERROR:", err);
+    }
+
+    if (!mangadexResults) {
+      // Mindhárom forrás hibázott — a frontend jelezze, hogy ez kiesés, nem "nincs találat"
+      return res.json({ results: [], unavailable: true });
+    }
+
+    return res.json({
+      results: mangadexResults.map(m => ({
+        id: m.id,
+        title: { romaji: m.title.romaji, english: m.title.english },
+        coverImage: { medium: m.coverImage.large || m.coverImage.extraLarge },
+        chapters: m.chapters,
+        source: "mangadex",
+      })),
+      unavailable: false,
+    });
+  } catch (err) {
+    console.error("SEARCH-WISHLIST ERROR:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 router.get("/connect", requireLogin, (req, res) => {
   const url = `https://anilist.co/api/v2/oauth/authorize?client_id=${process.env.ANILIST_CLIENT_ID}&response_type=code&redirect_uri=${process.env.ANILIST_REDIRECT}`;
   res.redirect(url);
@@ -292,6 +385,11 @@ export async function syncToAniList(userId, anilistId, progress) {
         }
       })
     });
+
+    if (!res.ok) {
+      console.error("ANILIST API ERROR:", res.status, res.statusText);
+      return;
+    }
 
     const json = await res.json();
 

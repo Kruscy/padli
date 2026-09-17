@@ -4,7 +4,8 @@ let allManga = [];
 
 async function loadMangaList() {
   try {
-    const r = await fetch("/api/manga");
+    const adultMode = localStorage.getItem("adultMode") === "1";
+    const r = await fetch(adultMode ? "/api/manga?adult=1" : "/api/manga");
     allManga = await r.json();
   } catch (e) {
     console.error("Search: failed to load manga list", e);

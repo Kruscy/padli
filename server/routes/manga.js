@@ -5,6 +5,7 @@ import { Readable } from "stream";
 import { pool } from "../db.js";
 import { requireLogin } from "../middleware/auth.js";
 import { getPresignedUrl, mangaImageToR2Key, objectExists, listFiles, localPathToR2Key } from "../r2.js";
+import { isAdultVerified, resolveAdultMode, ADULT_GENRE_EXISTS_SQL } from "../lib/age.js";
 
 const router = express.Router();
 /* ================= HELPERS ================= */
@@ -13,20 +14,6 @@ function extractPageNumber(filename) {
   const base = filename.replace(/\.[^.]+$/, "");
   const match = base.match(/(\d+)(?!.*\d)/);
   return match ? parseInt(match[1], 10) : null;
-}
-
-// 18+ korhatár-ellenőrzés: felnőtt tartalmú (Hentai/Ecchi) mangákhoz
-function isAdultVerified(birthDate) {
-  if (!birthDate) return false; // nincs dátum → fail closed, nem tekintjük felnőttnek
-  const b = new Date(birthDate);
-  if (isNaN(b.getTime())) return false; // értelmezhetetlen dátum → fail closed
-  const now = new Date();
-  if (b > now) return false; // jövőbeli "születési" dátum → érvénytelen, fail closed
-  let age = now.getFullYear() - b.getFullYear();
-  const m = now.getMonth() - b.getMonth();
-  if (m < 0 || (m === 0 && now.getDate() < b.getDate())) age--;
-  if (age > 120) return false; // irreális kor (pl. hibás/placeholder dátum) → fail closed
-  return age >= 18;
 }
 
 async function isAdultManga(slug) {
@@ -41,16 +28,24 @@ async function isAdultManga(slug) {
   return rows[0]?.is_adult || false;
 }
 /* ================= MANGA LIST ================= */
-router.get("/manga", requireLogin, async (_req, res) => {
+router.get("/manga", requireLogin, async (req, res) => {
   try {
-const { rows } = await pool.query(`
+    // 18+ mód: ?adult=1 csak akkor enged felnőtt (Hentai/Ecchi) tartalmat,
+    // ha a user igazoltan 18+ (birth_date alapján) — máskülönben csendben
+    // visszaesik a normál (nem-felnőtt) listára. Alapból (adult mód nélkül)
+    // a felnőtt tartalom teljesen ki van zárva a listából, nem csak
+    // elrejtve a felületen.
+    const adultMode = await resolveAdultMode(pool, req);
+
+    const { rows } = await pool.query(`
       SELECT m.title, m.slug, m.cover_url,
-        COUNT(c.id)::int AS chapter_count
+        COUNT(DISTINCT c.id)::int AS chapter_count
       FROM manga m
       LEFT JOIN chapter c ON c.manga_id = m.id
+      WHERE ${ADULT_GENRE_EXISTS_SQL} = $1
       GROUP BY m.id
       ORDER BY m.title
-    `);
+    `, [adultMode]);
     res.json(rows);
   } catch (e) {
     console.error(e);
@@ -63,6 +58,9 @@ router.get("/manga-list", requireLogin, async (_req, res) => {
       SELECT
         m.slug,
     m.anilist_id,
+    m.mal_id,
+    m.mangadex_id,
+        COALESCE(m.uploaders, '{}') AS uploaders,
         COALESCE(ARRAY_AGG(DISTINCT g.name) FILTER (WHERE g.name IS NOT NULL), '{}') AS genres,
         COALESCE(ARRAY_AGG(DISTINCT t.name) FILTER (WHERE t.name IS NOT NULL), '{}') AS tags
       FROM manga m
@@ -79,7 +77,10 @@ router.get("/manga-list", requireLogin, async (_req, res) => {
       result[r.slug] = {
         genres: r.genres,
         tags: r.tags,
-        anilist_id: r.anilist_id
+        uploaders: r.uploaders,
+        anilist_id: r.anilist_id,
+        mal_id: r.mal_id,
+        mangadex_id: r.mangadex_id
       };
     });
 
@@ -455,12 +456,14 @@ ORDER BY
 
 
 router.get("/featured", requireLogin, async (req, res) => {
+  const adultMode = await resolveAdultMode(pool, req);
   const { rows } = await pool.query(`
     SELECT title, slug, cover_url, description
-    FROM manga
+    FROM manga m
     WHERE cover_url IS NOT NULL
       AND description IS NOT NULL
-  `);
+      AND ${ADULT_GENRE_EXISTS_SQL} = $1
+  `, [adultMode]);
 
   const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
 
