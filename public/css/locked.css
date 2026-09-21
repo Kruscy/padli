@@ -108,6 +108,13 @@
   margin: 0 0 10px;
 }
 
+.paywall-note {
+  color: #777;
+  font-size: 0.78rem;
+  font-style: italic;
+  margin: 0 0 12px;
+}
+
 .paywall-new-badge {
   display: inline-block;
   background: linear-gradient(135deg, #6366f1, #8b5cf6);

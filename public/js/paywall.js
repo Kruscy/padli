@@ -1,5 +1,5 @@
 /* ============================================================
-   paywall.js — Prémium tartalom zárolt állapot UI
+   paywall.js — Támogatói tartalom zárolt állapot UI
    Chapters modal + Reader lock page közösen használja
    ============================================================ */
 
@@ -58,8 +58,10 @@ export function buildPaywallHTML({ patreonConnected, returnUrl = "" }) {
   return `
     <div class="paywall-header">
       <img src="/assets/padlizsanfansublakat.png" style="height:64px;margin-bottom:10px">
-      <h2 class="paywall-title">🔒 Prémium tartalom</h2>
-      <p class="paywall-subtitle">Ez a fejezet még nem érhető el ingyenesen.</p>
+      <h2 class="paywall-title">🔒 Támogatói tartalom</h2>
+      <p class="paywall-subtitle">Ez a fejezet még nem érhető el ingyenesen — ütemezett megjelenéssel dolgozunk, naponta 5 rész kerül fel az oldalra. Támogatóink köszönetképpen ütemezés nélkül olvashatják tovább.</p>
+      <p class="paywall-subtitle">Ha zavar a várakozás és nem szeretnél a hivatalos megjelenésig várni: támogass minket egy kávéval (vagy annak árával), vagy segíts a munkánkban — pl. 20 javított kép = 1 hónap előolvasás.</p>
+      <p class="paywall-note">Ez nem szolgáltatás, csak egy köszönet azoknak, akik anyagilag vagy a munkájukkal segítik, hogy jobb legyen az oldal.</p>
       <div class="paywall-new-badge">✨ Újdonság — fizethetsz bankkártyával, Patreon nem kell!</div>
     </div>
     <div class="paywall-tiers">${tierCards}</div>

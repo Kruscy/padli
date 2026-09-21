@@ -17,7 +17,7 @@ async function showLockedModal() {
   if (content) {
     content.innerHTML = window._buildPaywallHTML
       ? window._buildPaywallHTML({ patreonConnected })
-      : `<p style="color:#bbb">Prémium tartalom. <a href="/settings.html" style="color:#a78bfa">Előfizetés</a></p>`;
+      : `<p style="color:#bbb">Támogatói tartalom. <a href="/settings.html" style="color:#a78bfa">Előfizetés</a></p>`;
   }
 
   modal.classList.remove("hidden");

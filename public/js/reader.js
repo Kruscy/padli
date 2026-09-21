@@ -153,7 +153,7 @@ async function showLockPage(targetSlug) {
   }
   const paywallHTML = window._buildPaywallHTML
     ? window._buildPaywallHTML({ patreonConnected })
-    : `<p>Ez a fejezet prémium tartalom. <a href="/settings.html">Előfizetés</a></p>`;
+    : `<p>Ez a fejezet támogatói tartalom. <a href="/settings.html">Előfizetés</a></p>`;
 
   // Overlay modal — ugyanolyan mint a chapters oldalon
   const existing = document.getElementById("readerLockModal");

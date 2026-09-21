@@ -225,7 +225,17 @@ async function main() {
     console.log(`\n=== ${name.toUpperCase()} → ${r2prefix} ===`);
     console.log(`Forrás: ${local}`);
 
-    const files = [...walkFiles(local)];
+    // A "uploads/bugs/javitott/" egy STAGING mappa — a fordítók ide töltik
+    // fel a javított képeket admin-jóváhagyásra várva (lásd
+    // server/lib/apply-bug-fix.js). Az itteni fájlok szándékosan csak
+    // ideiglenesen léteznek a lemezen: ha ez a script feltöltené R2-re és
+    // utána törölné (ahogy minden más uploads-fájllal tenné), az admin
+    // "elfogadás" gombja sosem találná meg a helyi fájlt (lásd 2026-09-20-i
+    // incidens: mind a 64 függő javítás helyi fájlja eltűnt emiatt, 3 még
+    // R2-n sem volt meg — véglegesen elveszett). Ezt a mappát ezért teljesen
+    // kihagyjuk a migrálásból, függetlenül attól, hogy melyik forrást
+    // futtatjuk.
+    const files = [...walkFiles(local)].filter(f => !f.includes(`${path.sep}bugs${path.sep}javitott${path.sep}`));
     console.log(`Fájlok száma: ${files.length}`);
     totalFiles += files.length;
 
