@@ -86,9 +86,14 @@ async function loadBugReportsStatus() {
 
     reports.forEach(report => {
       let idx = report.image_index;
-      // Ha a DB-ben null az index, próbáljuk megtalálni a fájlnév alapján
+      // Ha a DB-ben null az index, próbáljuk megtalálni a fájlnév alapján.
+      // Néhány régebbi hibajegynél a tárolt image_file véletlenül a teljes
+      // URL query-részét is tartalmazza (pl. "16.webp?r2=1"), ami sosem
+      // egyezne pontosan az allImages tiszta fájlneveivel — ezért a "?"
+      // előtti részt hasonlítjuk össze.
       if ((idx === null || idx === undefined) && report.image_file && allImages.length) {
-        idx = allImages.findIndex(img => img === report.image_file);
+        const cleanFile = report.image_file.split("?")[0];
+        idx = allImages.findIndex(img => img.split("?")[0] === cleanFile);
         if (idx < 0) idx = null;
       }
       if (idx === null || idx === undefined || idx < 0) return;

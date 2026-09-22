@@ -56,7 +56,10 @@ router.get("/", requireLogin, async (req, res) => {
           FROM bug_fixes bf2
           WHERE bf2.manga_slug = br.manga_slug
             AND bf2.chapter = br.chapter
-            AND bf2.image_index = br.image_index
+            AND (
+              (br.image_index IS NOT NULL AND bf2.image_index = br.image_index)
+              OR (br.image_index IS NULL AND SPLIT_PART(bf2.image_file, '?', 1) = SPLIT_PART(br.image_file, '?', 1))
+            )
         ), '[]') as fixes
       FROM bug_reports br
       LEFT JOIN users u ON u.id = br.user_id

@@ -255,26 +255,53 @@ router.post("/chapter/:id/unlock", async (req, res) => {
 router.delete("/chapter/:id", async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT l.path AS library_path, m.folder AS manga_folder, c.folder AS chapter_folder, m.r2_migrated
+      `SELECT l.path AS library_path, m.title AS manga_title, m.slug AS manga_slug,
+              m.folder AS manga_folder, c.folder AS chapter_folder, m.r2_migrated
        FROM chapter c
        JOIN manga m ON m.id = c.manga_id
        JOIN library l ON l.id = c.library_id
        WHERE c.id = $1`,
       [req.params.id]
     );
+    if (!rows.length) return res.status(404).json({ error: "Fejezet nem található" });
+    const chapter = rows[0];
 
-    if (rows.length && rows[0].r2_migrated) {
-      const { library_path, manga_folder, chapter_folder } = rows[0];
+    let r2DeletedCount = null;
+    let r2Prefix = null;
+    if (chapter.r2_migrated) {
+      const { library_path, manga_folder, chapter_folder } = chapter;
       try {
-        const prefix = mangaImageToR2Key(library_path, manga_folder, chapter_folder, "");
-        const deleted = await deleteObjectsByPrefix(prefix);
-        console.log(`[R2] fejezet törölve (${deleted} fájl): ${prefix}`);
+        r2Prefix = mangaImageToR2Key(library_path, manga_folder, chapter_folder, "");
+        r2DeletedCount = await deleteObjectsByPrefix(r2Prefix);
+        console.log(`[R2] fejezet törölve (${r2DeletedCount} fájl): ${r2Prefix}`);
       } catch (err) {
         console.error("R2 fejezet törlési hiba:", err.message);
       }
     }
 
     await pool.query(`DELETE FROM chapter WHERE id = $1`, [req.params.id]);
+
+    if (req.session.user) {
+      await pool.query(
+        `INSERT INTO admin_delete_log (admin_id, admin_username, target_type, target_id, target_title, details)
+         VALUES ($1, $2, 'chapter', $3, $4, $5)`,
+        [
+          req.session.user.id,
+          req.session.user.username,
+          req.params.id,
+          `${chapter.manga_title} – ${chapter.chapter_folder}`,
+          JSON.stringify({
+            mangaSlug: chapter.manga_slug,
+            mangaTitle: chapter.manga_title,
+            folder: chapter.chapter_folder,
+            r2Prefix,
+            r2DeletedFileCount: r2DeletedCount,
+          }),
+        ]
+      );
+    }
+
+    console.log(`[chapter-delete] Törölve: "${chapter.manga_title}" – ${chapter.chapter_folder} (chapter id: ${req.params.id}) – admin: ${req.session.user?.username ?? "?"}`);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: "DB error" });
@@ -305,7 +332,7 @@ router.post("/manga/:slug/cover", coverUpload.single("cover"), async (req, res) 
 router.post("/manga/:slug/refresh-metadata", async (req, res) => {
   const { slug } = req.params;
   const { anilist_id } = req.body;
-
+ 
   try {
     // Duplikált slug esetén ugyanazt a kanonikus bejegyzést válasszuk,
     // mint a GET /api/manga/:slug (a több fejezettel rendelkezőt).
@@ -321,7 +348,7 @@ router.post("/manga/:slug/refresh-metadata", async (req, res) => {
     );
     if (!mangaRes.rows.length) return res.status(404).json({ error: "Not found" });
     const mangaId = mangaRes.rows[0].id;
- 
+
 if (anilist_id) {
       await pool.query(
         `UPDATE manga SET
@@ -653,7 +680,7 @@ router.post("/send-verification-emails", async (req, res) => {
 
     if (!users.length) return res.json({ ok: true, sent: 0, message: "Nincs verifikálandó felhasználó." });
 
-    const BASE_URL = process.env.BASE_URL || process.env.SITE_URL || "http://localhost:3000";
+    const BASE_URL = process.env.BASE_URL || "https://padlizsanfansub.hu";
     const deadline = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000); // 14 nap
 
     let sent = 0, failed = 0;
@@ -684,7 +711,7 @@ router.post("/send-verification-emails", async (req, res) => {
             </a>
             <p style="color:#888;font-size:0.82rem;margin-top:20px">A link 15 napig érvényes.</p>
             <hr style="border-color:#2a2a3a;margin:20px 0">
-            <p style="color:#555;font-size:0.78rem">${process.env.SITE_NAME || "PadlizsanFanSub"} · ${(process.env.SITE_URL || "").replace(/^https?:\/\//, "")}</p>
+            <p style="color:#555;font-size:0.78rem">PadlizsanFanSub · padlizsanfansub.hu</p>
           </div>`;
 
         await sendMail({ to: user.email, subject: "✉️ Erősítsd meg az email címed – PadlizsanFanSub", html });

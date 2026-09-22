@@ -60,39 +60,11 @@ router.post("/chapter/:id/unlock", async (req, res) => {
   }
 });
 
-/* ===== CHAPTER TÖRLÉS ===== */
-router.delete("/chapter/:id", async (req, res) => {
-  try {
-    const { rows } = await pool.query(`
-      SELECT c.id, c.folder, c.manga_id, m.title AS manga_title, m.slug AS manga_slug
-      FROM chapter c
-      JOIN manga m ON m.id = c.manga_id
-      WHERE c.id = $1
-    `, [req.params.id]);
-    if (!rows.length) return res.status(404).json({ error: "Fejezet nem található" });
-    const chapter = rows[0];
-
-    await pool.query(`DELETE FROM chapter WHERE id = $1`, [req.params.id]);
-
-    await pool.query(
-      `INSERT INTO admin_delete_log (admin_id, admin_username, target_type, target_id, target_title, details)
-       VALUES ($1, $2, 'chapter', $3, $4, $5)`,
-      [
-        req.session.user.id,
-        req.session.user.username,
-        chapter.id,
-        `${chapter.manga_title} – ${chapter.folder}`,
-        JSON.stringify({ mangaId: chapter.manga_id, mangaSlug: chapter.manga_slug, mangaTitle: chapter.manga_title, folder: chapter.folder }),
-      ]
-    );
-
-    console.log(`[chapter-delete] Törölve: "${chapter.manga_title}" – ${chapter.folder} (chapter id: ${chapter.id}) – admin: ${req.session.user.username}`);
-    res.json({ ok: true });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "DB error" });
-  }
-});
+// FIGYELEM: a fejezet-törlés (DELETE /chapter/:id) a server/routes/admin.js
+// fájlban él, mert az van a routes.js-ben ELŐBB regisztrálva ugyanarra a
+// "/admin" alap-útvonalra — egy itteni azonos útvonalú duplikátum soha nem
+// futna le (Express az első illeszkedő route-ot választja). Ne vedd fel
+// újra ide, csak ott módosítsd.
 
 /* ===== MANGA TÖRLÉS ===== */
 router.delete("/manga/:slug", async (req, res) => {

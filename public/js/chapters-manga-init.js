@@ -1,5 +1,17 @@
 let currentManga = null;
 
+// Leírásokban gyakran csak sima szövegként szerepel egy URL (pl. forrás-
+// hivatkozás) — ezeket alakítjuk kattintható linkké, mielőtt sanitize-oljuk.
+// A negatív lookbehind (nem előzheti meg idézőjel) elkerüli, hogy egy már
+// meglévő href="..." attribútum értékét dupla <a>-ba csomagoljuk.
+function autoLinkUrls(html) {
+  return html.replace(/(?<!["'])(https?:\/\/[^\s<]+)/g, (url) => {
+    const clean = url.replace(/[.,;:!?)\]]+$/, "");
+    const trailing = url.slice(clean.length);
+    return `<a href="${clean}" target="_blank" rel="noopener noreferrer">${clean}</a>${trailing}`;
+  });
+}
+
 (async () => {
   const slug = new URLSearchParams(location.search).get("slug");
   if (!slug) return;
@@ -10,8 +22,8 @@ let currentManga = null;
   document.getElementById("mangaTitle").textContent = currentManga.title;
   document.getElementById("coverImg").src = currentManga.cover_url || "/assets/no-cover.png";
   document.getElementById("description").innerHTML = DOMPurify.sanitize(
-    currentManga.description || "",
-    { ALLOWED_TAGS: ["br","b","i","em","strong","p","a"], ALLOWED_ATTR: ["href"] }
+    autoLinkUrls(currentManga.description || ""),
+    { ALLOWED_TAGS: ["br","b","i","em","strong","p","a"], ALLOWED_ATTR: ["href","target","rel"] }
   );
 
   const infoBar = document.getElementById("mangaInfoBar");

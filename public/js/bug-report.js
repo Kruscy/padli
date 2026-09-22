@@ -88,6 +88,64 @@ function closeImageLightbox() {
 }
 
 /* ──────────────────────────────────────────────────────────
+   EREDETI / JAVÍTOTT ÖSSZEHASONLÍTÓ NAGYÍTÁS
+   (a javított képre kattintva — egyszerre mindkettő, kinagyítva)
+   ────────────────────────────────────────────────────────── */
+function openCompareLightbox(origUrl, fixedUrl, label) {
+  let overlay = document.getElementById('compareLightboxOverlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'compareLightboxOverlay';
+    overlay.style.cssText = `
+      position:fixed;inset:0;z-index:10002;
+      background:rgba(0,0,0,.92);
+      display:flex;justify-content:center;
+      overflow-y:auto;
+      padding:24px 12px 40px;
+      cursor:zoom-out;
+    `;
+    overlay.addEventListener('click', e => { if (e.target === overlay) closeCompareLightbox(); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && overlay.style.display === 'flex') closeCompareLightbox(); });
+    document.body.appendChild(overlay);
+  }
+
+  const closeBtn = `
+    <button onclick="closeCompareLightbox()"
+      style="position:fixed;top:16px;right:20px;z-index:10003;background:rgba(0,0,0,.7);border:1px solid rgba(255,255,255,.2);color:#ccc;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:.9rem;font-weight:700;">✕</button>
+  `;
+
+  overlay.innerHTML = `
+    ${closeBtn}
+    <div style="width:min(98vw,1600px);cursor:default;">
+      <div style="color:#888;font-size:.82rem;padding:0 0 12px 2px;">${label ? escapeHtml(label) : ''}</div>
+      <div style="display:flex;gap:14px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:280px;">
+          <div style="font-size:.75rem;color:#888;margin-bottom:6px;">🔴 Eredeti</div>
+          <img src="${origUrl}" style="width:100%;height:auto;display:block;border-radius:8px;border:1px solid rgba(255,255,255,.08);cursor:zoom-in"
+            onclick="event.stopPropagation();openImageLightbox('${origUrl.replace(/'/g, "\\'")}','🔴 Eredeti')">
+        </div>
+        <div style="flex:1;min-width:280px;">
+          <div style="font-size:.75rem;color:#888;margin-bottom:6px;">✅ Javított</div>
+          <img src="${fixedUrl}" style="width:100%;height:auto;display:block;border-radius:8px;border:1px solid rgba(255,255,255,.08);cursor:zoom-in"
+            onclick="event.stopPropagation();openImageLightbox('${fixedUrl.replace(/'/g, "\\'")}','✅ Javított')">
+        </div>
+      </div>
+    </div>
+  `;
+  overlay.style.display = 'flex';
+  overlay.scrollTop = 0;
+  document.body.style.overflow = 'hidden';
+}
+
+function closeCompareLightbox() {
+  const overlay = document.getElementById('compareLightboxOverlay');
+  if (overlay) overlay.style.display = 'none';
+  document.body.style.overflow = '';
+}
+window.openCompareLightbox = openCompareLightbox;
+window.closeCompareLightbox = closeCompareLightbox;
+
+/* ──────────────────────────────────────────────────────────
    INIT
    ────────────────────────────────────────────────────────── */
 (async function init() {
@@ -680,9 +738,9 @@ function renderReportDetails(report, isAdmin) {
           <div class="left-col">
             ${activeFix ? `
               <div class="image-box-large fix-image-box">
-                <div class="image-label">✅ Javított kép${fixes.length > 1 ? ` (${fixIdx + 1}/${fixes.length})` : ''} <span style="font-weight:400;color:#555;font-size:.72rem">— kattints a nagyításhoz</span></div>
-                <img src="${escapeHtml(activeFix.fixed_image_url)}" alt="Javított kép" loading="lazy" style="cursor:zoom-in"
-                  onclick="openImageLightbox(this.src, '✅ Javított kép #${report.image_index} — ${escapeHtml(report.manga_slug)} ${escapeHtml(report.chapter)}')">
+                <div class="image-label">✅ Javított kép${fixes.length > 1 ? ` (${fixIdx + 1}/${fixes.length})` : ''} <span style="font-weight:400;color:#555;font-size:.72rem">— kattints az eredeti + javított összehasonlításhoz</span></div>
+                <img src="${escapeHtml(activeFix.fixed_image_url)}" data-orig="${escapeHtml(report.image_url)}" alt="Javított kép" loading="lazy" style="cursor:zoom-in"
+                  onclick="openCompareLightbox(this.dataset.orig, this.src, '#${report.image_index} — ${escapeHtml(report.manga_slug)} ${escapeHtml(report.chapter)}')">
               </div>
               ${fixNavHtml}
               <div class="fix-meta">
@@ -733,9 +791,9 @@ function renderReportDetails(report, isAdmin) {
         <div class="left-col">
           ${appliedFix ? `
             <div class="image-box-large fix-image-box">
-              <div class="image-label">✅ Javított kép <span style="font-weight:400;color:#555;font-size:.72rem">— kattints a nagyításhoz</span></div>
-              <img src="${escapeHtml(appliedFix.fixed_image_url)}" alt="Javított kép" loading="lazy" style="cursor:zoom-in"
-                onclick="openImageLightbox(this.src, '✅ Javított kép #${report.image_index} — ${escapeHtml(report.manga_slug)} ${escapeHtml(report.chapter)}')">
+              <div class="image-label">✅ Javított kép <span style="font-weight:400;color:#555;font-size:.72rem">— kattints az eredeti + javított összehasonlításhoz</span></div>
+              <img src="${escapeHtml(appliedFix.fixed_image_url)}" data-orig="${escapeHtml(report.image_url)}" alt="Javított kép" loading="lazy" style="cursor:zoom-in"
+                onclick="openCompareLightbox(this.dataset.orig, this.src, '#${report.image_index} — ${escapeHtml(report.manga_slug)} ${escapeHtml(report.chapter)}')">
             </div>
             <div class="fix-meta">
               <span>👤 ${escapeHtml(appliedFix.fixed_by_name || 'Ismeretlen')}</span>
