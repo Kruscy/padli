@@ -180,6 +180,48 @@ function removeEmptyDirs(dir, protectedPaths) {
   }
 }
 
+// --- regisztrált fejezetek: csak ezek helyi fájljait szabad törölni ---
+// A server/scan.js KIZÁRÓLAG a helyi lemezről veszi fel a fejezeteket a
+// `chapter` táblába. Ha ez a script egy olyan fejezet helyi fájljait törli,
+// amit a scan még nem látott (a feltöltés a scan futása után, de a migráció
+// előtt ért a lemezre), akkor a képek R2-n megvannak, de DB-sor sosem
+// keletkezik, és a fejezet nem jelenik meg az oldalon (2026-10-02-i incidens:
+// 17 ilyen "árva" fejezet). Ezért helyi fájlt csak akkor törlünk, ha a
+// fejezete már szerepel az adatbázisban — a többit feltöltjük, de a lemezen
+// hagyjuk, hogy a következő scan regisztrálhassa.
+// A slugify-nak PONTOSAN egyeznie kell a server/scan.js-belivel, mert a scan
+// a manga-mappa nevéből képzett slug alapján rendeli a fejezetet a mangához.
+function slugify(str) {
+  return str
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+}
+
+async function loadChapterRegistry() {
+  const { rows: libs } = await pool.query(`SELECT path FROM library`);
+  const libPaths = libs
+    .map(l => path.resolve(l.path))
+    .sort((a, b) => b.length - a.length);
+  const { rows } = await pool.query(
+    `SELECT m.slug, c.folder FROM chapter c JOIN manga m ON m.id = c.manga_id`
+  );
+  const registered = new Set(rows.map(r => `${r.slug}\u0000${r.folder}`));
+  return { libPaths, registered };
+}
+
+// {library}/{manga}/{fejezet}/{fájl} → a fejezet benne van-e a chapter táblában.
+// Minden más elrendezést (library-n kívüli vagy más mélységű fájl) a scan sem
+// tud regisztrálni, ezért az sosem számít regisztráltnak.
+function isRegisteredChapterFile(filePath, { libPaths, registered }) {
+  const full = path.resolve(filePath);
+  const lib = libPaths.find(p => full.startsWith(p + path.sep));
+  if (!lib) return false;
+  const parts = full.slice(lib.length + 1).split(path.sep);
+  if (parts.length !== 3) return false;
+  return registered.has(`${slugify(parts[0])}\u0000${parts[1]}`);
+}
+
 // --- párhuzamos pool ---
 async function runPool(tasks, concurrency) {
   const iter = tasks[Symbol.iterator]();
@@ -214,6 +256,7 @@ async function main() {
   let failed = 0;
   let deletedLocal = 0;
   let verifyFailed = 0;
+  let keptUnregistered = 0;
   const startTime = Date.now();
 
   for (const [name, { local, r2prefix }] of Object.entries(activeSources)) {
@@ -242,6 +285,10 @@ async function main() {
     // Kavitánál nyilvántartjuk az újonnan feltöltött manga könyvtárakat
     const uploadedMangaDirs = new Set();
 
+    // Kavitánál csak a DB-ben már regisztrált fejezetek helyi fájljai törölhetők
+    const chapterRegistry = name === "kavita" ? await loadChapterRegistry() : null;
+    const unregisteredDirs = new Set();
+
     let done = 0;
     const tasks = files.map(filePath => async () => {
       const key = toKey(local, r2prefix, filePath);
@@ -266,8 +313,15 @@ async function main() {
         // mérete pontosan egyezik a helyivel — ez a "sikeres feltöltés"
         // igazolása, nem csak az, hogy a PUT nem dobott hibát.
         if (head.exists && head.size === localSize) {
-          fs.unlinkSync(filePath);
-          deletedLocal++;
+          if (chapterRegistry && !isRegisteredChapterFile(filePath, chapterRegistry)) {
+            // R2-n már fent van, de a scan még nem vette fel a fejezetet —
+            // a helyi fájl marad, amíg a chapter sor létre nem jön.
+            keptUnregistered++;
+            unregisteredDirs.add(path.dirname(filePath));
+          } else {
+            fs.unlinkSync(filePath);
+            deletedLocal++;
+          }
         } else {
           verifyFailed++;
           console.error(
@@ -292,6 +346,11 @@ async function main() {
 
     await runPool(tasks, CONCURRENCY);
     console.log("");
+
+    if (unregisteredDirs.size > 0) {
+      console.log(`⏸ ${unregisteredDirs.size} mappa helyi fájljai megmaradtak (a fejezet még nincs a DB-ben, a következő scan veszi fel):`);
+      for (const d of [...unregisteredDirs].sort()) console.log(`   ${d}`);
+    }
 
     // Kiürült manga-/fejezet-mappák eltávolítása — csak kavitánál futtatjuk,
     // mert az "uploads" forrás alatt névvel ellátott, funkcionális mappák
@@ -332,7 +391,7 @@ async function main() {
   const totalSec = Math.round((Date.now() - startTime) / 1000);
   console.log(`\n=== KÉSZ ===`);
   console.log(`Összesen: ${totalFiles} fájl`);
-  console.log(`Feltöltve: ${uploaded}, Kihagyva (már fent volt): ${skipped}, Törölve (helyi, ellenőrzött): ${deletedLocal}, Ellenőrzés sikertelen: ${verifyFailed}, Hiba: ${failed}`);
+  console.log(`Feltöltve: ${uploaded}, Kihagyva (már fent volt): ${skipped}, Törölve (helyi, ellenőrzött): ${deletedLocal}, Megtartva (fejezet még nincs DB-ben): ${keptUnregistered}, Ellenőrzés sikertelen: ${verifyFailed}, Hiba: ${failed}`);
   console.log(`Idő: ${Math.floor(totalSec / 3600)}ó ${Math.floor((totalSec % 3600) / 60)}p ${totalSec % 60}s`);
 
   await pool.end();
