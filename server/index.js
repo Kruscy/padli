@@ -5,8 +5,11 @@ import { fileURLToPath } from "url";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import helmet from "helmet";
-import { rateLimit } from "express-rate-limit";
+import { rateLimit, ipKeyGenerator } from "express-rate-limit";
 import routes from "./routes.js";
+import { securityMonitor } from "./middleware/security-monitor.js";
+import { getClientIp } from "./lib/client-ip.js";
+import { logSecurityEvent } from "./lib/security-log.js";
 import userRoutes from "./routes/user.js";
 import { activityTracker } from "./middleware/activity.js";
 import { billingAddressGate } from "./middleware/billingAddressGate.js";
@@ -34,6 +37,9 @@ if (isProd) {
     next();
   });
 }
+
+/* ===== BIZTONSÁGI FIGYELŐ (tiltólista, scanner, áradat, spam) ===== */
+app.use(securityMonitor);
 
 /* ===== SECURITY HEADERS ===== */
 app.use(helmet({
@@ -77,12 +83,19 @@ app.use((_req, res, next) => {
 });
 
 /* ===== RATE LIMITING ===== */
+// A kulcs a valódi kliens-IP (Cloudflare CF-Connecting-IP, lásd
+// lib/client-ip.js) — a req.ip a proxy mögött a proxy/Cloudflare címét
+// adhatta, így a korlát sok felhasználó között oszlott meg.
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: "Túl sok próbálkozás, kérjük várj 15 percet." },
+  keyGenerator: (req) => ipKeyGenerator(getClientIp(req)),
+  handler: (req, res, _next, options) => {
+    logSecurityEvent({ req, type: "auth_rate_limited", severity: "warn" });
+    res.status(options.statusCode).json({ error: "Túl sok próbálkozás, kérjük várj 15 percet." });
+  },
 });
 app.use("/api/auth/login", authLimiter);
 app.use("/api/auth/register", authLimiter);

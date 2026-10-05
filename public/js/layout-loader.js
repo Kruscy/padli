@@ -90,9 +90,9 @@ async function initAdminControls() {
 
   if (user.role !== "admin") return;
 
-  /* ===== SCAN GOMB ===== */
+  /* ===== SCAN GOMB (csak Ascyra — a szerver is ellenőrzi) ===== */
   const scanBtn = document.getElementById("scanBtn");
-  if (scanBtn) {
+  if (scanBtn && user.can_scan) {
     scanBtn.classList.remove("hidden");
 
     scanBtn.addEventListener("click", async () => {
@@ -114,6 +114,13 @@ async function initAdminControls() {
         scanBtn.disabled = false;
       }, 3000);
     });
+  }
+
+  /* ===== BIZTONSÁGI NAPLÓ GOMB (csak Ascyra — a szerver is ellenőrzi) ===== */
+  const securityBtn = document.getElementById("securityBtn");
+  if (securityBtn && user.can_security) {
+    securityBtn.classList.remove("hidden");
+    securityBtn.addEventListener("click", () => { window.location.href = "/security.html"; });
   }
 
   /* ===== USERS GOMB ===== */

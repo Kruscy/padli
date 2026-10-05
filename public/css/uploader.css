@@ -36,6 +36,24 @@ h1 {
   margin-bottom: 24px;
 }
 
+/* ── Kapcsolat teszt ── */
+.speedtest-box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.speedtest-result {
+  font-size: .85rem;
+  color: var(--muted);
+}
+
+.speedtest-result.ok   { color: #22c55e; }
+.speedtest-result.warn { color: #fbbf24; }
+.speedtest-result.bad  { color: #f87171; }
+
 /* ── Drag & drop zóna ── */
 .drop-zone {
   border: 2px dashed rgba(124,58,237,.5);
@@ -140,6 +158,7 @@ h1 {
 .queue-item-status { flex-shrink: 0; font-size: .8rem; font-weight: 600; }
 .queue-item-status.pending  { color: var(--muted); }
 .queue-item-status.uploading { color: #f59e0b; }
+.queue-item-status.retrying  { color: #fb923c; }
 .queue-item-status.done     { color: #22c55e; }
 .queue-item-status.error    { color: #f87171; }
 
@@ -337,4 +356,32 @@ h1 {
   font-weight: 700;
   font-size: .95rem;
   padding: 8px 0 2px;
+}
+
+/* Feltöltés utáni scan állapota */
+.scan-status-msg {
+  margin: 0 0 20px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: .9rem;
+  line-height: 1.5;
+}
+
+.scan-status-msg.running {
+  background: rgba(124, 58, 237, .12);
+  border: 1px solid rgba(124, 58, 237, .35);
+  color: #c4b5fd;
+}
+
+.scan-status-msg.ok {
+  background: rgba(34, 197, 94, .1);
+  border: 1px solid rgba(34, 197, 94, .35);
+  color: #22c55e;
+}
+
+.scan-status-msg.error {
+  background: rgba(248, 113, 113, .1);
+  border: 1px solid rgba(248, 113, 113, .35);
+  color: #f87171;
 }

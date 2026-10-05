@@ -20,7 +20,7 @@ router.get("/completion", requireLogin, async (req, res) => {
             FROM chapter c
             WHERE c.manga_id = m.id
             ORDER BY
-              CAST(regexp_replace(c.folder, '[^0-9]', '', 'g') AS INT) DESC
+              CAST(COALESCE(NULLIF(regexp_replace(c.folder, '[^0-9]', '', 'g'), ''), '0') AS INT) DESC
             LIMIT 1
           ) AS last_folder
         FROM manga m

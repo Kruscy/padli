@@ -16,20 +16,18 @@
   grid.innerHTML = "";
 
   /* ===== PROGRESS MAP ===== */
+  // Az összes olvasási állás egy kérésben (korábban mangánként külön kérés)
   const progressMap = {};
-
-  await Promise.all(
-    mangas.map(async (m) => {
-      try {
-        const r = await fetch(`/api/progress/${m.slug}`);
-        if (!r.ok) return;
-        const p = await r.json();
-        if (p && p.chapter) {
-          progressMap[m.slug] = p;
-        }
-      } catch {}
-    })
-  );
+  try {
+    const r = await fetch("/api/progress/_all");
+    if (r.ok) {
+      const all = await r.json();
+      for (const m of mangas) {
+        const p = all[m.slug];
+        if (p && p.chapter) progressMap[m.slug] = p;
+      }
+    }
+  } catch {}
 
   /* ===== RENDER ===== */
   mangas.forEach(m => {

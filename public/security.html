@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Biztonsági napló – PadlizsanFanSub</title>
+
+  <link rel="stylesheet" href="/css/search.css?v=20260619">
+  <link rel="stylesheet" href="/css/header.css?v=20260928">
+  <link rel="stylesheet" href="/css/sidebar.css?v=20260119">
+  <link rel="stylesheet" href="/css/security.css?v=20261005">
+  <link rel="stylesheet" href="/css/footer.css?v=20260405">
+  <link rel="stylesheet" href="/css/main.css?v=20260619">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+<div id="header-root"></div>
+<div id="sidebar-root"></div>
+
+<div class="sec-page">
+  <div class="sec-head">
+    <h1>🛡️ Biztonsági napló</h1>
+    <div class="sec-controls">
+      <label>Időszak
+        <select id="secHours">
+          <option value="1">1 óra</option>
+          <option value="24" selected>24 óra</option>
+          <option value="168">7 nap</option>
+          <option value="720">30 nap</option>
+        </select>
+      </label>
+      <button id="secRefresh" class="sec-btn">🔄 Frissítés</button>
+    </div>
+  </div>
+  <p id="secError" class="sec-error" hidden></p>
+
+  <section class="sec-card">
+    <h2>🚨 Riasztások</h2>
+    <div id="secAlerts" class="sec-alerts"><p class="sec-muted">Betöltés...</p></div>
+  </section>
+
+  <div class="sec-grid">
+    <section class="sec-card">
+      <h2>📊 Események típus szerint</h2>
+      <div class="sec-table-wrap"><table class="sec-table" id="secTypes"></table></div>
+    </section>
+    <section class="sec-card">
+      <h2>🌍 Gyanús események országonként</h2>
+      <div class="sec-table-wrap"><table class="sec-table" id="secCountries"></table></div>
+    </section>
+  </div>
+
+  <section class="sec-card">
+    <h2>🔎 Leggyakoribb IP-címek</h2>
+    <div class="sec-table-wrap"><table class="sec-table" id="secIps"></table></div>
+  </section>
+
+  <section class="sec-card">
+    <h2>⛔ Tiltott IP-címek</h2>
+    <form id="secBlockForm" class="sec-block-form">
+      <input id="secBlockIp" placeholder="IP-cím" required>
+      <input id="secBlockReason" placeholder="Indok (opcionális)">
+      <select id="secBlockHours">
+        <option value="1">1 óra</option>
+        <option value="24" selected>24 óra</option>
+        <option value="168">7 nap</option>
+        <option value="">Végleges</option>
+      </select>
+      <button class="sec-btn danger" type="submit">Tiltás</button>
+    </form>
+    <div class="sec-table-wrap"><table class="sec-table" id="secBlocks"></table></div>
+  </section>
+
+  <section class="sec-card">
+    <h2>📜 Események</h2>
+    <div class="sec-filters">
+      <input id="fType" placeholder="Típus (pl. login_failed)">
+      <input id="fIp" placeholder="IP">
+      <input id="fUser" placeholder="Felhasználó">
+      <label><input type="checkbox" id="fSusp"> csak gyanús</label>
+      <label><input type="checkbox" id="fHideInfo" checked> rutin események elrejtése</label>
+      <button id="fApply" class="sec-btn">Szűrés</button>
+    </div>
+    <div class="sec-table-wrap"><table class="sec-table" id="secEvents"></table></div>
+    <button id="secMore" class="sec-btn" hidden>Régebbiek betöltése</button>
+  </section>
+</div>
+
+<script src="/js/security-admin.js?v=20261005"></script>
+<div id="footer"></div>
+<script src="/js/footer.js?v=20260619"></script>
+<script type="module" src="/js/layout-loader.js?v=20261004"></script>
+<script src="/js/sidebar.js?v=20260204"></script>
+<script src="/js/auth-check.js?v=20260323"></script>
+</body>
+</html>

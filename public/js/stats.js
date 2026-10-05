@@ -8,11 +8,14 @@
 
     const recent = [];
 
-    for (const m of mangas) {
-      const r = await fetch(`/api/progress/${m.slug}`);
-      if (!r.ok) continue;
+    // Az összes olvasási állás egy kérésben (korábban mangánként egymás
+    // után külön kérés — több száz kérés és lassú betöltés)
+    let progressMap = {};
+    const pr = await fetch("/api/progress/_all");
+    if (pr.ok) progressMap = await pr.json();
 
-      const p = await r.json();
+    for (const m of mangas) {
+      const p = progressMap[m.slug];
       if (!p) continue;
 
       totalManga++;

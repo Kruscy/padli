@@ -1,13 +1,12 @@
 import express from "express";
-import { spawn } from "child_process";
 import fetch from "node-fetch";
 import { pool } from "../db.js";
 import { sendMail } from "../mail.js";
-import { clearNewReleasesCache } from "../cache/new-releases.js";
 import multer from "multer";
 import { refreshMetadataForManga } from "../refresh-metadata.js";
 import { getStatus as getGeminiStatus, validateGeminiKey, invalidateKeyCache } from "../lib/gemini-client.js";
 import { mangaImageToR2Key, deleteObjectsByPrefix } from "../r2.js";
+import { requestScan, SCAN_OWNER_USER_ID } from "../lib/scan-runner.js";
 import fs from "fs";
 import path from "path";
 
@@ -23,55 +22,17 @@ router.use((req, res, next) => {
 
 /* ================= SCAN LIBRARY ================= */
 
-const SCAN_LOCK = "/tmp/padlizsanfansub.scan.lock";
-let scanQueued = false;
-
-function isScanRunning() {
-  if (!fs.existsSync(SCAN_LOCK)) return false;
-  // Stale lock ellenőrzés: ha a PID már nem él, töröljük
-  try {
-    const pid = parseInt(fs.readFileSync(SCAN_LOCK, "utf8").trim(), 10);
-    process.kill(pid, 0); // 0 = csak ellenőrzés, nem küld signalt
-    return true; // PID él → scan fut
-  } catch {
-    fs.unlinkSync(SCAN_LOCK); // stale lock → töröljük
-    return false;
-  }
-}
-
-function spawnScan() {
-  clearNewReleasesCache();
-  const scan = spawn("node", ["./server/scan.js"], {
-    cwd: "/opt/padli",
-    detached: true,
-    stdio: "ignore"
-  });
-  scan.unref();
-  console.log("🔄 Admin scan started");
-}
-
+// A sor/lock kezelése a server/lib/scan-runner.js-ben van, közösen a
+// feltöltő oldal automatikus scanjével.
 router.post("/scan", (req, res) => {
+  // Kézi scant csak Ascyra indíthat (a header gombja is csak neki látszik)
+  if (req.session.user.id !== SCAN_OWNER_USER_ID) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
   try {
-    if (isScanRunning()) {
-      if (!scanQueued) {
-        scanQueued = true;
-        console.log("⏳ Scan már fut – a következő scan sorba állt");
-        // Megvárjuk amíg a lock felszabadul, majd elindítjuk
-        const interval = setInterval(() => {
-          if (!isScanRunning()) {
-            clearInterval(interval);
-            scanQueued = false;
-            spawnScan();
-          }
-        }, 5000); // 5 másodpercenként ellenőrzi
-      } else {
-        console.log("⏳ Scan már fut és egy scan már sorban van – eldobva");
-      }
-      return res.json({ ok: true, queued: true });
-    }
-
-    spawnScan();
-    res.json({ ok: true });
+    console.log(`🔄 Admin scan kérés: ${req.session.user.username}`);
+    const result = requestScan();
+    res.json({ ok: true, queued: result === "queued" });
   } catch (err) {
     console.error("❌ Scan spawn failed", err);
     res.status(500).json({ error: "Scan failed" });

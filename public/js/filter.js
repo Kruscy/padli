@@ -20,18 +20,13 @@ async function loadMangas() {
     const res = await fetch(adultMode ? "/api/manga?adult=1" : "/api/manga");
     allMangas = await res.json();
 
-    const progressMap = {};
-    await Promise.all(
-      allMangas.map(async (m) => {
-        try {
-          const r = await fetch(`/api/progress/${m.slug}`);
-          if (r.ok) {
-            const p = await r.json();
-            if (p) progressMap[m.slug] = p;
-          }
-        } catch {}
-      })
-    );
+    // Az összes olvasási állás egy kérésben (korábban mangánként külön
+    // kérés ment — ~600 egyszerre minden oldalbetöltésnél).
+    let progressMap = {};
+    try {
+      const r = await fetch("/api/progress/_all");
+      if (r.ok) progressMap = await r.json();
+    } catch {}
 
     const grid = document.getElementById("grid");
     grid.innerHTML = "";

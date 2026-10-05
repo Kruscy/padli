@@ -21,3 +21,9 @@ id_ed25519
 # Cache
 cache/
 server/cache/*.json
+
+# Szerkesztő-mentésfájlok (pl. ..env.swp — titkos adatot tartalmazhat)
+*.swp
+*.swo
+# Helyi kódmentések élesítés előtt
+backups/

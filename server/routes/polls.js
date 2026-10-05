@@ -107,42 +107,55 @@ router.get("/active", requireLogin, async (req, res) => {
 ===================================================== */
 router.get("/closed", requireLogin, async (req, res) => {
   try {
+    // Lezárt = lejárt VAGY az admin kézzel lezárta (POST /:id/close).
+    // Kézi lezárásnál az ends_at még a jövőben lehet, ezért a megjelenített
+    // lezárási idő a lejárat és "most" közül a korábbi.
     const { rows } = await pool.query(`
       SELECT
         p.id,
         p.title AS poll_title,
-        p.ends_at,
+        p.created_at,
+        LEAST(p.ends_at, NOW()) AS closed_at,
+        u.username AS created_by_name,
+        (SELECT COUNT(DISTINCT pv.user_id)::int FROM poll_votes pv WHERE pv.poll_id = p.id) AS voters,
         po.id AS option_id,
         po.title AS option_title,
         COUNT(v.id)::int AS votes
       FROM polls p
+      LEFT JOIN users u ON u.id = p.created_by
       JOIN poll_options po ON po.poll_id = p.id
       LEFT JOIN poll_votes v ON v.option_id = po.id
-      WHERE p.ends_at <= NOW()
-      GROUP BY p.id, p.title, p.ends_at, po.id, po.title
-      ORDER BY p.ends_at DESC
+      WHERE p.ends_at <= NOW() OR p.active = false
+      GROUP BY p.id, u.username, po.id
+      ORDER BY closed_at DESC, p.id DESC, votes DESC, po.id
     `);
 
-    const polls = {};
+    // FONTOS: Map és nem sima objektum — egy objektum egész-szám kulcsait
+    // a JS mindig növekvő sorrendbe rakja, ezért korábban a legrégebbi
+    // szavazás került felülre, hiába rendezett az SQL csökkenőbe.
+    const polls = new Map();
 
     for (const row of rows) {
-      if (!polls[row.id]) {
-        polls[row.id] = {
+      if (!polls.has(row.id)) {
+        polls.set(row.id, {
           id: row.id,
           title: row.poll_title,
-          ends_at: row.ends_at,
+          created_at: row.created_at,
+          ends_at: row.closed_at,
+          created_by: row.created_by_name,
+          voters: row.voters,
           options: []
-        };
+        });
       }
 
-      polls[row.id].options.push({
+      polls.get(row.id).options.push({
         id: row.option_id,
         title: row.option_title,
         votes: row.votes
       });
     }
 
-    res.json(Object.values(polls));
+    res.json([...polls.values()]);
   } catch (err) {
     console.error("CLOSED POLLS ERROR:", err);
     res.status(500).json({ error: "Server error" });

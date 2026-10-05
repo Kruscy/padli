@@ -14,6 +14,10 @@ const ALLOWED_PATHS = new Set([
 export async function billingAddressGate(req, res, next) {
   if (!req.session.user) return next();
   if (ALLOWED_PATHS.has(req.path)) return next();
+  // A feltöltő minden egyes képnél külön kérést küld — ennek a gate-nek
+  // semmi köze a feltöltéshez, felesleges DB-lekérdezést adott hozzá
+  // minden egyes fájlhoz (pl. 300 képes köteg = 300 felesleges query).
+  if (req.path.startsWith("/uploader/")) return next();
 
   try {
     const { rows } = await pool.query(

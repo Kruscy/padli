@@ -593,8 +593,13 @@
     display: flex;
   }
 
-  /* Logo szöveg: összezsugorodik helyet adva a keresőnek */
-  .logo span {
+  /* Logo szöveg: összezsugorodik helyet adva a keresőnek.
+     FONTOS: kifejezetten .logo-text-et célozzuk, NEM ".logo span"-t —
+     a .logo alatt a #adultBadge is egy <span>, és a korábbi ".logo span"
+     szabály (nagyobb specificitása miatt) felülírta a jelvény .hidden
+     osztályát, ezért az mobilon mindig látszott, a tényleges 18+
+     állapottól függetlenül. */
+  .logo .logo-text {
     display: inline-block;
     white-space: nowrap;
     vertical-align: middle;
@@ -604,7 +609,7 @@
     transition: max-width 0.28s ease, opacity 0.22s ease;
   }
 
-  .topbar.search-open .logo span {
+  .topbar.search-open .logo .logo-text {
     max-width: 0;
     opacity: 0;
   }

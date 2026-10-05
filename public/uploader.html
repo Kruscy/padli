@@ -6,9 +6,9 @@
 <title>Feltöltő – PadlizsanFanSub</title>
 <link rel="icon" type="image/png" sizes="32x32" href="/assets/favico.png">
 <link rel="stylesheet" href="/css/sidebar.css?v=20260119">
-<link rel="stylesheet" href="/css/header.css?v=20260915e">
+<link rel="stylesheet" href="/css/header.css?v=20260928">
 <link rel="stylesheet" href="/css/notification-badge.css?v=20260619">
-<link rel="stylesheet" href="/css/uploader.css?v=20260619">
+<link rel="stylesheet" href="/css/uploader.css?v=20261004">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
@@ -19,6 +19,12 @@
 <main class="uploader-main">
   <h1>📤 Feltöltő</h1>
   <p class="subtitle">Mangát tölthetsz fel a saját mappádba. Mappákat és fájlokat húzz ide, vagy tallózz.</p>
+
+  <!-- Kapcsolat teszt -->
+  <div class="speedtest-box">
+    <button class="btn btn-secondary" id="speedtestBtn">🌐 Kapcsolat tesztelése</button>
+    <span id="speedtestResult" class="speedtest-result"></span>
+  </div>
 
   <!-- Drag & Drop zóna -->
   <div class="drop-zone" id="dropZone">
@@ -63,6 +69,9 @@
     <div class="queue-list" id="queueList"></div>
   </div>
 
+  <!-- Feltöltés utáni scan állapota (a soron kívül, hogy a "Befejezettek törlése" ne tüntesse el) -->
+  <div id="scanStatusMsg" class="scan-status-msg hidden" role="status" aria-live="polite"></div>
+
   <!-- Fájlböngésző -->
   <div class="browser-section">
     <h2>📁 A te mappád</h2>
@@ -76,7 +85,7 @@
   </div>
 </main>
 
-<script type="module" src="/js/layout-loader.js?v=20260915d"></script>
-<script src="/js/uploader.js?v=20260619"></script>
+<script type="module" src="/js/layout-loader.js?v=20261004"></script>
+<script src="/js/uploader.js?v=20261004"></script>
 </body>
 </html>

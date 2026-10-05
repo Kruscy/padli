@@ -1,6 +1,7 @@
 import express from "express";
 import { pool } from "../db.js";
 import { requireLogin } from "../middleware/auth.js";
+import { removeTierRoles } from "../lib/discord-roles.js";
 
 const router = express.Router();
 
@@ -11,7 +12,9 @@ router.get("/export", requireLogin, async (req, res) => {
     const [profile, progress, reads, ratings, favorites, wishlist, wantToRead, orders, points] =
       await Promise.all([
         pool.query(
-          `SELECT username, email, created_at, TO_CHAR(birth_date, 'YYYY-MM-DD') AS birth_date FROM users WHERE id = $1`,
+          `SELECT username, email, created_at, TO_CHAR(birth_date, 'YYYY-MM-DD') AS birth_date,
+                  discord_id, discord_username, discord_linked_at
+           FROM users WHERE id = $1`,
           [userId]
         ),
         pool.query(
@@ -83,6 +86,12 @@ router.delete("/account", requireLogin, async (req, res) => {
   const client = await pool.connect();
 
   try {
+    // A törlés ELŐTT kell (a patreon_status sor is törlődik): az összekapcsolt
+    // Discord-fiók és a szint a támogatói rangok utólagos elvételéhez.
+    const { rows: discordRows } = await client.query(
+      `SELECT u.discord_id, ps.tier FROM users u LEFT JOIN patreon_status ps ON ps.user_id = u.id WHERE u.id = $1`, [userId]
+    );
+
     await client.query("BEGIN");
 
     await client.query(`DELETE FROM reading_progress   WHERE user_id = $1`, [userId]);
@@ -110,6 +119,11 @@ router.delete("/account", requireLogin, async (req, res) => {
     await client.query(`DELETE FROM users WHERE id = $1`, [userId]);
 
     await client.query("COMMIT");
+
+    // Az összekapcsolt Discord-fiókról a támogatói rangokat is levesszük
+    // (a törölt fiókot az időszakos egyeztetés már nem látná).
+    removeTierRoles(discordRows[0]?.discord_id, discordRows[0]?.tier)
+      .catch(err => console.error("GDPR törlés: Discord rang elvétel hiba:", err.message));
 
     req.session.destroy(() => res.json({ success: true }));
   } catch (err) {

@@ -5,6 +5,7 @@ import multer from "multer";
 import { pool } from "../db.js";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { localPathToR2Key } from "../r2.js";
+import { requestScan, getScanStatus } from "../lib/scan-runner.js";
 
 const r2 = new S3Client({
   region: "auto",
@@ -262,6 +263,44 @@ router.post("/upload", requireUploader, upload.single("file"), async (req, res) 
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+/* ── POST /api/uploader/scan – scan a sikeres feltöltés után ───────
+   A kliens akkor hívja, ha a feltöltési sor minden fájlja hibátlanul
+   felment. Ha már fut scan, a kérés sorba áll (és összevonódik), így
+   sok egyszerre végző feltöltő sem indít párhuzamos scaneket.
+   A requestedAt szerveridő: a kliens ehhez viszonyítva dönti el, hogy
+   a kérése UTÁN indult scan befejeződött-e (a scan-status alapján). ── */
+router.post("/scan", requireUploader, (req, res) => {
+  try {
+    const requestedAt = new Date();
+    const state = requestScan();
+    console.log(`🔄 Feltöltés utáni scan kérés: ${req.session.user.username} (${state})`);
+    res.json({ ok: true, state, requestedAt });
+  } catch (err) {
+    console.error("❌ Feltöltés utáni scan hiba:", err);
+    res.status(500).json({ error: "Nem sikerült elindítani a scant" });
+  }
+});
+
+router.get("/scan-status", requireUploader, (req, res) => {
+  res.json(getScanStatus());
+});
+
+/* ── GET /api/uploader/speedtest/ping – kör-idő (latency) mérés ─── */
+router.get("/speedtest/ping", requireUploader, (req, res) => {
+  res.json({ ok: true, t: Date.now() });
+});
+
+/* ── POST /api/uploader/speedtest/upload – feltöltési sávszélesség
+   mérés. A kapott adatot NEM írjuk lemezre, csak eldobjuk — kizárólag
+   az átvitel időzítésére kell a kliens oldalon. ── */
+const speedtestUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 },
+});
+router.post("/speedtest/upload", requireUploader, speedtestUpload.single("blob"), (req, res) => {
+  res.json({ ok: true, receivedBytes: req.file?.size || 0 });
 });
 
 /* ── POST /api/uploader/check – meglévő fájlok ellenőrzése ─ */

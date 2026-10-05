@@ -1,3 +1,19 @@
+.closed-polls-page {
+  max-width: 900px;
+  margin: 40px auto;
+  padding: 0 20px;
+  color: #fff;
+  font-family: "Poppins", sans-serif;
+}
+
+.closed-polls-page h1 {
+  margin: 0 0 24px;
+}
+
+.closed-empty {
+  opacity: .7;
+}
+
 .closed-poll {
   background: #0f172a;
   padding: 20px;
@@ -5,23 +21,44 @@
   margin-bottom: 24px;
 }
 
-.closed-poll h3 {
-  margin-bottom: 6px;
+.closed-poll-head {
+  margin-bottom: 16px;
 }
 
-.closed-date {
+.closed-poll h3 {
+  margin: 0 0 8px;
+  overflow-wrap: anywhere;
+}
+
+.closed-poll-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
   font-size: 13px;
-  opacity: .6;
-  margin-bottom: 16px;
+  opacity: .75;
 }
 
 .result-row {
   margin-bottom: 12px;
 }
 
+.result-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
 .result-label {
   font-weight: 500;
-  margin-bottom: 4px;
+  overflow-wrap: anywhere;
+}
+
+.result-meta {
+  font-size: 13px;
+  opacity: .8;
+  white-space: nowrap;
 }
 
 .result-bar {
@@ -36,8 +73,27 @@
   height: 100%;
 }
 
-.result-meta {
-  font-size: 13px;
-  margin-top: 4px;
-  opacity: .8;
+.result-row.winner .result-label {
+  color: #c4b5fd;
+  font-weight: 600;
+}
+
+.result-row.winner .fill {
+  background: linear-gradient(90deg, #a78bfa, #7c5cff);
+}
+
+@media (max-width: 600px) {
+  .closed-polls-page {
+    padding: 0 14px;
+    margin: 20px auto;
+  }
+
+  .closed-poll {
+    padding: 16px;
+  }
+
+  .result-head {
+    flex-direction: column;
+    gap: 2px;
+  }
 }

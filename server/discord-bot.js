@@ -38,6 +38,10 @@ const userActivity = new Map();
 
 async function handleCompromisedAccount(guild, user, messages) {
   console.log(`🚨 Feltört fiók gyanú: ${user.tag} (${user.id}) — ${messages.length} üzenet törlése és kick`);
+  import("./lib/security-log.js").then(({ logSecurityEvent }) => logSecurityEvent({
+    type: "discord_raid", severity: "high", dedupeKey: user.id,
+    details: { discordUser: `${user.tag} (${user.id})`, messages: messages.length },
+  })).catch(() => {});
 
   const byChannel = {};
   for (const m of messages) {
@@ -316,6 +320,25 @@ export async function sendImageToDiscord(username, buffer, filename) {
     files: [{ attachment: buffer, name: filename }],
   });
 }
+// A weboldal Discord-összekapcsolása (server/lib/discord-roles.js) ezen
+// keresztül éri el a szervert a támogatói rangok kiosztásához.
+export { MANAGEABLE_ROLES };
+// Biztonsági riasztás (server/lib/security-log.js). Saját csatorna:
+// DISCORD_SECURITY_CHANNEL_ID — ha nincs megadva, nem küldünk (csak napló).
+export async function sendSecurityAlert(text) {
+  const channelId = process.env.DISCORD_SECURITY_CHANNEL_ID;
+  if (!channelId || !bot.isReady()) return;
+  const channel = await bot.channels.fetch(channelId);
+  if (channel) await channel.send(text.slice(0, 1900));
+}
+
+export function isDiscordBotReady() {
+  return bot.isReady();
+}
+export async function getGuild() {
+  return bot.guilds.fetch(process.env.DISCORD_GUILD_ID);
+}
+
 export async function getGuildEmojis() {
   const guild = await bot.guilds.fetch(process.env.DISCORD_GUILD_ID);
   const emojis = await guild.emojis.fetch();

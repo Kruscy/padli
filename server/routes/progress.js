@@ -171,6 +171,32 @@ router.get("/recent-reading", async (req, res) => {
   }
 });
 
+/* ===== ÖSSZES PROGRESS EGY KÉRÉSBEN ===== */
+// A listaoldalak (Összes manga, Olvasási lista, Statisztika) korábban
+// mangánként külön GET /:slug kérést küldtek — az Összes manga oldal egy
+// megnyitása így ~600 párhuzamos kérés volt. Ez a végpont a user összes
+// állását egy lekérdezéssel adja vissza: { slug: { chapter, page, ... } }.
+// Duplikált slug esetén (lásd lent) itt is a legutóbb frissített nyer.
+// Az "_all" nem ütközhet manga-sluggal (a slugify aláhúzást nem hagy meg).
+router.get("/_all", requireLogin, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT DISTINCT ON (m.slug) m.slug, rp.chapter, rp.page, rp.highest_chapter, rp.updated_at
+       FROM reading_progress rp
+       JOIN manga m ON m.id = rp.manga_id
+       WHERE rp.user_id = $1
+       ORDER BY m.slug, rp.updated_at DESC NULLS LAST`,
+      [req.session.user.id]
+    );
+    const map = {};
+    for (const { slug, ...p } of rows) map[slug] = p;
+    res.json(map);
+  } catch (err) {
+    console.error("[progress] _all hiba:", err.message);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 /* ===== LOAD PROGRESS ===== */
 router.get("/:slug?", requireLogin, async (req, res) => {
   if (!req.session.user) return res.json(null);

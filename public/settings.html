@@ -7,8 +7,8 @@
 <link rel="stylesheet" href="/css/sidebar.css?v=20260119">
 <link rel="stylesheet" href="/css/search.css?v=20260619">
 <link rel="stylesheet" href="/css/grid.css?v=20260119">
-<link rel="stylesheet" href="/css/header.css?v=20260915e">
-<link rel="stylesheet" href="/css/settings.css?v=20260619">
+<link rel="stylesheet" href="/css/header.css?v=20260928">
+<link rel="stylesheet" href="/css/settings.css?v=20261004">
 <link rel="stylesheet" href="/css/footer.css?v=20260405">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -27,6 +27,7 @@
       <h3>Account</h3>
       <button data-tab="patreon" class="active">Patreon</button>
       <button data-tab="account">👤 Fiók</button>
+      <button data-tab="discord">🎮 Discord</button>
       <button data-tab="anilist">📚 AniList</button>
       <button data-tab="gdpr">🔒 Adataim</button>
     </aside>
@@ -184,6 +185,39 @@
   </div>
 </section>
 
+<section id="tab-discord" class="tab">
+  <h2>🎮 Discord</h2>
+  <p class="discord-intro">
+    Kösd össze a Discord-fiókodat, és a támogatói szintednek megfelelő rangot
+    (Támogató, Booster, Szuper Támogató) a bot automatikusan megadja neked
+    a PadlizsanFanSub Discord szerverén. Ha a támogatásod szintje változik
+    vagy lejár, a rang is követi.
+  </p>
+
+  <div id="discord-loading" class="discord-muted">Betöltés...</div>
+
+  <div id="discord-notconfigured" class="discord-notice warn hidden">
+    A Discord-összekapcsolás még nincs beállítva a szerveren. Nézz vissza később!
+  </div>
+
+  <div id="discord-disconnected" class="hidden">
+    <button id="discordConnectBtn" class="discord-btn">Discord összekapcsolása</button>
+    <p class="discord-muted discord-small">
+      A Discord csak a felhasználónevedet és az azonosítódat osztja meg velünk.
+    </p>
+  </div>
+
+  <div id="discord-connected" class="hidden">
+    <p><b>Összekapcsolt fiók:</b> <span id="discordUsername"></span></p>
+    <p><b>Járó rang:</b> <span id="discordRole"></span></p>
+    <div id="discordSyncNotice" class="discord-notice hidden"></div>
+    <div class="discord-actions">
+      <button id="discordSyncBtn" class="discord-btn secondary">🔄 Rang frissítése</button>
+      <button id="discordDisconnectBtn" class="disconnect-btn">Leválasztás</button>
+    </div>
+  </div>
+</section>
+
 <section id="tab-anilist" class="tab">
   <h2>📚 AniList</h2>
 
@@ -211,7 +245,8 @@
 <script src="/js/anilist-settings.js?v=20260325"></script>
 <script src="/js/patreon-settings.js?v=20260619"></script>
 <script src="/js/stripe-settings.js?v=20260619"></script>
-<script type="module" src="/js/layout-loader.js?v=20260915d"></script>
+<script src="/js/discord-settings.js?v=20261004"></script>
+<script type="module" src="/js/layout-loader.js?v=20261004"></script>
 <script src="/js/sidebar.js?v=20260204"></script>
 <script src="/js/email-verify-modal.js?v=20260808"></script>
 <script src="/js/auth-check.js?v=20260323"></script>

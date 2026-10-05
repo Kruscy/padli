@@ -4,12 +4,16 @@ import path from "path";
 import { pool } from "./db.js";
 import { requireLogin } from "./middleware/auth.js";
 import adminRoutes from "./routes/admin.js";
+import { SCAN_OWNER_USER_ID } from "./lib/scan-runner.js";
+import { logSecurityEvent } from "./lib/security-log.js";
 import { randomBytes, createHash } from "crypto";
 import { sendMail } from "./mail.js";
 import wishlistRoutes from "./routes/wishlist.js";
 import anilistRoutes from "./routes/anilist.js";
 import settingsRoutes from "./routes/settings.js";
 import patreonRoutes from "./routes/patreon.js";
+import discordLinkRoutes from "./routes/discord-link.js";
+import securityAdminRoutes from "./routes/security-admin.js";
 import { getNewReleasesCache, setNewReleasesCache, clearNewReleasesCache} from "./cache/new-releases.js";
 import { getNewMangaCache } from "./cache/new-manga.js";
 import { resolveAdultMode, ADULT_GENRE_EXISTS_SQL } from "./lib/age.js";
@@ -108,11 +112,13 @@ router.post("/auth/register", async (req, res) => {
     const rawToken     = randomBytes(32).toString("hex");
     const hashedToken  = createHash("sha256").update(rawToken).digest("hex");
 
-    await pool.query(
+    const ins = await pool.query(
       `INSERT INTO users (username, email, password_hash, birth_date, email_verified, email_verification_token, email_verification_expires)
-       VALUES ($1, $2, $3, $4, false, $5, NOW() + INTERVAL '24 hours')`,
+       VALUES ($1, $2, $3, $4, false, $5, NOW() + INTERVAL '24 hours') RETURNING id`,
       [username, email, passwordHash, birthDate, hashedToken]
     );
+    logSecurityEvent({ req, type: "register", userId: ins.rows[0]?.id, username,
+                       details: { emailDomain: String(email).split("@")[1]?.toLowerCase() || null } });
 
     const verifyLink = `${process.env.BASE_URL || "https://padlizsanfansub.hu"}/verify-email.html?token=${rawToken}`;
     await sendMail({
@@ -133,6 +139,8 @@ router.post("/auth/register", async (req, res) => {
 router.post("/auth/forgot-password", async (req, res) => {
   try {
     const { email } = req.body;
+    logSecurityEvent({ req, type: "password_reset_request",
+                       details: { emailDomain: String(email || "").split("@")[1]?.toLowerCase() || null } });
 
     const token = randomBytes(32).toString("hex");
     const expires = new Date(Date.now() + 1000 * 60 * 30); // 30 perc
@@ -222,11 +230,23 @@ router.post("/auth/login", async (req, res) => {
       [login]
     );
 
-    if (!rows.length) return res.status(401).json({ error: "Invalid login" });
+    const loginKey = String(login).slice(0, 120);
+    if (!rows.length) {
+      logSecurityEvent({ req, type: "login_failed", severity: "info", dedupeKey: `${loginKey}|nouser`,
+                         details: { login: loginKey, reason: "no_such_user" } });
+      return res.status(401).json({ error: "Invalid login" });
+    }
 
     const user = rows[0];
     const ok = await bcrypt.compare(password, user.password_hash);
-    if (!ok) return res.status(401).json({ error: "Invalid login" });
+    if (!ok) {
+      logSecurityEvent({ req, type: "login_failed", severity: "info", dedupeKey: `${loginKey}|badpw`,
+                         userId: user.id, username: user.username,
+                         details: { login: loginKey, reason: "bad_password", admin: user.role === "admin" } });
+      return res.status(401).json({ error: "Invalid login" });
+    }
+    logSecurityEvent({ req, type: "login_success", userId: user.id, username: user.username,
+                       dedupeKey: `ok|${user.id}`, details: { admin: user.role === "admin" } });
 
     req.session.user = { id: user.id, username: user.username, avatar: user.avatar, role: user.role };
     if (remember) req.session.cookie.maxAge = 1000 * 60 * 60 * 24 * 30;
@@ -327,9 +347,11 @@ router.get("/auth/me", async (req, res) => {
       email: userRes.rows[0]?.email || null,
       email_verified: userRes.rows[0]?.email_verified ?? true,
       can_upload: userRes.rows[0]?.can_upload || false,
+      can_scan: req.session.user.id === SCAN_OWNER_USER_ID,
+      can_security: req.session.user.id === SCAN_OWNER_USER_ID,
     });
   } catch {
-    res.json(req.session.user);
+    res.json({ ...req.session.user, can_scan: req.session.user.id === SCAN_OWNER_USER_ID, can_security: req.session.user.id === SCAN_OWNER_USER_ID });
   }
 });
 
@@ -480,6 +502,8 @@ router.use("/wishlist", wishlistRoutes);
 router.use("/anilist", anilistRoutes);
 router.use("/settings", settingsRoutes);
 router.use("/patreon", patreonRoutes);
+router.use("/discord", discordLinkRoutes);
+router.use("/admin/security", securityAdminRoutes);
 router.use("/polls", pollRoutes);
 router.use("/stats", statsRoutes);
 router.use("/announcements", announcementRoutes);

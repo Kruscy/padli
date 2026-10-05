@@ -24,6 +24,8 @@ const browserSearch  = document.getElementById("browserSearch");
 const statTotal    = document.getElementById("statTotal");
 const statDone     = document.getElementById("statDone");
 const statError    = document.getElementById("statError");
+const speedtestBtn    = document.getElementById("speedtestBtn");
+const speedtestResult = document.getElementById("speedtestResult");
 
 /* ══════════════════════════════════════════════════════════
    DRAG & DROP
@@ -119,7 +121,7 @@ function renderQueue() {
       <span class="queue-item-size">${formatSize(item.file.size)}</span>
       <span class="queue-item-status ${item.status}">${statusLabel(item.status)}</span>
     </div>
-    ${item.status === "uploading" ? `
+    ${item.status === "uploading" || item.status === "retrying" ? `
       <div class="queue-progress">
         <div class="queue-progress-bar" style="width:${item.progress}%"></div>
       </div>` : ""}
@@ -128,7 +130,7 @@ function renderQueue() {
   const done    = uploadQueue.filter(i => i.status === "done").length;
   const skipped = uploadQueue.filter(i => i.status === "skipped").length;
   const error   = uploadQueue.filter(i => i.status === "error").length;
-  const active  = uploadQueue.filter(i => i.status === "uploading" || i.status === "pending").length;
+  const active  = uploadQueue.filter(i => i.status === "uploading" || i.status === "retrying" || i.status === "pending").length;
 
   statTotal.textContent = uploadQueue.length;
   statDone.textContent  = done;
@@ -170,7 +172,7 @@ function renderQueue() {
 }
 
 function statusLabel(s) {
-  return { pending: "⏳ Vár", uploading: "⬆️ Tölt...", done: "✅ Kész", error: "❌ Hiba", skipped: "⏭️ Kihagyva" }[s] || s;
+  return { pending: "⏳ Vár", uploading: "⬆️ Tölt...", retrying: "🔁 Újrapróbálás...", done: "✅ Kész", error: "❌ Hiba", skipped: "⏭️ Kihagyva" }[s] || s;
 }
 
 function formatSize(bytes) {
@@ -325,6 +327,83 @@ async function startUpload() {
   clearBtn.disabled  = false;
   uploadBtn.textContent = "⬆️ Feltöltés indítása";
   loadFiles();
+
+  // Ha a sorban minden hibátlanul felment (és volt is mit feltölteni),
+  // automatikusan indul egy scan, hogy az új fejezetek megjelenjenek.
+  const anyError = uploadQueue.some(i => i.status === "error");
+  const anyUploaded = toUpload.some(i => i.status === "done");
+  if (!anyError && anyUploaded) startScanAfterUpload();
+}
+
+/* ══════════════════════════════════════════════════════════
+   SCAN A FELTÖLTÉS UTÁN
+   A szerver sorba rendezi a kéréseket (egyszerre egy scan fut, egy
+   várhat utána). A kérésünkre akkor tekintjük késznek, ha a kérés
+   UTÁN indult scan befejeződött — a requestedAt szerveridő, így a
+   kliens órájától független.
+   ══════════════════════════════════════════════════════════ */
+let scanPollTimer = null;
+
+function showScanStatus(kind, text) {
+  const box = document.getElementById("scanStatusMsg");
+  if (!box) return;
+  box.className = `scan-status-msg ${kind}`;
+  box.textContent = text;
+}
+
+async function startScanAfterUpload() {
+  clearTimeout(scanPollTimer);
+
+  let requestedAt;
+  try {
+    const r = await fetch("/api/uploader/scan", { method: "POST" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const data = await r.json();
+    requestedAt = new Date(data.requestedAt);
+    showScanStatus("running", data.state === "queued"
+      ? "⏳ Scan elindítva — egy korábbi scan még fut, utána rögtön a tiéd következik..."
+      : "🔄 A scan elindult — az új fejezetek feldolgozása folyamatban...");
+  } catch (err) {
+    console.warn("Scan indítási hiba:", err);
+    showScanStatus("error", "❌ Nem sikerült elindítani a scant. Szólj egy adminnak.");
+    return;
+  }
+
+  const deadline = Date.now() + 20 * 60 * 1000;
+
+  const poll = async () => {
+    try {
+      const r = await fetch("/api/uploader/scan-status", { cache: "no-store" });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      const s = await r.json();
+
+      const startedAt  = s.lastStartedAt  ? new Date(s.lastStartedAt)  : null;
+      const finishedAt = s.lastFinishedAt ? new Date(s.lastFinishedAt) : null;
+      const ourScanStarted = startedAt && startedAt >= requestedAt;
+
+      if (ourScanStarted && finishedAt && finishedAt >= startedAt && !s.running && !s.queued) {
+        if (s.lastExitCode === 0) {
+          showScanStatus("ok", "✅ A scan befejeződött — az új fejezetek már megjelentek az oldalon.");
+        } else {
+          showScanStatus("error", `⚠️ A scan hibával állt le (kód: ${s.lastExitCode}). Szólj egy adminnak.`);
+        }
+        return;
+      }
+      if (ourScanStarted) {
+        showScanStatus("running", "🔄 A scan fut — az új fejezetek feldolgozása folyamatban...");
+      }
+    } catch (err) {
+      console.warn("Scan állapot lekérdezési hiba:", err);
+    }
+
+    if (Date.now() > deadline) {
+      showScanStatus("error", "⚠️ Nem jött visszajelzés a scan befejezéséről. Nézd meg az oldalon, megjelentek-e a fejezetek.");
+      return;
+    }
+    scanPollTimer = setTimeout(poll, 4000);
+  };
+
+  scanPollTimer = setTimeout(poll, 3000);
 }
 
 function showOverwriteModal(existCount, totalCount) {
@@ -370,11 +449,8 @@ function showOverwriteModal(existCount, totalCount) {
   });
 }
 
-async function uploadItem(item) {
-  item.status = "uploading";
-  item.progress = 0;
-  renderQueue();
-
+// Egy feltöltési próbálkozás — a hívó (uploadItem) dönt az újrapróbálásról.
+function uploadAttempt(item) {
   const destPath = currentPath
     ? `${currentPath}/${item.relativePath}`
     : item.relativePath;
@@ -395,31 +471,124 @@ async function uploadItem(item) {
     };
 
     xhr.onload = () => {
-      if (xhr.status === 200 || xhr.status === 201) {
-        item.status = "done";
-        item.progress = 100;
-      } else {
-        item.status = "error";
-        console.warn("Upload hiba:", xhr.responseText);
-      }
-      renderQueue();
-      resolve();
+      resolve({ ok: xhr.status === 200 || xhr.status === 201, status: xhr.status, responseText: xhr.responseText });
     };
-
-    xhr.onerror = () => {
-      item.status = "error";
-      renderQueue();
-      resolve();
-    };
+    xhr.onerror = () => resolve({ ok: false, status: 0, responseText: "network error" });
 
     xhr.send(fd);
   });
+}
+
+// Feltöltés max. 3 próbálkozással, automatikusan — korábban a userre
+// hárult, hogy manuálisan próbálja újra a hibás elemeket (átlagosan
+// 3x kellett kattintania). 4xx (kliens-oldali, pl. jogosultság/rossz
+// mappanév) hibáknál nincs értelme újrapróbálni, azok azonnal buknak.
+async function uploadItem(item) {
+  const MAX_ATTEMPTS = 3;
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    item.status = attempt === 1 ? "uploading" : "retrying";
+    item.progress = 0;
+    renderQueue();
+
+    const result = await uploadAttempt(item);
+    if (result.ok) {
+      item.status = "done";
+      item.progress = 100;
+      renderQueue();
+      return;
+    }
+
+    if (result.status >= 400 && result.status < 500) {
+      console.warn("Upload hiba (nem javul újrapróbálásra):", result.responseText);
+      break;
+    }
+    if (attempt < MAX_ATTEMPTS) {
+      await new Promise(r => setTimeout(r, attempt * 1500));
+    } else {
+      console.warn(`Upload hiba (${MAX_ATTEMPTS} próbálkozás után):`, result.responseText);
+    }
+  }
+
+  item.status = "error";
+  renderQueue();
 }
 
 clearBtn.addEventListener("click", () => {
   uploadQueue = uploadQueue.filter(i => i.status !== "done");
   renderQueue();
 });
+
+/* ══════════════════════════════════════════════════════════
+   KAPCSOLAT TESZT
+   Kör-idő (ping) + feltöltési sávszélesség mérése, hogy a feltöltő
+   lássa, a lassúság a saját netje/a szerver felé vezető útvonal miatt
+   van-e, mielőtt nagy köteget indítana el.
+   ══════════════════════════════════════════════════════════ */
+speedtestBtn?.addEventListener("click", runSpeedTest);
+
+async function runSpeedTest() {
+  speedtestBtn.disabled = true;
+  speedtestResult.className = "speedtest-result";
+  speedtestResult.textContent = "⏳ Mérés...";
+
+  try {
+    // Kör-idő: 4 ping, az első (kapcsolat-felépülés miatt torzít) kihagyva
+    const pings = [];
+    for (let i = 0; i < 4; i++) {
+      const t0 = performance.now();
+      const r = await fetch("/api/uploader/speedtest/ping", { cache: "no-store" });
+      if (!r.ok) throw new Error("Ping sikertelen (HTTP " + r.status + ")");
+      pings.push(performance.now() - t0);
+    }
+    const latency = Math.round(pings.slice(1).reduce((a, b) => a + b, 0) / (pings.length - 1));
+
+    // Feltöltési sebesség: 5MB véletlen (tömöríthetetlen) adat
+    const SIZE = 5 * 1024 * 1024;
+    const data = new Uint8Array(SIZE);
+    for (let off = 0; off < SIZE; off += 65536) {
+      crypto.getRandomValues(data.subarray(off, Math.min(off + 65536, SIZE)));
+    }
+    const blob = new Blob([data]);
+
+    const speedMbps = await new Promise((resolve, reject) => {
+      const fd = new FormData();
+      fd.append("blob", blob, "speedtest.bin");
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", "/api/uploader/speedtest/upload");
+      xhr.timeout = 25000;
+      const start = performance.now();
+      let lastLoaded = 0;
+
+      xhr.upload.onprogress = e => { if (e.lengthComputable) lastLoaded = e.loaded; };
+      xhr.onload = () => {
+        const seconds = (performance.now() - start) / 1000;
+        if (xhr.status === 200) resolve((SIZE * 8) / seconds / 1_000_000);
+        else reject(new Error("HTTP " + xhr.status));
+      };
+      xhr.onerror = () => reject(new Error("Hálózati hiba"));
+      xhr.ontimeout = () => {
+        const seconds = (performance.now() - start) / 1000;
+        if (lastLoaded > 0) resolve((lastLoaded * 8) / seconds / 1_000_000);
+        else reject(new Error("Időtúllépés — nagyon lassú kapcsolat"));
+      };
+      xhr.send(fd);
+    });
+
+    let verdict = "✅ Jó";
+    let cls = "ok";
+    if (speedMbps < 1) { verdict = "🔴 Nagyon lassú — nagy képeknél könnyen elakadhat/timeoutolhat"; cls = "bad"; }
+    else if (speedMbps < 3) { verdict = "🟡 Lassú — nagyobb képeknél számíts újrapróbálkozásra"; cls = "warn"; }
+
+    speedtestResult.className = "speedtest-result " + cls;
+    speedtestResult.innerHTML = `Feltöltés: <strong>${(Math.round(speedMbps * 10) / 10)} Mbps</strong> · Késleltetés: <strong>${latency} ms</strong> — ${verdict}`;
+  } catch (err) {
+    speedtestResult.className = "speedtest-result bad";
+    speedtestResult.textContent = "❌ Nem sikerült megmérni: " + err.message;
+  } finally {
+    speedtestBtn.disabled = false;
+  }
+}
 
 /* ══════════════════════════════════════════════════════════
    FÁJLBÖNGÉSZŐ
