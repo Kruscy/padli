@@ -68,6 +68,26 @@ router.get("/events", async (req, res) => {
   }
 });
 
+// Admin-műveleti napló (admin_action_log) — pl. fejezet-feloldások
+router.get("/admin-actions", async (req, res) => {
+  const limit = clampInt(req.query.limit, 100, 1, 500);
+  const where = [], params = [];
+  const add = (sql, v) => { params.push(v); where.push(sql.replace("?", `$${params.length}`)); };
+  if (req.query.admin) add("admin_username ILIKE ?", `%${String(req.query.admin)}%`);
+  if (req.query.target) add("target_title ILIKE ?", `%${String(req.query.target)}%`);
+  if (req.query.before) add("id < ?", clampInt(req.query.before, 0, 0, Number.MAX_SAFE_INTEGER));
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, created_at, admin_username, action, target_type, target_id, target_title, details
+       FROM admin_action_log ${where.length ? "WHERE " + where.join(" AND ") : ""}
+       ORDER BY id DESC LIMIT ${limit}`, params);
+    res.json({ actions: rows });
+  } catch (err) {
+    console.error("[security-admin] admin-actions hiba:", err.message);
+    res.status(500).json({ error: "Szerver hiba" });
+  }
+});
+
 router.post("/block", express.json(), async (req, res) => {
   const ip = String(req.body?.ip || "").trim();
   const hours = req.body?.hours ? clampInt(req.body.hours, 24, 1, 24 * 365) : null;

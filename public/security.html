@@ -73,6 +73,17 @@
   </section>
 
   <section class="sec-card">
+    <h2>🧾 Admin-műveletek</h2>
+    <div class="sec-filters">
+      <input id="aAdmin" placeholder="Admin neve">
+      <input id="aTarget" placeholder="Manga / fejezet">
+      <button id="aApply" class="sec-btn">Szűrés</button>
+    </div>
+    <div class="sec-table-wrap"><table class="sec-table" id="secAdminActions"></table></div>
+    <button id="aMore" class="sec-btn" hidden>Régebbiek betöltése</button>
+  </section>
+
+  <section class="sec-card">
     <h2>📜 Események</h2>
     <div class="sec-filters">
       <input id="fType" placeholder="Típus (pl. login_failed)">
@@ -87,7 +98,7 @@
   </section>
 </div>
 
-<script src="/js/security-admin.js?v=20261005"></script>
+<script src="/js/security-admin.js?v=20261005b"></script>
 <div id="footer"></div>
 <script src="/js/footer.js?v=20260619"></script>
 <script type="module" src="/js/layout-loader.js?v=20261004"></script>

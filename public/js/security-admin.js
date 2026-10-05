@@ -75,9 +75,34 @@
     $("secMore").hidden = events.length < 100;
   }
 
+  const ACTION_LABEL = { chapter_unlock_adjust: "Feloldási idő eltolva", chapter_unlock_now: "Feloldva most" };
+  let lastActionId = null;
+  async function loadAdminActions(append = false) {
+    const q = new URLSearchParams({ limit: "100" });
+    if ($("aAdmin").value.trim()) q.set("admin", $("aAdmin").value.trim());
+    if ($("aTarget").value.trim()) q.set("target", $("aTarget").value.trim());
+    if (append && lastActionId) q.set("before", lastActionId);
+    const { actions } = await api(`/api/admin/security/admin-actions?${q}`);
+    const rows = actions.map(a => {
+      const d = a.details || {};
+      const change = a.action === "chapter_unlock_adjust"
+        ? `${d.hours > 0 ? "+" : ""}${d.hours} óra`
+        : "azonnal";
+      return `<tr>
+        <td class="sec-time">${fmt(a.created_at)}</td><td>${esc(a.admin_username || "?")}</td>
+        <td>${esc(ACTION_LABEL[a.action] || a.action)}</td><td>${esc(a.target_title || "")}</td>
+        <td>${esc(change)}</td><td class="sec-time">${fmt(d.before)} → ${fmt(d.after)}</td></tr>`;
+    }).join("");
+    const head = `<tr><th>Idő</th><th>Admin</th><th>Művelet</th><th>Fejezet</th><th>Változás</th><th>Feloldás: előtte → utána</th></tr>`;
+    if (append) $("secAdminActions").insertAdjacentHTML("beforeend", rows);
+    else $("secAdminActions").innerHTML = head + (rows || `<tr><td colspan="6" class="sec-muted">Még nincs naplózott admin-művelet.</td></tr>`);
+    lastActionId = actions.length ? actions[actions.length - 1].id : lastActionId;
+    $("aMore").hidden = actions.length < 100;
+  }
+
   async function refresh() {
     showError("");
-    try { await Promise.all([loadSummary(), loadEvents()]); }
+    try { await Promise.all([loadSummary(), loadEvents(), loadAdminActions()]); }
     catch (e) { showError(e.message); }
   }
 
@@ -115,6 +140,8 @@
     } catch (err) { showError(err.message); }
   });
 
+  $("aApply").addEventListener("click", () => loadAdminActions().catch(err => showError(err.message)));
+  $("aMore").addEventListener("click", () => loadAdminActions(true).catch(err => showError(err.message)));
   $("secRefresh").addEventListener("click", refresh);
   $("secHours").addEventListener("change", refresh);
   $("fApply").addEventListener("click", () => loadEvents().catch(err => showError(err.message)));

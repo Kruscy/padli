@@ -84,7 +84,11 @@ export function securityMonitor(req, res, next) {
     }
 
     const isWrite = req.method !== "GET" && req.method !== "HEAD" && req.method !== "OPTIONS";
-    if (isWrite && p.startsWith("/api/") && !WRITE_EXCLUDE.test(p)) {
+    // Admin a saját admin felületén: sok egymás utáni művelet is normális
+    // (pl. fejezetek feloldási idejének állítása) — ezeket az admin-műveleti
+    // napló rögzíti, a tömeges-írás figyelés téves riasztást adna rájuk.
+    const adminOnAdminApi = req.session?.user?.role === "admin" && /^\/api\/admin(\/|$)/.test(p);
+    if (isWrite && p.startsWith("/api/") && !WRITE_EXCLUDE.test(p) && !adminOnAdminApi) {
       const uid = req.session?.user?.id;
       const checks = [[`ip:${ip}`, WRITE_LIMIT_IP]];
       if (uid) checks.push([`user:${uid}`, WRITE_LIMIT_USER]);

@@ -450,6 +450,7 @@ async function toggleManga(slug, headerEl) {
                   <button data-id="${ch.id}" data-h="1"   data-slug="${escHtml(slug)}" class="ann-delete adj-btn" style="background:#1f2937;">+1h</button>
                   <button data-id="${ch.id}" data-h="-24" data-slug="${escHtml(slug)}" class="ann-delete adj-btn" style="background:#1f2937;">−24h</button>
                   <button data-id="${ch.id}" data-h="24"  data-slug="${escHtml(slug)}" class="ann-delete adj-btn" style="background:#1f2937;">+24h</button>
+                  ${isLocked ? `<button data-id="${ch.id}" data-slug="${escHtml(slug)}" class="ann-delete unlock-now-btn" style="background:#14532d;" title="Azonnal szabaddá teszi mindenkinek">🔓 Feloldás most</button>` : ""}
                 </div>
               </td>
               <td>
@@ -467,6 +468,11 @@ async function toggleManga(slug, headerEl) {
       adjustUnlock(btn.dataset.id, parseInt(btn.dataset.h), btn.dataset.slug)
     );
   });
+  panel.querySelectorAll(".unlock-now-btn").forEach(btn => {
+    btn.addEventListener("click", () =>
+      unlockNow(btn.dataset.id, btn.dataset.slug)
+    );
+  });
   panel.querySelectorAll(".del-ch-btn").forEach(btn => {
     btn.addEventListener("click", () =>
       deleteChapter(btn.dataset.id, btn.dataset.slug)
@@ -480,6 +486,15 @@ async function adjustUnlock(chapterId, hours, slug) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ hours })
   });
+  const header = document.querySelector(`#chapters-${slug}`).previousElementSibling;
+  await toggleManga(slug, header);
+  await toggleManga(slug, header);
+}
+
+// Azonnali feloldás egy kattintással (a sok "−24h" helyett). A művelet
+// bekerül az admin-műveleti naplóba a korábbi feloldási idővel együtt.
+async function unlockNow(chapterId, slug) {
+  await fetch(`/api/admin/chapter/${chapterId}/unlock-now`, { method: "POST" });
   const header = document.querySelector(`#chapters-${slug}`).previousElementSibling;
   await toggleManga(slug, header);
   await toggleManga(slug, header);

@@ -7,6 +7,7 @@ import { refreshMetadataForManga } from "../refresh-metadata.js";
 import { getStatus as getGeminiStatus, validateGeminiKey, invalidateKeyCache } from "../lib/gemini-client.js";
 import { mangaImageToR2Key, deleteObjectsByPrefix } from "../r2.js";
 import { requestScan, SCAN_OWNER_USER_ID } from "../lib/scan-runner.js";
+import { logAdminAction } from "../lib/admin-log.js";
 import fs from "fs";
 import path from "path";
 
@@ -198,16 +199,56 @@ router.get("/manga/:slug/chapters", async (req, res) => {
   }
 });
 
+// Fejezet feloldási idejének eltolása ±órával (admin manga-lista gombjai).
+// Minden módosítás bekerül az admin-műveleti naplóba (előtte/utána értékkel).
+async function loadChapterForLog(id) {
+  const { rows } = await pool.query(
+    `SELECT c.id, c.folder, c.unlocks_at, m.title FROM chapter c JOIN manga m ON m.id = c.manga_id WHERE c.id = $1`,
+    [id]
+  );
+  return rows[0] || null;
+}
+
 router.post("/chapter/:id/unlock", async (req, res) => {
-  const { hours } = req.body;
+  const hours = Number(req.body?.hours);
+  if (!Number.isFinite(hours) || Math.abs(hours) > 24 * 366) {
+    return res.status(400).json({ error: "Érvénytelen óraszám" });
+  }
   try {
-    await pool.query(
+    const before = await loadChapterForLog(req.params.id);
+    if (!before) return res.status(404).json({ error: "Fejezet nem található" });
+    const { rows } = await pool.query(
       `UPDATE chapter
        SET unlocks_at = COALESCE(unlocks_at, now()) + ($1 * interval '1 hour')
-       WHERE id = $2`,
+       WHERE id = $2 RETURNING unlocks_at`,
       [hours, req.params.id]
     );
-    res.json({ ok: true });
+    await logAdminAction(req, {
+      action: "chapter_unlock_adjust", targetType: "chapter", targetId: before.id,
+      targetTitle: `${before.title} – ${before.folder}`,
+      details: { hours, before: before.unlocks_at, after: rows[0]?.unlocks_at },
+    });
+    res.json({ ok: true, unlocks_at: rows[0]?.unlocks_at });
+  } catch (err) {
+    res.status(500).json({ error: "DB error" });
+  }
+});
+
+// Fejezet azonnali feloldása (a sok "−24h" kattintás helyett egy gomb).
+router.post("/chapter/:id/unlock-now", async (req, res) => {
+  try {
+    const before = await loadChapterForLog(req.params.id);
+    if (!before) return res.status(404).json({ error: "Fejezet nem található" });
+    const { rows } = await pool.query(
+      `UPDATE chapter SET unlocks_at = now() - interval '1 second' WHERE id = $1 RETURNING unlocks_at`,
+      [req.params.id]
+    );
+    await logAdminAction(req, {
+      action: "chapter_unlock_now", targetType: "chapter", targetId: before.id,
+      targetTitle: `${before.title} – ${before.folder}`,
+      details: { before: before.unlocks_at, after: rows[0]?.unlocks_at },
+    });
+    res.json({ ok: true, unlocks_at: rows[0]?.unlocks_at });
   } catch (err) {
     res.status(500).json({ error: "DB error" });
   }
