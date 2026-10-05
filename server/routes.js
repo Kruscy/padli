@@ -6,6 +6,7 @@ import { requireLogin } from "./middleware/auth.js";
 import adminRoutes from "./routes/admin.js";
 import { SCAN_OWNER_USER_ID } from "./lib/scan-runner.js";
 import { logSecurityEvent } from "./lib/security-log.js";
+import { validatePassword, comparePasswordSafe, hashToken, destroyUserSessions } from "./lib/auth-security.js";
 import { randomBytes, createHash } from "crypto";
 import { sendMail } from "./mail.js";
 import wishlistRoutes from "./routes/wishlist.js";
@@ -92,6 +93,9 @@ router.post("/auth/register", async (req, res) => {
       return res.status(400).json({ error: "A felhasználónév túl rövid" });
     }
 
+    const pwError = validatePassword(password);
+    if (pwError) return res.status(400).json({ error: pwError });
+
     const birthDateObj = new Date(birthDate);
     const ageInYears = (Date.now() - birthDateObj.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
     if (isNaN(birthDateObj.getTime()) || birthDateObj > new Date() || ageInYears > 120) {
@@ -153,7 +157,7 @@ router.post("/auth/forgot-password", async (req, res) => {
       WHERE email = $3
       RETURNING email
       `,
-      [token, expires, email]
+      [hashToken(token), expires, email]
     );
 
     // Biztonság: mindig OK
@@ -189,24 +193,38 @@ router.post("/auth/forgot-password", async (req, res) => {
 router.post("/auth/reset-password", async (req, res) => {
   try {
     const { token, password } = req.body;
+    if (!token || typeof token !== "string") {
+      return res.status(400).json({ error: "Hibás vagy lejárt link." });
+    }
+    const pwError = validatePassword(password);
+    if (pwError) return res.status(400).json({ error: pwError });
 
-    const hash = await bcrypt.hash(password, 10);
+    const hash = await bcrypt.hash(password, 12);
 
+    // A token hash-elve van tárolva. Átmenetileg (az élesítés előtt kiküldött,
+    // max. 30 percig érvényes linkek miatt) a régi, nyers formát is elfogadjuk.
     const result = await pool.query(
       `
       UPDATE users
       SET password_hash = $1,
           reset_token = NULL,
           reset_expires = NULL
-      WHERE reset_token = $2
+      WHERE (reset_token = $2 OR reset_token = $3)
         AND reset_expires > NOW()
+      RETURNING id, username
       `,
-      [hash, token]
+      [hash, hashToken(token), token]
     );
 
     if (!result.rowCount) {
-      return res.status(400).json({ error: "Invalid or expired token" });
+      return res.status(400).json({ error: "Hibás vagy lejárt link." });
     }
+
+    // Minden korábbi bejelentkezés érvénytelen (ha valaki ellopta, kiesik)
+    const { id, username } = result.rows[0];
+    const killed = await destroyUserSessions(id);
+    logSecurityEvent({ req, type: "password_reset_done", severity: "info", userId: id, username,
+                       details: { sessionsRevoked: killed } });
 
     res.json({ ok: true });
   } catch (err) {
@@ -231,6 +249,8 @@ router.post("/auth/login", async (req, res) => {
     );
 
     const loginKey = String(login).slice(0, 120);
+    // Nem létező fióknál is lefut egy bcrypt-összehasonlítás (időzítés-kiegyenlítés)
+    const ok = await comparePasswordSafe(password, rows[0]?.password_hash);
     if (!rows.length) {
       logSecurityEvent({ req, type: "login_failed", severity: "info", dedupeKey: `${loginKey}|nouser`,
                          details: { login: loginKey, reason: "no_such_user" } });
@@ -238,7 +258,6 @@ router.post("/auth/login", async (req, res) => {
     }
 
     const user = rows[0];
-    const ok = await bcrypt.compare(password, user.password_hash);
     if (!ok) {
       logSecurityEvent({ req, type: "login_failed", severity: "info", dedupeKey: `${loginKey}|badpw`,
                          userId: user.id, username: user.username,
@@ -248,8 +267,12 @@ router.post("/auth/login", async (req, res) => {
     logSecurityEvent({ req, type: "login_success", userId: user.id, username: user.username,
                        dedupeKey: `ok|${user.id}`, details: { admin: user.role === "admin" } });
 
+    // Új munkamenet-azonosító belépéskor (session fixation ellen): a
+    // belépés előtti esetleges munkamenet azonosítója nem marad érvényes.
+    await new Promise((resolve, reject) => req.session.regenerate(err => err ? reject(err) : resolve()));
     req.session.user = { id: user.id, username: user.username, avatar: user.avatar, role: user.role };
     if (remember) req.session.cookie.maxAge = 1000 * 60 * 60 * 24 * 30;
+    await new Promise((resolve, reject) => req.session.save(err => err ? reject(err) : resolve()));
 
     if (!user.email_verified) {
       return res.json({ ok: true, emailPending: true, email: user.email });

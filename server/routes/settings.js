@@ -3,6 +3,8 @@ import bcrypt from "bcrypt";
 import { randomBytes, createHash } from "crypto";
 import { pool } from "../db.js";
 import { sendMail } from "../mail.js";
+import { logSecurityEvent } from "../lib/security-log.js";
+import { validatePassword, destroyUserSessions } from "../lib/auth-security.js";
 
 function verificationEmailHtml(username, link) {
   return `
@@ -51,12 +53,51 @@ router.post("/", async (req, res) => {
   const userId = req.session.user.id;
   const { email, oldPassword, newPassword } = req.body;
 
+  const { rows: cur } = await pool.query(
+    "SELECT email, password_hash, username FROM users WHERE id = $1",
+    [userId]
+  );
+  if (!cur.length) return res.status(404).json({ error: "Felhasználó nem található" });
+
+  // A kliens minden mentéskor elküldi az e-mail-címet — csak akkor e-mail-
+  // csere, ha TÉNYLEG eltér a jelenlegitől (korábban minden mentés, pl. egy
+  // sima jelszócsere is "megerősítetlenné" tette az e-mailt és levelet küldött).
+  const newEmail = typeof email === "string" ? email.trim() : "";
+  const wantsEmailChange = !!newEmail && newEmail.toLowerCase() !== String(cur[0].email || "").toLowerCase();
+  const wantsPasswordChange = !!newPassword;
+
+  if (!wantsEmailChange && !wantsPasswordChange) {
+    return res.json({ ok: true, emailChanged: false });
+  }
+
+  // E-mail- és jelszócseréhez is a JELENLEGI jelszó kell — egy ellopott
+  // munkamenettel így nem lehet átírni az e-mailt, majd jelszó-
+  // visszaállítással véglegesen átvenni a fiókot.
+  if (!oldPassword) {
+    return res.status(400).json({
+      error: wantsEmailChange
+        ? "Az e-mail-cím módosításához add meg a jelenlegi jelszavadat (Régi jelszó mező)."
+        : "Régi jelszó megadása kötelező",
+    });
+  }
+  const ok = await bcrypt.compare(String(oldPassword), cur[0].password_hash);
+  if (!ok) {
+    logSecurityEvent({ req, type: "settings_bad_password", severity: "warn",
+                       details: { emailChange: wantsEmailChange, passwordChange: wantsPasswordChange } });
+    return res.status(400).json({ error: "A jelenlegi jelszó hibás" });
+  }
+
+  if (wantsPasswordChange) {
+    const pwError = validatePassword(newPassword);
+    if (pwError) return res.status(400).json({ error: pwError });
+  }
+
   /* ==== EMAIL CSERE ==== */
   let emailChanged = false;
-  if (email) {
+  if (wantsEmailChange) {
     const exists = await pool.query(
       "SELECT 1 FROM users WHERE lower(email) = lower($1) AND id != $2",
-      [email, userId]
+      [newEmail, userId]
     );
 
     if (exists.rowCount > 0) {
@@ -67,46 +108,37 @@ router.post("/", async (req, res) => {
     const hashedToken = createHash("sha256").update(rawToken).digest("hex");
     const expires = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-    const { rows: uRows } = await pool.query(
+    await pool.query(
       `UPDATE users SET email = $1, email_verified = false,
        email_verification_token = $2, email_verification_expires = $3
-       WHERE id = $4 RETURNING username`,
-      [email, hashedToken, expires, userId]
+       WHERE id = $4`,
+      [newEmail, hashedToken, expires, userId]
     );
 
-    const username = uRows[0]?.username || "Felhasználó";
+    const username = cur[0].username || "Felhasználó";
     const verifyLink = `${process.env.BASE_URL || process.env.SITE_URL || "http://localhost:3000"}/verify-email.html?token=${rawToken}`;
 
     sendMail({
-      to: email,
+      to: newEmail,
       subject: "✉️ Erősítsd meg az új email címed – PadlizsanFanSub",
       html: verificationEmailHtml(username, verifyLink),
     }).catch(e => console.error("[mail] email change verify error:", e.message));
 
+    logSecurityEvent({ req, type: "email_changed", severity: "info",
+                       details: { from: String(cur[0].email || "").split("@")[1] || null, to: newEmail.split("@")[1] || null } });
     emailChanged = true;
   }
 
   /* ==== JELSZÓ CSERE ==== */
-  if (oldPassword || newPassword) {
-    if (!oldPassword || !newPassword) {
-      return res.status(400).json({ error: "Password fields incomplete" });
-    }
-
-    const { rows } = await pool.query(
-      "SELECT password_hash FROM users WHERE id = $1",
-      [userId]
-    );
-
-    const ok = await bcrypt.compare(oldPassword, rows[0].password_hash);
-    if (!ok) {
-      return res.status(400).json({ error: "Old password incorrect" });
-    }
-
+  if (wantsPasswordChange) {
     const hash = await bcrypt.hash(newPassword, 12);
     await pool.query(
       "UPDATE users SET password_hash = $1 WHERE id = $2",
       [hash, userId]
     );
+    // A többi eszközön lévő bejelentkezés érvénytelen (a mostani marad)
+    const killed = await destroyUserSessions(userId, req.sessionID);
+    logSecurityEvent({ req, type: "password_changed", severity: "info", details: { otherSessionsRevoked: killed } });
   }
 
   res.json({ ok: true, emailChanged });

@@ -12,6 +12,8 @@ import sharp    from "sharp";
 import fs       from "fs";
 import path     from "path";
 import { pool } from "../db.js";
+import { logSecurityEvent } from "../lib/security-log.js";
+import { comparePasswordSafe } from "../lib/auth-security.js";
 import { localPathToR2Key, listFiles } from "../r2.js";
 import { callGemini } from "../lib/gemini-client.js";
 
@@ -324,9 +326,20 @@ router.post("/login", async (req, res) => {
       "SELECT id, username, password_hash FROM users WHERE username = $1 OR email = $1 LIMIT 1",
       [username]
     );
-    if (!rows.length || !(await bcrypt.compare(password, rows[0].password_hash)))
+    // Ugyanazokkal a fiókokkal működik, mint a fő belépés — ezért ugyanúgy
+    // naplózzuk, és a kérésszám-korlát is rajta van (server/index.js).
+    const loginKey = String(username).slice(0, 120);
+    const ok = await comparePasswordSafe(password, rows[0]?.password_hash);
+    if (!ok) {
+      logSecurityEvent({ req, type: "login_failed", severity: "info",
+                         dedupeKey: `${loginKey}|${rows.length ? "badpw" : "nouser"}`,
+                         userId: rows[0]?.id ?? null, username: rows[0]?.username ?? null,
+                         details: { login: loginKey, reason: rows.length ? "bad_password" : "no_such_user", source: "padlicrome" } });
       return res.status(401).json({ error: "Hibás felhasználónév vagy jelszó" });
+    }
     const user = rows[0];
+    logSecurityEvent({ req, type: "login_success", userId: user.id, username: user.username,
+                       dedupeKey: `ok|${user.id}|pc`, details: { source: "padlicrome" } });
     const points = await getPoints(user.id);
     const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: "7d" });
     res.json({ token, username: user.username, points });

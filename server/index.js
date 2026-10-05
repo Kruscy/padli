@@ -100,6 +100,24 @@ const authLimiter = rateLimit({
 app.use("/api/auth/login", authLimiter);
 app.use("/api/auth/register", authLimiter);
 app.use("/api/auth/forgot-password", authLimiter);
+// A PadliCrome-bővítmény saját belépése ugyanazokkal a fiókokkal működik —
+// korlát nélkül ezen át meg lehetett kerülni a fő belépés védelmét.
+app.use("/api/padlicrome/login", authLimiter);
+
+// Megerősítő e-mail újraküldése: tetszőleges címre küld levelet, ezért
+// szigorúbb korlát (e-mail-bombázás és a levélküldő hírnevének védelme).
+const resendLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => ipKeyGenerator(getClientIp(req)),
+  handler: (req, res, _next, options) => {
+    logSecurityEvent({ req, type: "auth_rate_limited", severity: "warn", details: { endpoint: "resend-verification" } });
+    res.status(options.statusCode).json({ error: "Túl sok kérés, próbáld újra később." });
+  },
+});
+app.use("/api/auth/resend-verification", resendLimiter);
 
 /* ===== WEBHOOK ENDPOINTOK - raw body kell, ezért json() ELÉ ===== */
 app.use("/api/shop/webhook", express.raw({ type: "application/json" }));

@@ -22,8 +22,8 @@ form.addEventListener("submit", async (e) => {
     return;
   }
 
-  if (password.length < 6) {
-    errorEl.textContent = "A jelszó legalább 6 karakter legyen";
+  if (password.length < 8) {
+    errorEl.textContent = "A jelszó legalább 8 karakter legyen";
     return;
   }
 
