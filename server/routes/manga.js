@@ -180,10 +180,41 @@ const { rows } = await pool.query(
   [slug]
 );
 
+// ===== MEGNYITÁSOK SZÁMA =====
+// daily_stats: napi összesítő május 10. óta (a server/daily-stats.js tölti
+// reggel 6-kor a tegnapi napra); chapter_reads: a nyers napló, 30 napig
+// őrizzük. Összes megnyitás = a napi összesítők összege + a még nem
+// összesített (utolsó összesített nap utáni) nyers sorok. Egyedi olvasó
+// csak a nyers naplóból számolható pontosan → az elmúlt 30 napra.
+// Csak bejelentkezett olvasók; egy megnyitás akkor számít, ha a user
+// egy másik fejezetről lép erre (lásd routes/progress.js).
+const viewStats = {};
+try {
+  const { rows: vs } = await pool.query(
+    `WITH ids AS (SELECT id FROM manga WHERE slug = $1),
+          last_day AS (SELECT COALESCE(MAX(stat_date), '1970-01-01')::date AS d FROM daily_stats),
+          agg AS (SELECT chapter, SUM(read_count)::int n FROM daily_stats
+                  WHERE manga_id IN (SELECT id FROM ids) GROUP BY chapter),
+          raw AS (SELECT chapter,
+                         COUNT(*) FILTER (WHERE read_at >= (SELECT d FROM last_day) + 1)::int n_new,
+                         COUNT(DISTINCT user_id)::int readers30
+                  FROM chapter_reads WHERE manga_id IN (SELECT id FROM ids) GROUP BY chapter)
+     SELECT COALESCE(agg.chapter, raw.chapter) AS chapter,
+            COALESCE(agg.n, 0) + COALESCE(raw.n_new, 0) AS views,
+            COALESCE(raw.readers30, 0) AS readers30
+     FROM agg FULL JOIN raw ON raw.chapter = agg.chapter`,
+    [slug]
+  );
+  for (const v of vs) viewStats[v.chapter] = { views: v.views, readers30: v.readers30 };
+} catch (statErr) {
+  console.error("Chapter view stats error:", statErr.message); // a lista enélkül is megjelenik
+}
+
 const now = new Date();
 const result = rows.map(ch => {
   const locked = isFree && ch.unlocks_at && new Date(ch.unlocks_at) > now;
-  return { ...ch, locked };
+  const vs = viewStats[ch.folder];
+  return { ...ch, locked, views: vs?.views ?? 0, readers30: vs?.readers30 ?? 0 };
 });
 
 // ===== 18+ KORHATÁR ELLENŐRZÉS =====

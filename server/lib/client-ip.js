@@ -15,6 +15,16 @@ const TRUSTED_PROXIES = new Set(
 
 const strip = ip => (ip || "").replace(/^::ffff:/, "");
 
+// Belső / megbízható cím (proxy, loopback, magánhálózat) — ezeket soha nem
+// tiltjuk automatikusan (különben a proxy tiltásával az egész oldal leállna).
+export function isInternalIp(ip) {
+  const v = strip(ip);
+  if (!v || TRUSTED_PROXIES.has(v)) return true;
+  if (net.isIPv4(v)) return /^(10\.|127\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|0\.)/.test(v);
+  if (net.isIPv6(v)) return /^(::1$|fc|fd|fe80:)/i.test(v);
+  return true;
+}
+
 export function getClientIp(req) {
   if (req._clientIp) return req._clientIp;
   const peer = strip(req.socket?.remoteAddress);

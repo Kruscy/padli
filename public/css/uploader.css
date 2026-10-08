@@ -385,3 +385,38 @@ h1 {
   border: 1px solid rgba(248, 113, 113, .35);
   color: #f87171;
 }
+
+/* Feltöltés utáni scan csíkja (a feltöltés-csík alatt) */
+.scan-status-msg { margin: 10px 0 16px; }
+.scan-status-text { margin-bottom: 8px; }
+.scan-progress-wrap { display: flex; align-items: center; gap: 10px; }
+.scan-progress-bg {
+  flex: 1;
+  height: 10px;
+  background: #1e1e2e;
+  border-radius: 999px;
+  overflow: hidden;
+  border: 1px solid #2a2a3a;
+}
+.scan-progress-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #7c3aed, #a78bfa);
+  transition: width 0.4s ease;
+}
+.scan-status-msg.ok .scan-progress-fill { background: linear-gradient(90deg, #16a34a, #22c55e); }
+.scan-status-msg.error .scan-progress-fill { background: linear-gradient(90deg, #b91c1c, #f87171); }
+.scan-progress-fill.indeterminate {
+  background: repeating-linear-gradient(-45deg, #7c3aed 0 12px, #5b21b6 12px 24px);
+  background-size: 34px 34px;
+  animation: scan-stripes 1s linear infinite;
+}
+@keyframes scan-stripes { from { background-position: 0 0; } to { background-position: 34px 0; } }
+@media (prefers-reduced-motion: reduce) { .scan-progress-fill.indeterminate { animation: none; } }
+.scan-progress-label {
+  font-size: .82rem;
+  min-width: 36px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}

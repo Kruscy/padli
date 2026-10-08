@@ -144,3 +144,6 @@
   .sec-page { margin: 20px auto; padding: 0 14px; }
   .sec-card { padding: 14px; }
 }
+
+.sec-actions-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.sec-actions-row .sec-btn { margin: 0; }

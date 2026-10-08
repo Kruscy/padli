@@ -108,6 +108,14 @@ function addToQueue(file, relativePath) {
    ══════════════════════════════════════════════════════════ */
 function renderQueue() {
   if (!uploadQueue.length) {
+    // Ha épp a feltöltés utáni scan csíkja látszik, a szakasz maradjon látható
+    const scanBox = document.getElementById("scanStatusMsg");
+    if (scanBox && !scanBox.classList.contains("hidden")) {
+      queueList.innerHTML = "";
+      queueCount.textContent = "0";
+      document.getElementById("overallProgressWrap")?.classList.add("hidden");
+      return;
+    }
     queueSection.classList.add("hidden");
     return;
   }
@@ -222,6 +230,10 @@ function showNewFolderModal(missingFolders) {
 async function startUpload() {
   const pending = uploadQueue.filter(i => i.status === "pending" || i.status === "error");
   if (!pending.length) return;
+
+  // Az előző feltöltés scan-csíkja eltűnik (az új feltöltés végén új scan indul)
+  clearTimeout(scanPollTimer);
+  document.getElementById("scanStatusMsg")?.classList.add("hidden");
 
   uploadBtn.disabled = true;
   clearBtn.disabled  = true;
@@ -344,11 +356,29 @@ async function startUpload() {
    ══════════════════════════════════════════════════════════ */
 let scanPollTimer = null;
 
-function showScanStatus(kind, text) {
+// kind: running | ok | error; percent: 0–100, vagy null = még nem tudjuk
+// (pl. sorban áll) → mozgó, csíkos animáció
+const SCAN_PHASE_TEXT = {
+  start: "Scan indul...",
+  scan: "Mappák átnézése",
+  unlock: "Feloldási idők beállítása",
+  metadata: "Adatlapok frissítése",
+  cache: "Gyorsítótár frissítése",
+  discord: "Értesítés küldése",
+  done: "Befejezés",
+};
+function showScanStatus(kind, text, percent = null) {
   const box = document.getElementById("scanStatusMsg");
   if (!box) return;
   box.className = `scan-status-msg ${kind}`;
-  box.textContent = text;
+  document.getElementById("scanStatusText").textContent = text;
+  const fill = document.getElementById("scanProgressFill");
+  const label = document.getElementById("scanProgressLabel");
+  const indeterminate = kind === "running" && percent === null;
+  fill.classList.toggle("indeterminate", indeterminate);
+  fill.style.width = indeterminate ? "100%" : `${kind === "ok" ? 100 : Math.max(0, Math.min(100, percent ?? 0))}%`;
+  label.textContent = indeterminate ? "" : `${kind === "ok" ? 100 : Math.round(percent ?? 0)}%`;
+  queueSection.classList.remove("hidden");
 }
 
 async function startScanAfterUpload() {
@@ -361,8 +391,8 @@ async function startScanAfterUpload() {
     const data = await r.json();
     requestedAt = new Date(data.requestedAt);
     showScanStatus("running", data.state === "queued"
-      ? "⏳ Scan elindítva — egy korábbi scan még fut, utána rögtön a tiéd következik..."
-      : "🔄 A scan elindult — az új fejezetek feldolgozása folyamatban...");
+      ? "⏳ Scan sorban áll — egy korábbi scan még fut, utána rögtön a tiéd következik..."
+      : "🔄 A scan elindult — az új fejezetek feldolgozása folyamatban...", data.state === "queued" ? null : 0);
   } catch (err) {
     console.warn("Scan indítási hiba:", err);
     showScanStatus("error", "❌ Nem sikerült elindítani a scant. Szólj egy adminnak.");
@@ -383,14 +413,20 @@ async function startScanAfterUpload() {
 
       if (ourScanStarted && finishedAt && finishedAt >= startedAt && !s.running && !s.queued) {
         if (s.lastExitCode === 0) {
-          showScanStatus("ok", "✅ A scan befejeződött — az új fejezetek már megjelentek az oldalon.");
+          showScanStatus("ok", "✅ A scan befejeződött — az új fejezetek már megjelentek az oldalon.", 100);
         } else {
-          showScanStatus("error", `⚠️ A scan hibával állt le (kód: ${s.lastExitCode}). Szólj egy adminnak.`);
+          showScanStatus("error", `⚠️ A scan hibával állt le (kód: ${s.lastExitCode}). Szólj egy adminnak.`, s.progress?.percent ?? 0);
         }
         return;
       }
       if (ourScanStarted) {
-        showScanStatus("running", "🔄 A scan fut — az új fejezetek feldolgozása folyamatban...");
+        // Csak a mi (a kérésünk után indult) scanünk előrehaladását mutatjuk
+        const p = s.progress && s.progress.startedAt >= requestedAt.getTime() - 5000 ? s.progress : null;
+        const phase = p ? (SCAN_PHASE_TEXT[p.phase] || p.phase) : "Scan fut";
+        const detail = p && p.phase === "scan" && p.total ? ` (${p.done}/${p.total} mappa)` : "";
+        showScanStatus("running", `🔄 ${phase}${detail}...`, p ? p.percent : null);
+      } else if (s.queued || s.running) {
+        showScanStatus("running", "⏳ Scan sorban áll — egy korábbi scan még fut, utána rögtön a tiéd következik...", null);
       }
     } catch (err) {
       console.warn("Scan állapot lekérdezési hiba:", err);
@@ -400,10 +436,10 @@ async function startScanAfterUpload() {
       showScanStatus("error", "⚠️ Nem jött visszajelzés a scan befejezéséről. Nézd meg az oldalon, megjelentek-e a fejezetek.");
       return;
     }
-    scanPollTimer = setTimeout(poll, 4000);
+    scanPollTimer = setTimeout(poll, 1500);
   };
 
-  scanPollTimer = setTimeout(poll, 3000);
+  scanPollTimer = setTimeout(poll, 1000);
 }
 
 function showOverwriteModal(existCount, totalCount) {

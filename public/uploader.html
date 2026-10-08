@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="/css/sidebar.css?v=20260119">
 <link rel="stylesheet" href="/css/header.css?v=20260928">
 <link rel="stylesheet" href="/css/notification-badge.css?v=20260619">
-<link rel="stylesheet" href="/css/uploader.css?v=20261004">
+<link rel="stylesheet" href="/css/uploader.css?v=20261008">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
@@ -61,6 +61,15 @@
     </div>
     <div id="uploadDoneMsg" class="upload-done-msg hidden">✅ Minden fájl sikeresen feltöltve!</div>
 
+    <!-- Feltöltés utáni scan: csík + állapotszöveg (a scan-script valós előrehaladása) -->
+    <div id="scanStatusMsg" class="scan-status-msg hidden" role="status" aria-live="polite">
+      <div class="scan-status-text" id="scanStatusText"></div>
+      <div class="scan-progress-wrap">
+        <div class="scan-progress-bg"><div class="scan-progress-fill" id="scanProgressFill"></div></div>
+        <div class="scan-progress-label" id="scanProgressLabel"></div>
+      </div>
+    </div>
+
     <div class="btn-row" style="justify-content:flex-start; margin-bottom:12px">
       <button class="btn btn-primary" id="uploadBtn">⬆️ Feltöltés indítása</button>
       <button class="btn btn-secondary" id="clearBtn">🗑️ Befejezettek törlése</button>
@@ -68,9 +77,6 @@
 
     <div class="queue-list" id="queueList"></div>
   </div>
-
-  <!-- Feltöltés utáni scan állapota (a soron kívül, hogy a "Befejezettek törlése" ne tüntesse el) -->
-  <div id="scanStatusMsg" class="scan-status-msg hidden" role="status" aria-live="polite"></div>
 
   <!-- Fájlböngésző -->
   <div class="browser-section">
@@ -86,6 +92,6 @@
 </main>
 
 <script type="module" src="/js/layout-loader.js?v=20261004"></script>
-<script src="/js/uploader.js?v=20261004"></script>
+<script src="/js/uploader.js?v=20261008"></script>
 </body>
 </html>

@@ -83,7 +83,13 @@ function getSavedSortOrder() {
         } else {
           date.textContent = "—";
         }
-        row.append(status, title, date);
+        // Megnyitások száma (bejelentkezett olvasók, május 10. óta)
+        const views = document.createElement("span");
+        views.className = "chapter-views";
+        const v = ch.views || 0;
+        views.textContent = `👁 ${v.toLocaleString("hu-HU")}`;
+        views.title = `${v.toLocaleString("hu-HU")} megnyitás (május 10. óta)\n${(ch.readers30 || 0).toLocaleString("hu-HU")} különböző olvasó az elmúlt 30 napban\n(csak bejelentkezett olvasók)`;
+        row.append(status, title, views, date);
         list.appendChild(row);
       });
     }

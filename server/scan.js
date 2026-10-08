@@ -23,6 +23,24 @@ if (fs.existsSync(LOCK)) {
 
 fs.writeFileSync(LOCK, process.pid.toString());
 
+/* ================= ELŐREHALADÁS =================
+   A feltöltő oldal csíkja ebből mutatja, hol tart a scan
+   (server/lib/scan-runner.js olvassa). Atomikus írás: tmp + rename. */
+const PROGRESS = "/tmp/padlizsanfansub.scan.progress.json";
+const progress = { phase: "start", done: 0, total: 0, pid: process.pid, startedAt: Date.now() };
+let lastProgressWrite = 0;
+function writeProgress(patch = {}, force = false) {
+  Object.assign(progress, patch);
+  const now = Date.now();
+  if (!force && now - lastProgressWrite < 500) return;
+  lastProgressWrite = now;
+  try {
+    fs.writeFileSync(PROGRESS + ".tmp", JSON.stringify({ ...progress, at: now }));
+    fs.renameSync(PROGRESS + ".tmp", PROGRESS);
+  } catch {}
+}
+writeProgress({}, true);
+
 const cleanup = () => {
   if (fs.existsSync(LOCK)) fs.unlinkSync(LOCK);
 };
@@ -159,6 +177,13 @@ async function scan() {
 
   const uploaderRoots = await buildUploaderRoots();
 
+  // Előre megszámoljuk a manga-mappákat, hogy a csík százalékot mutathasson
+  let totalDirs = 0;
+  for (const lib of libraries) {
+    try { totalDirs += fs.readdirSync(lib.path, { withFileTypes: true }).filter(d => d.isDirectory()).length; } catch {}
+  }
+  writeProgress({ phase: "scan", done: 0, total: totalDirs }, true);
+
   for (const lib of libraries) {
     console.log(`📂 Library: ${lib.name}`);
     console.log(`   Path: ${lib.path}`);
@@ -185,6 +210,7 @@ async function scan() {
     }
 
     for (const mangaDir of mangaDirs) {
+      writeProgress({ done: progress.done + 1 });
       const mangaTitle = mangaDir.name;
       const mangaSlug = slugify(mangaTitle);
       const mangaPath = path.join(lib.path, mangaTitle);
@@ -358,14 +384,36 @@ async function buildNewMangaCache() {
   }
 }
 
+/* ================= DISCORD ÜZENET DARABOLÁS =================
+   Linkek " • "-tal elválasztva, darabonként legfeljebb `limit` karakter
+   (az első darab helyét a fejléc hossza csökkenti — ezt a hívó adja meg,
+   a további darabok 1900-ig mehetnek). */
+function splitLinks(links, firstLimit, limit = 1900) {
+  const parts = [];
+  let cur = "", max = firstLimit;
+  for (const l of links) {
+    const piece = cur ? " • " + l : l;
+    if (cur && cur.length + piece.length > max) {
+      parts.push(cur);
+      cur = l;
+      max = limit;
+    } else {
+      cur += piece;
+    }
+  }
+  if (cur) parts.push(cur);
+  return parts;
+}
+
 /* ================= RUN ================= */
 
 let newChaptersResult = [];
 scan()
-  .then((newChs) => { newChaptersResult = newChs || []; return setUnlockTimes(); })
-  .then(() => scanMetadata())
-  .then(() => buildNewMangaCache())
+  .then((newChs) => { newChaptersResult = newChs || []; writeProgress({ phase: "unlock" }, true); return setUnlockTimes(); })
+  .then(() => { writeProgress({ phase: "metadata" }, true); return scanMetadata(); })
+  .then(() => { writeProgress({ phase: "cache" }, true); return buildNewMangaCache(); })
   .then(async () => {
+    writeProgress({ phase: "discord" }, true);
     if (newChaptersResult.length === 0) return;
     // scanMetadata() után frissítjük a cover URL-eket DB-ből (új mangánál ilyenkor már van)
     for (const ch of newChaptersResult) {
@@ -500,17 +548,20 @@ scan()
         const gridBuffer = await buildGrid(chunk);
         const attachment = new AttachmentBuilder(gridBuffer, { name: "uj-fejezetek.png" });
 
-        // Link lista szövegként
-        const linkList = chunk.map(m =>
+        // Link lista szövegként. A Discord legfeljebb 2000 karaktert fogad el
+        // egy üzenetben — sok sorozatnál (kb. 18+) a lista ennél hosszabb
+        // volt, és az egész értesítés elveszett (2026-10-08: 19 sorozat,
+        // 2076 karakter). Ezért a linkeket több üzenetre bontjuk.
+        const links = chunk.map(m =>
           `[${m.title}](${siteUrl}/chapters.html?slug=${encodeURIComponent(m.slug)})`
-        ).join(" • ");
+        );
+        const header = i === 0 ? `📚 **Új fejezetek érkeztek!** (${newChaptersResult.length} sorozat)\n` : "";
+        const parts = splitLinks(links, 1900 - header.length);
 
-        const msgContent = i === 0
-          ? `📚 **Új fejezetek érkeztek!** (${newChaptersResult.length} sorozat)
-${linkList}`
-          : linkList;
-
-        await channel.send({ content: msgContent, files: [attachment] });
+        await channel.send({ content: header + (parts[0] || ""), files: [attachment] });
+        for (const extra of parts.slice(1)) {
+          await channel.send({ content: extra });
+        }
       }
 
       console.log("✅ Discord grid értesítés elküldve");
@@ -542,6 +593,7 @@ ${linkList}`
     process.exit(1);
   })
   .finally(() => {
+    writeProgress({ phase: "done" }, true);
     cleanup();
     pool.end();
   });

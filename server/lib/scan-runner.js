@@ -1,4 +1,5 @@
 import fs from "fs";
+import path from "path";
 import { spawn } from "child_process";
 import { clearNewReleasesCache } from "../cache/new-releases.js";
 
@@ -31,13 +32,34 @@ export function isScanRunning() {
   }
 }
 
+// A scan kimenete (benne a Discord-küldés esetleges hibája) eddig
+// elveszett ("ignore") — most a logs/scan.log-ba megy. 5 MB fölött a régi
+// napló scan.log.1 néven megmarad, és újat kezdünk.
+const SCAN_LOG = path.join(process.cwd(), "logs", "scan.log");
+function openScanLog() {
+  try {
+    fs.mkdirSync(path.dirname(SCAN_LOG), { recursive: true });
+    if (fs.existsSync(SCAN_LOG) && fs.statSync(SCAN_LOG).size > 5 * 1024 * 1024) {
+      fs.renameSync(SCAN_LOG, SCAN_LOG + ".1");
+    }
+    const fd = fs.openSync(SCAN_LOG, "a");
+    fs.writeSync(fd, `\n===== Scan indul: ${new Date().toISOString()} =====\n`);
+    return fd;
+  } catch (err) {
+    console.error("Scan napló megnyitási hiba:", err.message);
+    return "ignore";
+  }
+}
+
 function spawnScan() {
   clearNewReleasesCache();
+  const logFd = openScanLog();
   const scan = spawn("node", ["./server/scan.js"], {
     cwd: process.cwd(),
     detached: true,
-    stdio: "ignore"
+    stdio: ["ignore", logFd, logFd]
   });
+  if (typeof logFd === "number") fs.closeSync(logFd); // a gyerekfolyamat már örökölte
   state.lastStartedAt = new Date();
   scan.on("exit", (code) => {
     state.lastFinishedAt = new Date();
@@ -79,8 +101,25 @@ export function requestScan() {
   return "queued";
 }
 
+// A futó scan előrehaladása (server/scan.js írja). Csak akkor adjuk vissza,
+// ha a fájl a jelenleg futó (vagy épp most végzett) scan-folyamathoz tartozik.
+const PROGRESS = "/tmp/padlizsanfansub.scan.progress.json";
+const PHASE_PCT = { start: 2, unlock: 82, metadata: 88, cache: 93, discord: 96, done: 100 };
+function readProgress() {
+  try {
+    const p = JSON.parse(fs.readFileSync(PROGRESS, "utf8"));
+    if (Date.now() - (p.at || 0) > 15 * 60e3) return null; // elavult
+    let percent = PHASE_PCT[p.phase] ?? 0;
+    if (p.phase === "scan") percent = p.total ? Math.round(5 + 75 * Math.min(p.done, p.total) / p.total) : 5;
+    return { phase: p.phase, done: p.done, total: p.total, percent, startedAt: p.startedAt };
+  } catch {
+    return null;
+  }
+}
+
 export function getScanStatus() {
   return {
+    progress: readProgress(),
     running: isScanRunning(),
     queued: state.queued,
     lastStartedAt: state.lastStartedAt,

@@ -9,6 +9,7 @@
     rate_limited: "Korlátba futott (429)", scanner_probe: "Sebezhetőség-keresés", admin_probe: "Admin-próbálgatás",
     write_burst: "Tömeges írás (spam?)", request_flood: "Kérés-áradat (DoS?)", blocked_request: "Tiltott IP kérése",
     discord_raid: "Discord raid / feltört fiók", ip_blocked: "IP tiltva", ip_unblocked: "IP tiltás feloldva",
+    ip_auto_blocked: "Automatikus tiltás (24 óra)", auto_block_skipped: "Automatikus tiltás kihagyva",
   };
   const label = t => TYPE_LABEL[t] ? `${TYPE_LABEL[t]} <span class="sec-code">${esc(t)}</span>` : `<span class="sec-code">${esc(t)}</span>`;
   const sev = s => `<span class="sec-sev ${esc(s)}">${{ info: "info", warn: "figyelmeztetés", high: "súlyos" }[s] || esc(s)}</span>`;
@@ -77,7 +78,20 @@
 
   const ACTION_LABEL = { chapter_unlock_adjust: "Feloldási idő eltolva", chapter_unlock_now: "Feloldva most" };
   let lastActionId = null;
+  // Alapból csak az 5 legutóbbi látszik, a többi a "Továbbiak" gombbal nyitható
+  const ACTIONS_COLLAPSED = 5;
+  let actionsExpanded = false, actionsHasMore = false;
+  function applyActionsCollapse() {
+    const rows = [...$("secAdminActions").querySelectorAll("tr.a-row")];
+    rows.forEach((tr, i) => { tr.style.display = (!actionsExpanded && i >= ACTIONS_COLLAPSED) ? "none" : ""; });
+    const hiddenCount = Math.max(0, rows.length - ACTIONS_COLLAPSED);
+    const t = $("aToggle");
+    t.hidden = hiddenCount === 0;
+    t.textContent = actionsExpanded ? "▲ Kevesebb" : `▼ Továbbiak (${hiddenCount}${actionsHasMore ? "+" : ""})`;
+    $("aMore").hidden = !(actionsExpanded && actionsHasMore);
+  }
   async function loadAdminActions(append = false) {
+    if (!append) actionsExpanded = false;
     const q = new URLSearchParams({ limit: "100" });
     if ($("aAdmin").value.trim()) q.set("admin", $("aAdmin").value.trim());
     if ($("aTarget").value.trim()) q.set("target", $("aTarget").value.trim());
@@ -88,7 +102,7 @@
       const change = a.action === "chapter_unlock_adjust"
         ? `${d.hours > 0 ? "+" : ""}${d.hours} óra`
         : "azonnal";
-      return `<tr>
+      return `<tr class="a-row">
         <td class="sec-time">${fmt(a.created_at)}</td><td>${esc(a.admin_username || "?")}</td>
         <td>${esc(ACTION_LABEL[a.action] || a.action)}</td><td>${esc(a.target_title || "")}</td>
         <td>${esc(change)}</td><td class="sec-time">${fmt(d.before)} → ${fmt(d.after)}</td></tr>`;
@@ -97,7 +111,8 @@
     if (append) $("secAdminActions").insertAdjacentHTML("beforeend", rows);
     else $("secAdminActions").innerHTML = head + (rows || `<tr><td colspan="6" class="sec-muted">Még nincs naplózott admin-művelet.</td></tr>`);
     lastActionId = actions.length ? actions[actions.length - 1].id : lastActionId;
-    $("aMore").hidden = actions.length < 100;
+    actionsHasMore = actions.length === 100;
+    applyActionsCollapse();
   }
 
   async function refresh() {
@@ -142,6 +157,7 @@
 
   $("aApply").addEventListener("click", () => loadAdminActions().catch(err => showError(err.message)));
   $("aMore").addEventListener("click", () => loadAdminActions(true).catch(err => showError(err.message)));
+  $("aToggle").addEventListener("click", () => { actionsExpanded = !actionsExpanded; applyActionsCollapse(); });
   $("secRefresh").addEventListener("click", refresh);
   $("secHours").addEventListener("change", refresh);
   $("fApply").addEventListener("click", () => loadEvents().catch(err => showError(err.message)));
