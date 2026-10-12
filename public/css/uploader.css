@@ -420,3 +420,17 @@ h1 {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
+
+/* Feltöltési hibák oka (a szerver üzenete), a lista fölött */
+.upload-error-box {
+  margin: 10px 0 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(248, 113, 113, .1);
+  border: 1px solid rgba(248, 113, 113, .35);
+  color: #fca5a5;
+  font-size: .88rem;
+  line-height: 1.5;
+}
+.upload-error-row + .upload-error-row { margin-top: 4px; }
+.upload-error-box strong { color: #f87171; }

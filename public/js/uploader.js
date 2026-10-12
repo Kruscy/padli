@@ -106,7 +106,42 @@ function addToQueue(file, relativePath) {
 /* ══════════════════════════════════════════════════════════
    QUEUE RENDER
    ══════════════════════════════════════════════════════════ */
+function escAttr(s) {
+  return String(s ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+// A hibás fájlok okai összevonva, darabszámmal, a feltöltési lista fölött
+function renderUploadErrors() {
+  const box = document.getElementById("uploadErrorBox");
+  if (!box) return;
+  const groups = new Map();
+  for (const i of uploadQueue) {
+    if (i.status !== "error") continue;
+    const msg = i.errorMsg || "Ismeretlen hiba.";
+    groups.set(msg, (groups.get(msg) || 0) + 1);
+  }
+  if (!groups.size) { box.classList.add("hidden"); box.textContent = ""; return; }
+  box.classList.remove("hidden");
+  box.textContent = "";
+  const sorted = [...groups].sort((a, b) => b[1] - a[1]);
+  for (const [msg, n] of sorted.slice(0, 4)) {
+    const row = document.createElement("div");
+    row.className = "upload-error-row";
+    const cnt = document.createElement("strong");
+    cnt.textContent = `❌ ${n} fájl nem ment fel: `;
+    row.append(cnt, document.createTextNode(msg));
+    box.appendChild(row);
+  }
+  if (sorted.length > 4) {
+    const more = document.createElement("div");
+    more.className = "upload-error-row";
+    more.textContent = `…és még ${sorted.length - 4} másféle hiba (vidd az egeret egy hibás fájlra a részletekért).`;
+    box.appendChild(more);
+  }
+}
+
 function renderQueue() {
+  renderUploadErrors();
   if (!uploadQueue.length) {
     // Ha épp a feltöltés utáni scan csíkja látszik, a szakasz maradjon látható
     const scanBox = document.getElementById("scanStatusMsg");
@@ -127,7 +162,7 @@ function renderQueue() {
       ${item.exists && item.status === "pending" ? '<span title="Már létezik a szerveren" style="flex-shrink:0">⚠️</span>' : ""}
       <span class="queue-item-name" title="${item.relativePath}">${item.relativePath}</span>
       <span class="queue-item-size">${formatSize(item.file.size)}</span>
-      <span class="queue-item-status ${item.status}">${statusLabel(item.status)}</span>
+      <span class="queue-item-status ${item.status}"${item.status === "error" && item.errorMsg ? ` title="${escAttr(item.errorMsg)}"` : ""}>${statusLabel(item.status)}</span>
     </div>
     ${item.status === "uploading" || item.status === "retrying" ? `
       <div class="queue-progress">
@@ -519,6 +554,20 @@ function uploadAttempt(item) {
 // hárult, hogy manuálisan próbálja újra a hibás elemeket (átlagosan
 // 3x kellett kattintania). 4xx (kliens-oldali, pl. jogosultság/rossz
 // mappanév) hibáknál nincs értelme újrapróbálni, azok azonnal buknak.
+// A szerver hibaüzenete (pl. "fejezet-mappának tűnik…") — korábban csak a
+// konzolba került, a felhasználó csak annyit látott: "❌ Hiba".
+function uploadErrorMessage(result) {
+  if (result.status === 0) return "Nem sikerült elérni a szervert (hálózati hiba).";
+  if (result.status === 401) return "Lejárt a bejelentkezés — jelentkezz be újra.";
+  if (result.status === 403) return "Nincs feltöltési jogosultságod.";
+  if (result.status === 413) return "A fájl túl nagy.";
+  try {
+    const j = JSON.parse(result.responseText);
+    if (j && j.error) return String(j.error);
+  } catch {}
+  return `Szerverhiba (HTTP ${result.status}).`;
+}
+
 async function uploadItem(item) {
   const MAX_ATTEMPTS = 3;
 
@@ -531,9 +580,11 @@ async function uploadItem(item) {
     if (result.ok) {
       item.status = "done";
       item.progress = 100;
+      item.errorMsg = null;
       renderQueue();
       return;
     }
+    item.errorMsg = uploadErrorMessage(result);
 
     if (result.status >= 400 && result.status < 500) {
       console.warn("Upload hiba (nem javul újrapróbálásra):", result.responseText);

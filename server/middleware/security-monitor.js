@@ -15,7 +15,8 @@ import { logSecurityEvent, isIpBlocked } from "../lib/security-log.js";
 const PROBE_RE = /(^|\/)(\.env|\.git\/|\.aws\/|\.ssh\/|\.DS_Store|wp-(admin|login|content|includes|config)|xmlrpc\.php|phpmyadmin|cgi-bin\/|server-status|actuator\/|vendor\/phpunit|etc\/passwd|boaform|HNAP1|\.well-known\/security\.txt\.bak)|\.(php|asp|aspx|jsp|cgi|sql|bak|old|swp)(\?|$)|\.\.\/|%2e%2e|\$\{jndi:/i;
 
 // Írási kérések, amik normál használatban is sűrűk lehetnek → nem számoljuk
-const WRITE_EXCLUDE = /^\/api\/(uploader|progress|chat\/send|padlicrome|translate|ocr|inpaint|gemini|discord\/sync)/;
+// (az anilist/queue az olvasási állással együtt megy minden lapozáskor)
+const WRITE_EXCLUDE = /^\/api\/(uploader|progress|anilist\/queue|chat\/send|padlicrome|translate|ocr|inpaint|gemini|discord\/sync)/;
 // Kérés-áradat számlálásnál kihagyott: képbetöltés (egy fejezet 60+ kép is
 // lehet) és az olvasási állás (olvasás közben sűrűn mentődik; a régi
 // listaoldalak — régi böngésző-cache-ből — mangánként kértek le állást).

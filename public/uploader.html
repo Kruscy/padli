@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="/css/sidebar.css?v=20260119">
 <link rel="stylesheet" href="/css/header.css?v=20260928">
 <link rel="stylesheet" href="/css/notification-badge.css?v=20260619">
-<link rel="stylesheet" href="/css/uploader.css?v=20261008">
+<link rel="stylesheet" href="/css/uploader.css?v=20261011">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
@@ -60,6 +60,7 @@
       <div class="overall-progress-label" id="overallProgressLabel">0%</div>
     </div>
     <div id="uploadDoneMsg" class="upload-done-msg hidden">✅ Minden fájl sikeresen feltöltve!</div>
+    <div id="uploadErrorBox" class="upload-error-box hidden" role="alert"></div>
 
     <!-- Feltöltés utáni scan: csík + állapotszöveg (a scan-script valós előrehaladása) -->
     <div id="scanStatusMsg" class="scan-status-msg hidden" role="status" aria-live="polite">
@@ -92,6 +93,6 @@
 </main>
 
 <script type="module" src="/js/layout-loader.js?v=20261004"></script>
-<script src="/js/uploader.js?v=20261008"></script>
+<script src="/js/uploader.js?v=20261011"></script>
 </body>
 </html>

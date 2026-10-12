@@ -64,6 +64,20 @@ function getCurrentPage() {
   return current;
 }
 
+// AniList-szinkront csak összekötött fióknál küldünk (oldalbetöltésenként
+// egyszer kérdezzük le). Ha az állapot nem kérhető le (nem 401), inkább
+// küldjük, hogy a szinkron ne vesszen el.
+let anilistConnectedPromise = null;
+function isAnilistConnected() {
+  if (!anilistConnectedPromise) {
+    anilistConnectedPromise = fetch("/api/anilist/status")
+      .then(r => r.status === 401 ? { connected: false } : r.ok ? r.json() : { connected: true })
+      .then(d => !!d.connected)
+      .catch(() => true);
+  }
+  return anilistConnectedPromise;
+}
+
 async function saveProgress(page) {
   if (!chapter || !page || page === lastSavedPage) return;
   clearTimeout(saveTimeout);
@@ -74,11 +88,13 @@ async function saveProgress(page) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ slug, chapter, page })
       });
-      await fetch("/api/anilist/queue", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slug, chapter })
-      });
+      if (await isAnilistConnected()) {
+        await fetch("/api/anilist/queue", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ slug, chapter })
+        });
+      }
       lastSavedPage = page;
     } catch {}
   }, 600);
