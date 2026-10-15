@@ -3,6 +3,7 @@ import fetch from "node-fetch";
 import crypto from "crypto";
 import { pool } from "../db.js";
 import { syncPatreon } from "../patreon-sync.js";
+import { logSecurityEvent } from "../lib/security-log.js";
 
 const router = express.Router();
 
@@ -135,23 +136,23 @@ router.get("/callback", async (req, res) => {
     console.error("❌ No session in callback");
     return res.redirect("/login.html");
   }
-
+ 
   const { code, error } = req.query;
   const userId = req.session.user.id;
-
+  
   if (error) {
     console.error("❌ Patreon OAuth error:", error);
     return res.redirect(`/settings.html?patreon=error&reason=${encodeURIComponent(error)}`);
   }
-
+  
   if (!code) {
     console.error("❌ No code parameter");
     return res.redirect("/settings.html?patreon=error&reason=no_code");
   }
-
+ 
   try {
     console.log("🔵 Patreon callback started for user:", userId);
-
+ 
     /* TOKEN EXCHANGE */
     const tokenRes = await fetch("https://www.patreon.com/api/oauth2/token", {
       method: "POST",
@@ -164,18 +165,18 @@ router.get("/callback", async (req, res) => {
         redirect_uri: `${process.env.BASE_URL}/api/patreon/callback`
       })
     });
-
+ 
     if (!tokenRes.ok) {
       const errorText = await tokenRes.text();
       console.error("❌ Token exchange failed:", errorText);
       return res.redirect("/settings.html?patreon=error&reason=token_exchange");
     }
-
+ 
     const tokenData = await tokenRes.json();
     const accessToken = tokenData.access_token;
-
+ 
     console.log("✅ Access token received");
-
+ 
     /* USER IDENTITY */
     const meRes = await fetch(
       "https://www.patreon.com/api/oauth2/v2/identity",
@@ -231,7 +232,7 @@ router.get("/callback", async (req, res) => {
     console.log("✅ PATREON CALLBACK SUCCESS");
 
     res.redirect("/settings.html?patreon=connected");
-
+ 
   } catch (err) {
     console.error("❌ PATREON CALLBACK ERROR:", err);
     console.error("   Stack:", err.stack);
@@ -293,7 +294,18 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
   if (secret) {
     const sig = req.headers["x-patreon-signature"];
     const expected = crypto.createHmac("md5", secret).update(req.body).digest("hex");
-    if (sig !== expected) return res.status(401).end();
+    if (sig !== expected) {
+      // Naplózzuk: 2026-10-07 után napokig nem jött feldolgozott webhook, és
+      // az eldobott (hibás aláírású) kérésekből semmi nem látszott.
+      const event = req.headers["x-patreon-event"] || null;
+      console.warn(`Patreon webhook ELUTASÍTVA (hibás aláírás) [${event}] aláírás: ${sig ? "van" : "nincs"}`);
+      logSecurityEvent({
+        req, type: "patreon_webhook_bad_signature", severity: "warn",
+        details: { event, hasSignature: !!sig, bodyBytes: req.body?.length ?? null },
+        dedupeKey: "patreon-webhook",
+      });
+      return res.status(401).end();
+    }
   }
 
   // A Patreon a "Send test" gombbal (és néha éles eseményeknél is) a régi,

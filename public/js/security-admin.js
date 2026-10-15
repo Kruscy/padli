@@ -10,6 +10,7 @@
     write_burst: "Tömeges írás (spam?)", request_flood: "Kérés-áradat (DoS?)", blocked_request: "Tiltott IP kérése",
     discord_raid: "Discord raid / feltört fiók", ip_blocked: "IP tiltva", ip_unblocked: "IP tiltás feloldva",
     ip_auto_blocked: "Automatikus tiltás (24 óra)", auto_block_skipped: "Automatikus tiltás kihagyva",
+    patreon_webhook_bad_signature: "Patreon webhook: hibás aláírás",
   };
   const label = t => TYPE_LABEL[t] ? `${TYPE_LABEL[t]} <span class="sec-code">${esc(t)}</span>` : `<span class="sec-code">${esc(t)}</span>`;
   const sev = s => `<span class="sec-sev ${esc(s)}">${{ info: "info", warn: "figyelmeztetés", high: "súlyos" }[s] || esc(s)}</span>`;

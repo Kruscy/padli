@@ -223,8 +223,12 @@ async function scan() {
         // manga-bejegyzés, ha ugyanaz a cím több uploader mappájában is
         // szerepel. Csak akkor hozunk létre újat, ha a slug még sehol
         // nem létezik.
+        // ORDER BY id: ha (régi, javítás előtti) duplikátum miatt több sor is
+        // van ezzel a sluggal, mindig ugyanazt kapjuk — sorrend nélkül hol az
+        // egyiket, hol a másikat adta, és ugyanaz a mappa mindkettő alá
+        // bekerült (Drawing Romance: 122 fejezet duplán, 2026-10-15).
         const existingManga = await pool.query(
-          `SELECT id FROM manga WHERE slug = $1 LIMIT 1`,
+          `SELECT id FROM manga WHERE slug = $1 ORDER BY id LIMIT 1`,
           [mangaSlug]
         );
         if (existingManga.rows.length) {
@@ -295,12 +299,18 @@ try {
   folderMtime = fs.statSync(chapterPath).mtime;
 } catch {}
 
+// Ha ez a mappa (ugyanebből a könyvtárból) már be van jegyezve az azonos
+// slugú művek BÁRMELYIK sorához, ne vegyük fel újra egy másik sor alá.
 const chRes = await pool.query(
   `INSERT INTO chapter (manga_id, title, folder, library_id, scanned_at)
-   VALUES ($1, $2, $3, $4, $5)
+   SELECT $1::int, $2::text, $3::text, $4::int, $5::timestamptz
+   WHERE NOT EXISTS (
+     SELECT 1 FROM chapter c JOIN manga m ON m.id = c.manga_id
+     WHERE m.slug = $6::text AND c.library_id = $4::int AND c.folder = $3::text
+   )
    ON CONFLICT (manga_id, folder) DO NOTHING
    RETURNING id`,
-  [mangaId, ch.name, ch.name, libraryId, folderMtime]
+  [mangaId, ch.name, ch.name, libraryId, folderMtime, mangaSlug]
 );
 if (chRes.rows.length > 0) {
   // Új fejezet - megkeressük a manga cover_url-jét

@@ -262,8 +262,67 @@ function showNewFolderModal(missingFolders) {
   });
 }
 
+/* ── Már fent lévő mű más néven ─────────────────────────────
+   blocked: a szerver /check-series válasza (mappánként). Visszaad:
+   null = mégse; különben { [mappa]: "own" | "force" | "skip" }
+   - own:   a feltöltő saját, más nevű mappájába kerül
+   - force: (csak Ascyra) mégis új sorozatként
+   - skip:  kimarad (más feltöltő sorozata) */
+function showSeriesExistsModal(blocked) {
+  return new Promise(resolve => {
+    const overlay = document.createElement("div");
+    overlay.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:99999;
+      display:flex;align-items:center;justify-content:center;padding:16px;`;
+    const rows = blocked.map((b, i) => {
+      let action;
+      if (b.series.own && b.series.ownFolder) {
+        action = `<div style="color:#86efac;margin-top:6px">→ A saját „<b>${escAttr(b.series.ownFolder)}</b>” mappádba kerül.</div>`;
+      } else if (b.canOverride) {
+        action = `<label style="display:flex;gap:8px;align-items:center;margin-top:6px;cursor:pointer">
+            <input type="checkbox" data-force="${i}"> Mégis új sorozatként töltöm fel (nem ugyanaz a mű)
+          </label>`;
+      } else {
+        action = `<div style="color:#fca5a5;margin-top:6px">→ Ez a mappa kimarad a feltöltésből.</div>`;
+      }
+      return `<li style="margin-bottom:14px;line-height:1.5">${escAttr(b.error)}${action}</li>`;
+    }).join("");
+    overlay.innerHTML = `
+      <div style="background:#13131f;border:1px solid rgba(255,255,255,.1);border-radius:16px;
+                  padding:28px 24px;max-width:540px;width:100%;max-height:90vh;overflow-y:auto;
+                  font-family:Poppins,sans-serif;color:#e8e8f5;">
+        <div style="font-size:2rem;margin-bottom:12px">📚</div>
+        <h3 style="margin-bottom:12px;font-size:1.1rem">Ez a mű már fent van az oldalon</h3>
+        <ul style="margin:0 0 16px 18px;padding:0;font-size:.88rem;color:#d1d5db">${rows}</ul>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <button id="se-ok" style="background:#7c3aed;color:#fff;border:none;padding:11px 16px;
+                  border-radius:10px;font-weight:600;cursor:pointer;font-size:.9rem">Rendben, folytatom</button>
+          <button id="se-cancel" style="background:none;color:#6b7280;border:none;
+                  padding:8px;cursor:pointer;font-size:.85rem">Mégse (semmit nem töltök fel)</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    overlay.querySelector("#se-ok").onclick = () => {
+      const decisions = {};
+      blocked.forEach((b, i) => {
+        if (b.series.own && b.series.ownFolder) decisions[b.folder] = "own";
+        else if (b.canOverride && overlay.querySelector(`[data-force="${i}"]`)?.checked) decisions[b.folder] = "force";
+        else decisions[b.folder] = "skip";
+      });
+      document.body.removeChild(overlay);
+      resolve(decisions);
+    };
+    overlay.querySelector("#se-cancel").onclick = () => { document.body.removeChild(overlay); resolve(null); };
+  });
+}
+
+function resetUploadButtons() {
+  uploadBtn.disabled = false;
+  clearBtn.disabled  = false;
+  uploadBtn.textContent = "⬆️ Feltöltés indítása";
+}
+
 async function startUpload() {
-  const pending = uploadQueue.filter(i => i.status === "pending" || i.status === "error");
+  let pending = uploadQueue.filter(i => i.status === "pending" || (i.status === "error" && !i.blocked));
   if (!pending.length) return;
 
   // Az előző feltöltés scan-csíkja eltűnik (az új feltöltés végén új scan indul)
@@ -280,6 +339,42 @@ async function startUpload() {
       .filter(i => i.relativePath.includes("/"))
       .map(i => i.relativePath.split("/")[0])
   )];
+
+  // A gyökérben új sorozat-mappa: fent van-e már a mű (akár más néven)?
+  // Más feltöltő sorozatába nem lehet feltölteni; a szerver is ellenőrzi.
+  if (!currentPath && topFolders.length > 0) {
+    try {
+      const r = await fetch("/api/uploader/check-series", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folders: topFolders }),
+      });
+      const data = r.ok ? await r.json() : { blocked: [] };
+      if (data.blocked?.length) {
+        const decisions = await showSeriesExistsModal(data.blocked);
+        if (!decisions) { resetUploadButtons(); return; }
+        for (const b of data.blocked) {
+          const items = pending.filter(i => i.relativePath.split("/")[0] === b.folder);
+          const d = decisions[b.folder];
+          if (d === "own") {
+            items.forEach(i => { i.relativePath = b.series.ownFolder + i.relativePath.slice(b.folder.length); });
+          } else if (d === "force") {
+            items.forEach(i => { i.force = true; });
+          } else {
+            items.forEach(i => { i.status = "error"; i.blocked = true; i.errorMsg = b.error; });
+          }
+        }
+        pending = pending.filter(i => !i.blocked);
+        renderQueue();
+        topFolders.splice(0, topFolders.length, ...new Set(
+          pending.filter(i => i.relativePath.includes("/")).map(i => i.relativePath.split("/")[0])
+        ));
+        if (!pending.length) { resetUploadButtons(); return; }
+      }
+    } catch (err) {
+      console.warn("Sorozat-ellenőrzés hiba:", err);
+    }
+  }
 
   if (topFolders.length > 0) {
     try {
@@ -304,10 +399,11 @@ async function startUpload() {
         // Mappák létrehozása
         for (const folderName of missing) {
           const folderPath = currentPath ? `${currentPath}/${folderName}` : folderName;
+          const force = pending.some(i => i.force && i.relativePath.split("/")[0] === folderName);
           await fetch("/api/uploader/mkdir", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ path: folderPath }),
+            body: JSON.stringify({ path: folderPath, force }),
           });
         }
       }
@@ -377,7 +473,8 @@ async function startUpload() {
 
   // Ha a sorban minden hibátlanul felment (és volt is mit feltölteni),
   // automatikusan indul egy scan, hogy az új fejezetek megjelenjenek.
-  const anyError = uploadQueue.some(i => i.status === "error");
+  // (a már fent lévő mű miatt kihagyott mappák nem akadályozzák a scant)
+  const anyError = uploadQueue.some(i => i.status === "error" && !i.blocked);
   const anyUploaded = toUpload.some(i => i.status === "done");
   if (!anyError && anyUploaded) startScanAfterUpload();
 }
@@ -529,6 +626,7 @@ function uploadAttempt(item) {
   const fd = new FormData();
   fd.append("file", item.file);
   fd.append("path", destPath);
+  if (item.force) fd.append("force", "1");
 
   return new Promise(resolve => {
     const xhr = new XMLHttpRequest();

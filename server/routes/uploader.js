@@ -5,7 +5,8 @@ import multer from "multer";
 import { pool } from "../db.js";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { localPathToR2Key } from "../r2.js";
-import { requestScan, getScanStatus } from "../lib/scan-runner.js";
+import { requestScan, getScanStatus, SCAN_OWNER_USER_ID } from "../lib/scan-runner.js";
+import { findExistingSeries } from "../lib/manga-duplicates.js";
 
 const r2 = new S3Client({
   region: "auto",
@@ -101,6 +102,67 @@ async function requireUploader(req, res, next) {
 
 /* ── Fejezet-mappa a gyökérben tiltva (ch015, ch15, chapter15, chapters, stb.) ── */
 const CHAPTER_FOLDER_RE = /^(chapters?|ch)[\s._-]*\d*$/i;
+
+/* ── Már fent lévő mű új néven ──────────────────────────────
+   Új sorozat-mappa (a feltöltő gyökerében még nem létező mappa) csak
+   akkor jöhet létre, ha a mű nincs még fent. Ha más feltöltő tölti,
+   tiltjuk (más mappájába sem tölthet); ha a saját, más nevű mappája,
+   oda kell feltöltenie. Ascyra figyelmeztetés után felülbírálhatja
+   (force). Az eredményt mappanevenként 10 percig megjegyezzük, hogy
+   ne fusson AniList-keresés minden egyes fájlnál. ── */
+const seriesCheckCache = new Map(); // `${userBase}\n${folder}` -> { at, result }
+const SERIES_CHECK_TTL = 10 * 60e3;
+
+function userBaseOf(uploaderRoot) {
+  return uploaderRoot.startsWith("/") ? path.resolve(uploaderRoot) : path.join(BASE_DIR, uploaderRoot);
+}
+
+async function checkSeriesCached(userBase, folder) {
+  const key = `${userBase}\n${folder}`;
+  const hit = seriesCheckCache.get(key);
+  if (hit && Date.now() - hit.at < SERIES_CHECK_TTL) return hit.result;
+  const result = await findExistingSeries(folder, userBase);
+  seriesCheckCache.set(key, { at: Date.now(), result });
+  for (const [k, v] of seriesCheckCache) if (Date.now() - v.at > SERIES_CHECK_TTL) seriesCheckCache.delete(k);
+  return result;
+}
+
+function seriesBlockMessage(folder, found) {
+  if (found.own && found.ownFolder) {
+    return `„${folder}” már fent van nálad „${found.ownFolder}” néven (${found.title}) — abba a mappába töltsd fel.`;
+  }
+  const who = found.others.map(o => o.library).join(", ") || "más feltöltő";
+  return `„${folder}” már fent van az oldalon „${found.title}” néven (${found.chapters} rész, feltöltő: ${who}). Más feltöltő sorozatát nem töltheted fel.`;
+}
+
+// null = mehet; különben a 409-es válasz törzse
+async function checkNewSeriesFolder(req, relativePath, { isFolder }) {
+  const parts = String(relativePath || "").replace(/\\/g, "/").split("/").filter(Boolean);
+  if (!parts.length || (!isFolder && parts.length < 2)) return null; // gyökérbe tett fájl
+  const folder = parts[0];
+  const userBase = userBaseOf(req.uploaderRoot);
+  if (fs.existsSync(path.join(userBase, folder))) return null; // meglévő mappa
+  let found;
+  try {
+    found = await checkSeriesCached(userBase, folder);
+  } catch (err) {
+    console.warn("[duplikátum-ellenőrzés] hiba:", err.message);
+    return null; // ellenőrzési hiba miatt ne álljon le a feltöltés
+  }
+  if (!found) return null;
+  // Saját sorozat, de a helyi mappája nem található → a saját művét ne tiltsuk
+  if (found.own && !found.ownFolder) return null;
+  const isOwner = req.session.user.id === SCAN_OWNER_USER_ID;
+  const force = req.body?.force === true || req.body?.force === "1";
+  if (isOwner && force) return null;
+  return {
+    error: seriesBlockMessage(folder, found),
+    code: "series_exists",
+    folder,
+    series: found,
+    canOverride: isOwner,
+  };
+}
 
 /* ── Path security ──────────────────────────────────────── */
 function safeUserPath(uploaderRoot, relativePath = "") {
@@ -243,6 +305,9 @@ router.post("/upload", requireUploader, upload.single("file"), async (req, res) 
   const fullPath = safeUserPath(uploaderRoot, relativePath);
   if (!fullPath) return res.status(400).json({ error: "Érvénytelen útvonal" });
 
+  const blocked = await checkNewSeriesFolder(req, relativePath, { isFolder: false });
+  if (blocked) return res.status(409).json(blocked);
+
   try {
     const wasOverwrite = fs.existsSync(fullPath);
 
@@ -342,6 +407,19 @@ router.delete("/file", requireUploader, express.json(), async (req, res) => {
   }
 });
 
+/* ── POST /api/uploader/check-series – új mappák előzetes ellenőrzése ─
+   A kliens a feltöltés előtt kérdezi meg, hogy az új sorozat-mappák
+   közül melyik mű van már fent (ugyanaz a szabály, mint az /upload-ban). */
+router.post("/check-series", requireUploader, express.json(), async (req, res) => {
+  const folders = Array.isArray(req.body?.folders) ? req.body.folders.slice(0, 50) : [];
+  const results = [];
+  for (const f of folders) {
+    const blocked = await checkNewSeriesFolder(req, String(f), { isFolder: true });
+    if (blocked) results.push(blocked);
+  }
+  res.json({ blocked: results });
+});
+
 /* ── POST /api/uploader/mkdir ───────────────────────────── */
 router.post("/mkdir", requireUploader, express.json(), async (req, res) => {
   const uploaderRoot = req.uploaderRoot;
@@ -359,6 +437,9 @@ router.post("/mkdir", requireUploader, express.json(), async (req, res) => {
 
   const fullPath = safeUserPath(uploaderRoot, relativePath);
   if (!fullPath) return res.status(400).json({ error: "Érvénytelen útvonal" });
+
+  const blocked = await checkNewSeriesFolder(req, relativePath, { isFolder: true });
+  if (blocked) return res.status(409).json(blocked);
 
   try {
     fs.mkdirSync(fullPath, { recursive: true });

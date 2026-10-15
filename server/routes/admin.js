@@ -5,7 +5,8 @@ import { sendMail } from "../mail.js";
 import multer from "multer";
 import { refreshMetadataForManga } from "../refresh-metadata.js";
 import { getStatus as getGeminiStatus, validateGeminiKey, invalidateKeyCache } from "../lib/gemini-client.js";
-import { mangaImageToR2Key, deleteObjectsByPrefix } from "../r2.js";
+import { mangaImageToR2Key, deleteObjectsByPrefix, listFiles } from "../r2.js";
+import { purgeChapterImages } from "../lib/cf-purge.js";
 import { requestScan, SCAN_OWNER_USER_ID } from "../lib/scan-runner.js";
 import { logAdminAction } from "../lib/admin-log.js";
 import fs from "fs";
@@ -257,7 +258,7 @@ router.post("/chapter/:id/unlock-now", async (req, res) => {
 router.delete("/chapter/:id", async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT l.path AS library_path, m.title AS manga_title, m.slug AS manga_slug,
+      `SELECT l.path AS library_path, l.name AS library_name, m.title AS manga_title, m.slug AS manga_slug,
               m.folder AS manga_folder, c.folder AS chapter_folder, m.r2_migrated
        FROM chapter c
        JOIN manga m ON m.id = c.manga_id
@@ -268,12 +269,24 @@ router.delete("/chapter/:id", async (req, res) => {
     if (!rows.length) return res.status(404).json({ error: "Fejezet nem található" });
     const chapter = rows[0];
 
+    // A képfájlok neve a CF-gyorsítótár ürítéséhez (törlés előtt kell kigyűjteni)
+    let imageFiles = [];
+    try {
+      imageFiles = fs.readdirSync(path.join(chapter.library_path, chapter.manga_folder, chapter.chapter_folder))
+        .filter(f => /\.(jpe?g|png|webp|gif|avif)$/i.test(f));
+    } catch {}
+
     let r2DeletedCount = null;
     let r2Prefix = null;
     if (chapter.r2_migrated) {
       const { library_path, manga_folder, chapter_folder } = chapter;
       try {
         r2Prefix = mangaImageToR2Key(library_path, manga_folder, chapter_folder, "");
+        try {
+          imageFiles = [...new Set([...imageFiles, ...await listFiles(r2Prefix)])];
+        } catch (err) {
+          console.error("R2 fejezet-listázási hiba:", err.message);
+        }
         r2DeletedCount = await deleteObjectsByPrefix(r2Prefix);
         console.log(`[R2] fejezet törölve (${r2DeletedCount} fájl): ${r2Prefix}`);
       } catch (err) {
@@ -282,6 +295,16 @@ router.delete("/chapter/:id", async (req, res) => {
     }
 
     await pool.query(`DELETE FROM chapter WHERE id = $1`, [req.params.id]);
+
+    const cfPurge = await purgeChapterImages({
+      libraryName: chapter.library_name,
+      libraryPath: chapter.library_path,
+      mangaSlug: chapter.manga_slug,
+      mangaFolder: chapter.manga_folder,
+      chapterFolder: chapter.chapter_folder,
+      files: imageFiles,
+    }).catch(err => ({ error: err.message }));
+    console.log(`[CF purge] fejezet-törlés: ${chapter.manga_slug} ${chapter.chapter_folder}`, cfPurge);
 
     if (req.session.user) {
       await pool.query(
@@ -298,6 +321,7 @@ router.delete("/chapter/:id", async (req, res) => {
             folder: chapter.chapter_folder,
             r2Prefix,
             r2DeletedFileCount: r2DeletedCount,
+            cfPurge,
           }),
         ]
       );
