@@ -3,6 +3,8 @@
    ══════════════════════════════════════════════════════════ */
 
 const CONCURRENT = 4; // párhuzamos feltöltések száma
+const STALL_MS = 45000;        // ennyi ideig semmi mozgás egy kérésen → megszakítás + újrapróbálás
+const MAX_REQUEST_MS = 300000; // egy fájl feltöltésének felső határa
 
 let currentPath = "";
 let uploadQueue = []; // { file, relativePath, status, progress }
@@ -461,10 +463,15 @@ async function startUpload() {
     renderQueue();
   }
 
-  for (let i = 0; i < toUpload.length; i += CONCURRENT) {
-    const batch = toUpload.slice(i, i + CONCURRENT);
-    await Promise.all(batch.map(item => uploadItem(item)));
-  }
+  // Folyamatos sor: amint egy fájl kész, jön a következő (korábban 4-es
+  // kötegekben ment, és egy lassú fájl a másik hármat is visszatartotta).
+  let nextIndex = 0;
+  const worker = async () => {
+    while (nextIndex < toUpload.length) {
+      await uploadItem(toUpload[nextIndex++]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(CONCURRENT, toUpload.length) }, worker));
 
   uploadBtn.disabled = false;
   clearBtn.disabled  = false;
@@ -628,21 +635,45 @@ function uploadAttempt(item) {
   fd.append("path", destPath);
   if (item.force) fd.append("force", "1");
 
+  // Időkorlát nélkül egy beragadt kapcsolat (se válasz, se hiba) örökre
+  // várakoztatta a feltöltést: 2026-10-15 Stukker 391/529-nél állt meg
+  // hibaüzenet nélkül. Ha STALL_MS-ig nem mozdul semmi, megszakítjuk, és
+  // az uploadItem újrapróbálja.
   return new Promise(resolve => {
     const xhr = new XMLHttpRequest();
+    let settled = false;
+    let lastActivity = Date.now();
+    const finish = result => {
+      if (settled) return;
+      settled = true;
+      clearInterval(watchdog);
+      resolve(result);
+    };
+    const watchdog = setInterval(() => {
+      if (Date.now() - lastActivity > STALL_MS) {
+        finish({ ok: false, status: 0, responseText: "stalled" });
+        xhr.abort();
+      }
+    }, 5000);
+
     xhr.open("POST", "/api/uploader/upload");
+    xhr.timeout = MAX_REQUEST_MS;
 
     xhr.upload.onprogress = e => {
+      lastActivity = Date.now();
       if (e.lengthComputable) {
         item.progress = Math.round((e.loaded / e.total) * 100);
         renderQueue();
       }
     };
+    xhr.onreadystatechange = () => { lastActivity = Date.now(); };
 
     xhr.onload = () => {
-      resolve({ ok: xhr.status === 200 || xhr.status === 201, status: xhr.status, responseText: xhr.responseText });
+      finish({ ok: xhr.status === 200 || xhr.status === 201, status: xhr.status, responseText: xhr.responseText });
     };
-    xhr.onerror = () => resolve({ ok: false, status: 0, responseText: "network error" });
+    xhr.onerror   = () => finish({ ok: false, status: 0, responseText: "network error" });
+    xhr.ontimeout = () => finish({ ok: false, status: 0, responseText: "timeout" });
+    xhr.onabort   = () => finish({ ok: false, status: 0, responseText: "aborted" });
 
     xhr.send(fd);
   });
@@ -655,6 +686,8 @@ function uploadAttempt(item) {
 // A szerver hibaüzenete (pl. "fejezet-mappának tűnik…") — korábban csak a
 // konzolba került, a felhasználó csak annyit látott: "❌ Hiba".
 function uploadErrorMessage(result) {
+  if (result.status === 0 && (result.responseText === "stalled" || result.responseText === "timeout"))
+    return "Elakadt a kapcsolat (nem jött válasz a szervertől).";
   if (result.status === 0) return "Nem sikerült elérni a szervert (hálózati hiba).";
   if (result.status === 401) return "Lejárt a bejelentkezés — jelentkezz be újra.";
   if (result.status === 403) return "Nincs feltöltési jogosultságod.";
