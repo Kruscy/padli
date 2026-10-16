@@ -6,9 +6,7 @@ node_modules/
 .DS_Store
 /tmp
 libraries.jsos
-./uploads
 logs/
-./deploy.sh
 uploads/
 # SSH kulcsok és titkos fájlok
 medvedisznoember1990
