@@ -28,6 +28,37 @@ export async function comparePasswordSafe(password, hash) {
 // megerősítőt is) — adatbázis-szivárgásnál a tárolt érték nem használható.
 export const hashToken = (t) => createHash("sha256").update(String(t)).digest("hex");
 
+// Felhasználó keresése belépési névvel (felhasználónév VAGY e-mail).
+// Előbb pontos egyezés; ha nincs, kis-/nagybetűtől függetlenül — de csak
+// akkor, ha egyetlen fiók felel meg (van 10 felhasználónév és 4 e-mail,
+// ami csak kis-/nagybetűben tér el, pl. Zoli/zoli: ott marad a pontos
+// egyezés kötelező). 2026-10-16: a „nincs ilyen felhasználó” hibák közel
+// fele csak a kis-/nagybetű miatt volt (mobilon nagybetűvel kezd a billentyűzet).
+// columns: a SELECT oszloplistája (megbízható, kódból jön).
+export async function findUserByLogin(login, columns = "*") {
+  const key = String(login ?? "").trim();
+  if (!key) return null;
+  const exact = await pool.query(
+    `SELECT ${columns} FROM users WHERE email = $1 OR username = $1 LIMIT 1`, [key]
+  );
+  if (exact.rows.length) return exact.rows[0];
+  const ci = await pool.query(
+    `SELECT ${columns} FROM users WHERE lower(email) = lower($1) OR lower(username) = lower($1) LIMIT 2`, [key]
+  );
+  return ci.rows.length === 1 ? ci.rows[0] : null;
+}
+
+// Ugyanez csak e-mail-címre (jelszó-visszaállítás, megerősítő újraküldése):
+// a tárolt e-mail-címet adja vissza, vagy null-t.
+export async function resolveStoredEmail(email) {
+  const key = String(email ?? "").trim();
+  if (!key) return null;
+  const exact = await pool.query(`SELECT email FROM users WHERE email = $1 LIMIT 1`, [key]);
+  if (exact.rows.length) return exact.rows[0].email;
+  const ci = await pool.query(`SELECT email FROM users WHERE lower(email) = lower($1) LIMIT 2`, [key]);
+  return ci.rows.length === 1 ? ci.rows[0].email : null;
+}
+
 // A user összes (vagy egy kivételével minden) munkamenetének törlése —
 // jelszócsere / -visszaállítás után a régi (esetleg ellopott) belépések
 // így érvénytelenné válnak. A munkamenetek a "session" táblában vannak

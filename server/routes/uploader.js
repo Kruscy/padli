@@ -5,8 +5,9 @@ import multer from "multer";
 import { pool } from "../db.js";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { localPathToR2Key } from "../r2.js";
-import { requestScan, getScanStatus, SCAN_OWNER_USER_ID } from "../lib/scan-runner.js";
+import { requestScan, getScanStatus } from "../lib/scan-runner.js";
 import { findExistingSeries } from "../lib/manga-duplicates.js";
+import { logSecurityEvent } from "../lib/security-log.js";
 
 const r2 = new S3Client({
   region: "auto",
@@ -107,8 +108,9 @@ const CHAPTER_FOLDER_RE = /^(chapters?|ch)[\s._-]*\d*$/i;
    Új sorozat-mappa (a feltöltő gyökerében még nem létező mappa) csak
    akkor jöhet létre, ha a mű nincs még fent. Ha más feltöltő tölti,
    tiltjuk (más mappájába sem tölthet); ha a saját, más nevű mappája,
-   oda kell feltöltenie. Ascyra figyelmeztetés után felülbírálhatja
-   (force). Az eredményt mappanevenként 10 percig megjegyezzük, hogy
+   oda kerül. Ha a feltöltő jelzi, hogy ez egy teljesen másik mű (force),
+   újként mehet — kivéve, ha a mappanév slugja már foglalt (2026-10-16).
+   Az eredményt mappanevenként 10 percig megjegyezzük, hogy
    ne fusson AniList-keresés minden egyes fájlnál. ── */
 const seriesCheckCache = new Map(); // `${userBase}\n${folder}` -> { at, result }
 const SERIES_CHECK_TTL = 10 * 60e3;
@@ -135,6 +137,29 @@ function seriesBlockMessage(folder, found) {
   return `„${folder}” már fent van az oldalon „${found.title}” néven (${found.chapters} rész, feltöltő: ${who}). Más feltöltő sorozatát nem töltheted fel.`;
 }
 
+// A scan a mappanévből képzett slug alapján köti a fejezeteket a műhöz
+// (server/scan.js slugify) — ha a slug már foglalt, a „másik mű” is a
+// meglévőhöz kerülne, ezért ilyenkor át kell nevezni a mappát.
+const slugify = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+async function slugTaken(folder) {
+  const { rowCount } = await pool.query(`SELECT 1 FROM manga WHERE slug = $1 LIMIT 1`, [slugify(folder)]);
+  return rowCount > 0;
+}
+
+// „Ez egy másik mű” jelzések naplózása (fájlonként is jön a kérés → egyszer/óra/mappa)
+const overrideLogged = new Map();
+function logSeriesOverride(req, folder, found) {
+  const key = `${req.session.user.id}\n${folder}`;
+  const prev = overrideLogged.get(key);
+  if (prev && Date.now() - prev < 3600e3) return;
+  overrideLogged.set(key, Date.now());
+  logSecurityEvent({
+    req, type: "upload_series_override", severity: "info",
+    details: { folder, matchedTitle: found.title, matchedMangaId: found.mangaId, matchedBy: found.matchedBy,
+               uploaders: found.others.map(o => o.library) },
+  });
+}
+
 // null = mehet; különben a 409-es válasz törzse
 async function checkNewSeriesFolder(req, relativePath, { isFolder }) {
   const parts = String(relativePath || "").replace(/\\/g, "/").split("/").filter(Boolean);
@@ -152,15 +177,22 @@ async function checkNewSeriesFolder(req, relativePath, { isFolder }) {
   if (!found) return null;
   // Saját sorozat, de a helyi mappája nem található → a saját művét ne tiltsuk
   if (found.own && !found.ownFolder) return null;
-  const isOwner = req.session.user.id === SCAN_OWNER_USER_ID;
+  // „Ez egy teljesen másik mű, újként töltöm fel” — bárki jelezheti, ha a
+  // mappanév nem ütközik egy meglévő mű slugjával (különben a scan úgyis a
+  // meglévőhöz kötné). Naplózzuk, hogy visszaélés esetén látszódjon.
+  const nameClash = await slugTaken(folder);
   const force = req.body?.force === true || req.body?.force === "1";
-  if (isOwner && force) return null;
+  if (force && !nameClash) {
+    logSeriesOverride(req, folder, found);
+    return null;
+  }
   return {
     error: seriesBlockMessage(folder, found),
     code: "series_exists",
     folder,
     series: found,
-    canOverride: isOwner,
+    canOverride: !nameClash,
+    nameClash,
   };
 }
 

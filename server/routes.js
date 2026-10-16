@@ -6,7 +6,8 @@ import { requireLogin } from "./middleware/auth.js";
 import adminRoutes from "./routes/admin.js";
 import { SCAN_OWNER_USER_ID } from "./lib/scan-runner.js";
 import { logSecurityEvent } from "./lib/security-log.js";
-import { validatePassword, comparePasswordSafe, hashToken, destroyUserSessions } from "./lib/auth-security.js";
+import { validatePassword, comparePasswordSafe, hashToken, destroyUserSessions,
+         findUserByLogin, resolveStoredEmail } from "./lib/auth-security.js";
 import { randomBytes, createHash } from "crypto";
 import { sendMail } from "./mail.js";
 import wishlistRoutes from "./routes/wishlist.js";
@@ -102,7 +103,9 @@ router.post("/auth/register", async (req, res) => {
       return res.status(400).json({ error: "Érvénytelen születési dátum" });
     }
 
-    const uCheck = await pool.query("SELECT 1 FROM users WHERE username = $1", [username]);
+    // Kis-/nagybetűben eltérő név se legyen (Zoli/zoli) — a belépés ilyenkor
+    // nem tudná eldönteni, melyik fiókról van szó.
+    const uCheck = await pool.query("SELECT 1 FROM users WHERE lower(username) = lower($1)", [username]);
     if (uCheck.rowCount > 0) {
       return res.status(400).json({ error: "Ez a felhasználónév foglalt" });
     }
@@ -142,7 +145,9 @@ router.post("/auth/register", async (req, res) => {
 /* ===== FORGOT PASSWORD ===== */
 router.post("/auth/forgot-password", async (req, res) => {
   try {
-    const { email } = req.body;
+    const { email: emailInput } = req.body;
+    // A tárolt (pontos) e-mail-cím — kis-/nagybetű eltérés esetén is megtalálja
+    const email = (await resolveStoredEmail(emailInput)) ?? emailInput;
     logSecurityEvent({ req, type: "password_reset_request",
                        details: { emailDomain: String(email || "").split("@")[1]?.toLowerCase() || null } });
 
@@ -241,12 +246,9 @@ router.post("/auth/login", async (req, res) => {
   }
 
   try {
-    const { rows } = await pool.query(
-      `SELECT id, username, email, password_hash, role, avatar,
-              email_verified, verified_deadline
-       FROM users WHERE email = $1 OR username = $1 LIMIT 1`,
-      [login]
-    );
+    const found = await findUserByLogin(login,
+      `id, username, email, password_hash, role, avatar, email_verified, verified_deadline`);
+    const rows = found ? [found] : [];
 
     const loginKey = String(login).slice(0, 120);
     // Nem létező fióknál is lefut egy bcrypt-összehasonlítás (időzítés-kiegyenlítés)
@@ -318,10 +320,11 @@ router.get("/auth/verify-email", async (req, res) => {
 
 /* ── POST /auth/resend-verification ─────────────────────── */
 router.post("/auth/resend-verification", async (req, res) => {
-  const { email } = req.body;
-  if (!email) return res.status(400).json({ error: "Email megadása kötelező" });
+  const { email: emailInput } = req.body;
+  if (!emailInput) return res.status(400).json({ error: "Email megadása kötelező" });
 
   try {
+    const email = (await resolveStoredEmail(emailInput)) ?? emailInput;
     const { rows } = await pool.query(
       `SELECT id, username, email_verified FROM users WHERE email = $1`, [email]
     );

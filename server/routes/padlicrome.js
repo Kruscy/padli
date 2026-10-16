@@ -13,7 +13,7 @@ import fs       from "fs";
 import path     from "path";
 import { pool } from "../db.js";
 import { logSecurityEvent } from "../lib/security-log.js";
-import { comparePasswordSafe } from "../lib/auth-security.js";
+import { comparePasswordSafe, findUserByLogin } from "../lib/auth-security.js";
 import { localPathToR2Key, listFiles } from "../r2.js";
 import { callGemini } from "../lib/gemini-client.js";
 
@@ -322,10 +322,8 @@ router.post("/login", async (req, res) => {
   const { username, password } = req.body || {};
   if (!username || !password) return res.status(400).json({ error: "Hiányzó adatok" });
   try {
-    const { rows } = await pool.query(
-      "SELECT id, username, password_hash FROM users WHERE username = $1 OR email = $1 LIMIT 1",
-      [username]
-    );
+    const found = await findUserByLogin(username, "id, username, password_hash");
+    const rows = found ? [found] : [];
     // Ugyanazokkal a fiókokkal működik, mint a fő belépés — ezért ugyanúgy
     // naplózzuk, és a kérésszám-korlát is rajta van (server/index.js).
     const loginKey = String(username).slice(0, 120);

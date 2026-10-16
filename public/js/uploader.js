@@ -268,23 +268,28 @@ function showNewFolderModal(missingFolders) {
    blocked: a szerver /check-series válasza (mappánként). Visszaad:
    null = mégse; különben { [mappa]: "own" | "force" | "skip" }
    - own:   a feltöltő saját, más nevű mappájába kerül
-   - force: (csak Ascyra) mégis új sorozatként
+   - force: „ez egy teljesen másik mű” — újként tölti fel
    - skip:  kimarad (más feltöltő sorozata) */
 function showSeriesExistsModal(blocked) {
   return new Promise(resolve => {
     const overlay = document.createElement("div");
     overlay.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:99999;
       display:flex;align-items:center;justify-content:center;padding:16px;`;
+    const differentLabel = i => `<label style="display:flex;gap:8px;align-items:flex-start;margin-top:8px;cursor:pointer;color:#e8e8f5">
+        <input type="checkbox" data-force="${i}" style="margin-top:4px">
+        <span>Ez egy <b>teljesen másik mű</b>, csak hasonló a neve — feltöltöm újként</span>
+      </label>`;
+    const renameHint = `<div style="color:#fbbf24;margin-top:6px;font-size:.84rem">
+        Ha ez egy másik mű: nevezd át a mappát (pl. írd mögé az eredeti címet vagy az évszámot),
+        mert ezzel a névvel a meglévő műhöz kerülne.</div>`;
     const rows = blocked.map((b, i) => {
       let action;
       if (b.series.own && b.series.ownFolder) {
-        action = `<div style="color:#86efac;margin-top:6px">→ A saját „<b>${escAttr(b.series.ownFolder)}</b>” mappádba kerül.</div>`;
-      } else if (b.canOverride) {
-        action = `<label style="display:flex;gap:8px;align-items:center;margin-top:6px;cursor:pointer">
-            <input type="checkbox" data-force="${i}"> Mégis új sorozatként töltöm fel (nem ugyanaz a mű)
-          </label>`;
+        action = `<div style="color:#86efac;margin-top:6px">→ A saját „<b>${escAttr(b.series.ownFolder)}</b>” mappádba kerül.</div>`
+          + (b.canOverride ? differentLabel(i) : "");
       } else {
-        action = `<div style="color:#fca5a5;margin-top:6px">→ Ez a mappa kimarad a feltöltésből.</div>`;
+        action = `<div style="color:#fca5a5;margin-top:6px">→ Ez a mappa kimarad a feltöltésből.</div>`
+          + (b.canOverride ? differentLabel(i) : renameHint);
       }
       return `<li style="margin-bottom:14px;line-height:1.5">${escAttr(b.error)}${action}</li>`;
     }).join("");
@@ -293,7 +298,7 @@ function showSeriesExistsModal(blocked) {
                   padding:28px 24px;max-width:540px;width:100%;max-height:90vh;overflow-y:auto;
                   font-family:Poppins,sans-serif;color:#e8e8f5;">
         <div style="font-size:2rem;margin-bottom:12px">📚</div>
-        <h3 style="margin-bottom:12px;font-size:1.1rem">Ez a mű már fent van az oldalon</h3>
+        <h3 style="margin-bottom:12px;font-size:1.1rem">Ez a mű már fent lehet az oldalon</h3>
         <ul style="margin:0 0 16px 18px;padding:0;font-size:.88rem;color:#d1d5db">${rows}</ul>
         <div style="display:flex;flex-direction:column;gap:10px">
           <button id="se-ok" style="background:#7c3aed;color:#fff;border:none;padding:11px 16px;
@@ -306,8 +311,8 @@ function showSeriesExistsModal(blocked) {
     overlay.querySelector("#se-ok").onclick = () => {
       const decisions = {};
       blocked.forEach((b, i) => {
-        if (b.series.own && b.series.ownFolder) decisions[b.folder] = "own";
-        else if (b.canOverride && overlay.querySelector(`[data-force="${i}"]`)?.checked) decisions[b.folder] = "force";
+        if (b.canOverride && overlay.querySelector(`[data-force="${i}"]`)?.checked) decisions[b.folder] = "force";
+        else if (b.series.own && b.series.ownFolder) decisions[b.folder] = "own";
         else decisions[b.folder] = "skip";
       });
       document.body.removeChild(overlay);
