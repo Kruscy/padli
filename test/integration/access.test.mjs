@@ -75,6 +75,14 @@ describe("hozzáférés-védelem", { skip: !hasDb && "nincs teszt-adatbázis (PG
     }
   });
 
+  test("törzsméret: 2 MB fölött 413, kivéve az OCR / inpaint képes kéréseit", async () => {
+    const big = JSON.stringify({ content: "x".repeat(3 * 1024 * 1024) });
+    const post = (p, who = "anon") => c[who].request(p, { method: "POST", body: big, headers: { "content-type": "application/json" } });
+    assert.equal((await post("/api/auth/login")).status, 413);
+    assert.equal((await post("/api/chat/send", "user")).status, 413);
+    assert.notEqual((await post("/api/ocr", "user")).status, 413, "OCR: nagy kép elfogadva");
+  });
+
   test("health: a szerver és a DB elérhető", async () => {
     const r = await c.anon.request("/api/health");
     assert.equal(r.status, 200);

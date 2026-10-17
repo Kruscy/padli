@@ -141,8 +141,13 @@ app.use("/api/auth/resend-verification", resendLimiter);
 app.use("/api/shop/webhook", express.raw({ type: "application/json" }));
 app.use("/api/patreon/webhook", express.raw({ type: "application/json" }));
 /* ===== BODY PARSER ===== */
-app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ limit: "50mb", extended: false }));
+// Nagy (base64-képes) JSON-t csak az OCR és az inpaint kap; minden más
+// végpontnak 2 MB is bőven elég (korábban mindenhol 50 MB: egy belépés
+// nélküli kérés is 50 MB-os JSON feldolgozására kényszeríthette a szervert).
+// A már feldolgozott törzset a későbbi parser nem olvassa újra.
+app.use(["/api/ocr", "/api/inpaint"], express.json({ limit: "50mb" }));
+app.use(express.json({ limit: "2mb" }));
+app.use(express.urlencoded({ limit: "2mb", extended: false }));
 /* ===== SESSION (AUTH) — lásd server/session.js ===== */
 app.use(sessionMiddleware);
 
