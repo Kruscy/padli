@@ -171,7 +171,7 @@ async function downloadImage(url, refererOverride, { trusted = false } = {}) {
       "User-Agent": USER_AGENT,
       "Accept": "image/webp,image/apng,image/*,*/*;q=0.8",
     },
-    timeout: 20000,
+    signal: AbortSignal.timeout(20000), // a node-fetch v3 a "timeout" opciót figyelmen kívül hagyja
   });
   if (!resp.ok) throw new Error(`HTTP ${resp.status} - ${url}`);
   const buf = await resp.buffer();
@@ -197,7 +197,7 @@ async function translateViaTorii(imageBuffer, filename) {
     method: "POST",
     headers: { "Authorization": `Bearer ${TORII_API_KEY}`, ...form.getHeaders() },
     body: form,
-    timeout: 180000,
+    signal: AbortSignal.timeout(180000),
   });
 
   if (resp.headers.get("success") !== "true") {
@@ -234,7 +234,7 @@ async function scrapeMangaDex(chapterUrl) {
   const apiUrl = `https://api.mangadex.org/at-home/server/${chapterId}`;
   const resp = await safeFetch(apiUrl, {
     headers: { "User-Agent": USER_AGENT },
-    timeout: 10000,
+    signal: AbortSignal.timeout(10000),
   });
   if (!resp.ok) throw new Error(`MangaDex API hiba: ${resp.status}`);
   const data = await resp.json();
@@ -256,7 +256,7 @@ async function scrapeGenericWordPress(chapterUrl) {
       "Accept-Language": "en-US,en;q=0.5",
       "Referer": new URL(chapterUrl).origin + "/",
     },
-    timeout: 15000,
+    signal: AbortSignal.timeout(15000),
   });
 
   if (!resp.ok) throw new Error(`Az oldal nem elérhető: HTTP ${resp.status}`);
