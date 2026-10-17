@@ -152,7 +152,7 @@ function renderMyGifts(gifts) {
 
       <div class="gift-code-box">
         <span id="giftCode${gift.id}">${escapeHtml(gift.gift_code)}</span>
-        <button class="copy-btn" onclick="copyGiftCode(${gift.id}, '${escapeHtml(gift.gift_code)}')">
+        <button class="copy-btn">
           📋 Másol
         </button>
       </div>
@@ -166,6 +166,8 @@ function renderMyGifts(gifts) {
       </div>
     `;
 
+    // Inline onclick helyett (CSP: script-src-attr)
+    card.querySelector(".copy-btn").addEventListener("click", () => copyGiftCode(gift.id, gift.gift_code));
     list.appendChild(card);
   });
 }

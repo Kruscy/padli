@@ -102,3 +102,8 @@ window.saveAvatar = async function () {
     alert("Nem sikerült feltölteni a profilképet, próbáld újra.");
   }
 };
+
+/* ===== Gombok (inline onclick helyett — CSP: script-src-attr) ===== */
+document.getElementById("avatarEditBtn")?.addEventListener("click", () => window.openUpload());
+document.getElementById("avatarModalClose")?.addEventListener("click", () => window.closeModal());
+document.getElementById("avatarSaveBtn")?.addEventListener("click", () => window.saveAvatar());

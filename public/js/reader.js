@@ -182,11 +182,16 @@ async function showLockPage(targetSlug) {
     <div class="locked-backdrop"></div>
     <div class="locked-box">
       ${paywallHTML}
-      <button class="lock-close" onclick="location.href='/chapters.html?slug=${targetSlug || slug}'">
+      <button class="lock-close">
         ← Vissza a fejezetlistához
       </button>
     </div>
   `;
+  // A slug az URL-ből jön — inline onclick-be fűzve kitörhetett a
+  // JS-stringből (reflektált XSS); most eseményfigyelő, kódolt URL-lel
+  modal.querySelector(".lock-close").addEventListener("click", () => {
+    location.href = `/chapters.html?slug=${encodeURIComponent(targetSlug || slug)}`;
+  });
   document.body.appendChild(modal);
 }
 
@@ -202,11 +207,14 @@ function showErrorPage(message) {
     <div class="locked-backdrop"></div>
     <div class="locked-box">
       <p>${message}</p>
-      <button class="lock-close" onclick="location.href='/chapters.html?slug=${slug}'">
+      <button class="lock-close">
         ← Vissza a fejezetlistához
       </button>
     </div>
   `;
+  modal.querySelector(".lock-close").addEventListener("click", () => {
+    location.href = `/chapters.html?slug=${encodeURIComponent(slug)}`;
+  });
   document.body.appendChild(modal);
 }
 
@@ -721,3 +729,8 @@ function bugReportClick() {
 
   // Fullscreen mindig kikapcsolt állapotban indul
 })();
+
+/* ===== Fejléc-gombok (inline onclick helyett — CSP: script-src-attr) ===== */
+document.getElementById("btnFullscreen")?.addEventListener("click", toggleFullscreen);
+document.querySelector(".btn-mode")?.addEventListener("click", cycleMode);
+document.getElementById("btnBugReport")?.addEventListener("click", bugReportClick);

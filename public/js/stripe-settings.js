@@ -59,6 +59,14 @@ function renderStripeActiveBox(data) {
 
 function renderTierCards(data) {
   const container = document.getElementById("stripe-tiers");
+  // Előfizetés-gombok (inline onclick helyett — CSP: script-src-attr)
+  if (container && !container.dataset.subBound) {
+    container.dataset.subBound = "1"; // többszöri render se kösse be kétszer
+    container.addEventListener("click", e => {
+      const btn = e.target.closest(".stripe-sub-btn[data-tier]");
+      if (btn) stripeSubscribe(btn.dataset.tier);
+    });
+  }
   if (!container) return;
 
   const activeTier = (data?.payment_source === "stripe" && data?.active) ? data.tier : null;
@@ -76,7 +84,7 @@ function renderTierCards(data) {
             <div style="color:#888;font-size:0.8rem;margin-bottom:14px">${t.description}</div>
             ${isActive
               ? `<span style="color:${color};font-size:0.83rem;font-weight:600">✓ Aktív előfizetés</span>`
-              : `<button onclick="stripeSubscribe('${t.id}')" style="background:${color};color:#fff;border:none;border-radius:8px;padding:8px 16px;cursor:pointer;font-size:0.85rem;width:100%">Előfizetés</button>`
+              : `<button class="stripe-sub-btn" data-tier="${t.id}" style="background:${color};color:#fff;border:none;border-radius:8px;padding:8px 16px;cursor:pointer;font-size:0.85rem;width:100%">Előfizetés</button>`
             }
           </div>`;
       }).join("");

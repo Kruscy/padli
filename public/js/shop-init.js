@@ -66,10 +66,12 @@ function renderPackages(packages) {
       <div class="shop-card-unit">kredit</div>
       <div class="shop-card-per">${perImg} Ft / kép</div>
       <div class="shop-card-price">${pkg.price.toLocaleString("hu-HU")} Ft</div>
-      <button class="shop-btn" onclick="checkout('${pkg.id}', this)">
+      <button class="shop-btn">
         Megvásárlom
       </button>
     `;
+    // Inline onclick helyett (CSP: script-src-attr)
+    card.querySelector(".shop-btn").addEventListener("click", e => checkout(pkg.id, e.currentTarget));
     grid.appendChild(card);
   });
 }

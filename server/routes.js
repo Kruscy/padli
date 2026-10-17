@@ -97,6 +97,27 @@ router.get("/health", async (_req, res) => {
   }
 });
 
+/* ===== CSP-JELENTÉSEK (Report-Only fejléc, lásd index.js) ===== */
+// A böngésző küldi, ha egy oldalon még inline eseménykezelő (onclick= stb.)
+// fut. Csak naplózzuk (security_events, "csp_violation"), oldalanként és
+// kódrészletenként deduplikálva — ebből látszik, hol van még átírnivaló.
+router.post("/csp-report", express.json({ type: ["application/csp-report", "application/json"], limit: "16kb" }), (req, res) => {
+  const r = req.body?.["csp-report"] || {};
+  let page = "";
+  try { page = new URL(String(r["document-uri"] || "")).pathname; } catch {}
+  const directive = String(r["effective-directive"] || r["violated-directive"] || "").slice(0, 60);
+  const sample = String(r["script-sample"] || "").slice(0, 120);
+  // Csak az inline eseménykezelők jelentései érdekesek (a többi irányelvet
+  // az éles CSP ugyanígy kikényszeríti, azok csak zajt adnának)
+  if (directive.startsWith("script-src-attr")) {
+    logSecurityEvent({ req, type: "csp_violation", severity: "info",
+                       dedupeKey: `${page}|${directive}|${sample}`,
+                       details: { page, directive, sample,
+                                  line: r["line-number"] || null, source: String(r["source-file"] || "").slice(0, 200) } });
+  }
+  res.status(204).end();
+});
+
 /* ===== READING PROGRESS → lásd routes/progress.js ===== */
 /* ===== online ===== */
 router.get("/online-count", async (req, res) => {

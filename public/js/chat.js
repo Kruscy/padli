@@ -263,7 +263,7 @@ function formatContent(content) {
   safe = safe.replace(/:([a-zA-Z0-9_]+):/g, (match, name) => {
     const emoji = guildEmojis.find(e => e.name === name);
     if (emoji) {
-      return `<img src="${emoji.url}" class="chat-emoji-inline" title=":${name}:">`;
+      return `<img src="${escapeHtml(emoji.url)}" class="chat-emoji-inline" title=":${escapeHtml(name)}:">`;
     }
     return match;
   });
@@ -287,7 +287,7 @@ function addMessage(data) {
 
   div.innerHTML = `
     <div class="chat-msg-header">
-      <img src="${data.avatar || 'https://padlizsanfansub.hu/assets/logo.png'}" class="chat-avatar">
+      <img src="${escapeHtml(data.avatar || 'https://padlizsanfansub.hu/assets/logo.png')}" class="chat-avatar">
       <span class="chat-name ${isDiscord ? 'chat-discord' : ''}">${isDiscord ? '🎮 ' : ''}${escapeHtml(displayName)}</span>
       <span class="chat-time">${formatTime(data.timestamp)}</span>
     </div>

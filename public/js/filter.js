@@ -96,6 +96,13 @@ async function loadMangaFilter() {
 
   buildFilterUI();
 }
+// A műfaj-/címke-/fordítónevek AniListből és az adminfelületről jönnek →
+// HTML-be csak escape-elve; a kattintásokat eseményfigyelők kezelik
+// (inline onclick-ben a nevek kitörhettek a JS-stringből)
+function filterEsc(str) {
+  return String(str ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
 function buildFilterUI() {
   const panel = document.getElementById("filterPanel");
   if (!panel) return;
@@ -106,47 +113,56 @@ function buildFilterUI() {
 
   panel.innerHTML = `
     <div class="filter-section open" id="genreSection">
-      <div class="filter-section-header" onclick="toggleFilterSection('genreSection')">
+      <div class="filter-section-header">
         <span>🎭 Műfaj</span>
         <span class="filter-toggle-icon">▶</span>
       </div>
       <div class="filter-tags" id="genreTags">
         ${allGenres.map(g => `
-          <button class="filter-genre-btn" data-genre="${g}" onclick="toggleGenre('${g.replace(/'/g, "\\'")}')">
-            ${g}
+          <button class="filter-genre-btn" data-genre="${filterEsc(g)}">
+            ${filterEsc(g)}
           </button>
         `).join("")}
       </div>
     </div>
 
     <div class="filter-section" id="tagSection">
-      <div class="filter-section-header" onclick="toggleFilterSection('tagSection')">
+      <div class="filter-section-header">
         <span>🏷️ Tag</span>
         <span class="filter-toggle-icon">▶</span>
       </div>
       <div class="filter-tags collapsed" id="tagTags">
         ${allTags.map(t => `
-          <button class="filter-tag-btn" data-tag="${t}" onclick="toggleTag('${t.replace(/'/g, "\\'")}')">
-            ${t}
+          <button class="filter-tag-btn" data-tag="${filterEsc(t)}">
+            ${filterEsc(t)}
           </button>
         `).join("")}
       </div>
     </div>
 
     <div class="filter-section" id="uploaderSection">
-      <div class="filter-section-header" onclick="toggleFilterSection('uploaderSection')">
+      <div class="filter-section-header">
         <span>✍️ Fordító</span>
         <span class="filter-toggle-icon">▶</span>
       </div>
       <div class="filter-tags collapsed" id="uploaderTags">
         ${allUploaders.map(u => `
-          <button class="filter-uploader-btn" data-uploader="${u}" onclick="toggleUploader('${u.replace(/'/g, "\\'")}')">
-            ${u}
+          <button class="filter-uploader-btn" data-uploader="${filterEsc(u)}">
+            ${filterEsc(u)}
           </button>
         `).join("")}
       </div>
     </div>
   `;
+
+  panel.querySelectorAll(".filter-section-header").forEach(h =>
+    h.addEventListener("click", () => toggleFilterSection(h.parentElement.id)));
+  panel.querySelectorAll(".filter-genre-btn").forEach(b =>
+    b.addEventListener("click", () => toggleGenre(b.dataset.genre)));
+  panel.querySelectorAll(".filter-tag-btn").forEach(b =>
+    b.addEventListener("click", () => toggleTag(b.dataset.tag)));
+  panel.querySelectorAll(".filter-uploader-btn").forEach(b =>
+    b.addEventListener("click", () => toggleUploader(b.dataset.uploader)));
 }
 
 function toggleFilterSection(id) {
@@ -245,15 +261,16 @@ function updateFilterUI() {
   }
 
   const labels = [
-    ...[...selectedGenres].map(g => `<span style="color:#7dd3fc">${g}</span>`),
-    ...[...selectedTags].map(t => `<span style="color:#a78bfa">${t}</span>`),
-    ...[...selectedUploaders].map(u => `<span style="color:#6ee7b7">${u}</span>`)
+    ...[...selectedGenres].map(g => `<span style="color:#7dd3fc">${filterEsc(g)}</span>`),
+    ...[...selectedTags].map(t => `<span style="color:#a78bfa">${filterEsc(t)}</span>`),
+    ...[...selectedUploaders].map(u => `<span style="color:#6ee7b7">${filterEsc(u)}</span>`)
   ].join(", ");
 
   summary.innerHTML = `
     Szűrő: ${labels}
-    <button class="filter-clear-btn" onclick="clearFilters()">✕ Törlés</button>
+    <button class="filter-clear-btn">✕ Törlés</button>
   `;
+  summary.querySelector(".filter-clear-btn").addEventListener("click", clearFilters);
 }
 
 function applyFilter() {
@@ -319,3 +336,6 @@ function waitForAuth() {
 window.reloadMangaGrid = loadMangas;
 
 document.addEventListener("DOMContentLoaded", waitForAuth);
+
+// Inline onclick helyett (CSP: script-src-attr)
+document.getElementById("sortChaptersBtn")?.addEventListener("click", cycleSortChapters);

@@ -134,7 +134,7 @@ async function loadRelated(post) {
       const excerpt = stripHtml(p.content || "").slice(0, 120);
       a.innerHTML = `
         ${p.cover_url
-          ? `<img src="${p.cover_url}" alt="${esc(p.title)}" class="blog-card-thumb" loading="lazy">`
+          ? `<img src="${esc(p.cover_url)}" alt="${esc(p.title)}" class="blog-card-thumb" loading="lazy">`
           : `<div class="blog-card-thumb-placeholder">📝</div>`}
         <div class="blog-card-body">
           <span class="post-category">${esc(catLabel)}</span>

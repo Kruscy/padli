@@ -416,9 +416,10 @@ function createDebugBox() {
   header.style.cssText = "font-weight: bold; margin-bottom: 8px; color: #a855f7; display: flex; justify-content: space-between; align-items: center;";
   header.innerHTML = `
     <span>🐛 Patreon Debug Log</span>
-    <button onclick="this.parentElement.parentElement.remove()" style="background: #ef4444; border: none; color: white; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 0.7rem;">✕</button>
+    <button class="debug-close" style="background: #ef4444; border: none; color: white; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 0.7rem;">✕</button>
   `;
   
+  header.querySelector(".debug-close").addEventListener("click", () => box.remove());
   box.appendChild(header);
   document.body.appendChild(box);
   

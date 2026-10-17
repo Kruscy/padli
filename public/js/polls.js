@@ -126,3 +126,6 @@ async function handleVote(pollId, optionId, currentVoteOptionId, card, cardPollI
   card.remove();
   renderPoll(cardPollId);
 }
+
+// Inline onclick helyett (CSP: script-src-attr)
+document.getElementById("closedPollsBtn")?.addEventListener("click", () => { location.href = "/closed-polls.html"; });

@@ -2,6 +2,7 @@
   const grid = document.getElementById("loginBlogGrid");
   const CAT_LABELS = { hir:"Hírek", ajanlo:"Ajánló", forditas:"Fordítás", kozosseg:"Közösség" };
   const CAT_ICONS  = { hir:"📰", ajanlo:"📚", forditas:"✍️", kozosseg:"💬" };
+  const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
   try {
     const res = await fetch("/api/blog?limit=21");
     const posts = res.ok ? await res.json() : [];
@@ -18,15 +19,15 @@
         : "";
       const a = document.createElement("a");
       a.className = "login-blog-card";
-      a.href = `/blog/${p.slug}.html`;
+      a.href = `/blog/${encodeURIComponent(p.slug)}.html`;
       a.innerHTML = `
         ${p.cover_url
-          ? `<img src="${p.cover_url}" class="login-blog-thumb" loading="lazy" alt="">`
+          ? `<img src="${esc(p.cover_url)}" class="login-blog-thumb" loading="lazy" alt="">`
           : `<div class="login-blog-thumb-ph">${icon}</div>`}
         <div class="login-blog-body">
-          <span class="login-blog-cat">${cat}</span>
-          <h3>${p.title||""}</h3>
-          <p>${p.excerpt||""}</p>
+          <span class="login-blog-cat">${esc(cat)}</span>
+          <h3>${esc(p.title)}</h3>
+          <p>${esc(p.excerpt)}</p>
           <div class="login-blog-meta">${date}</div>
         </div>
       `;

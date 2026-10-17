@@ -26,7 +26,7 @@
 <h1>My Profile</h1>
 <div class="avatar-container">
   <img id="avatar" src="https://padlizsanfansub.hu/assets/logo.png" />
-  <div class="avatar-edit" onclick="openUpload()">✏️</div>
+  <div class="avatar-edit" id="avatarEditBtn">✏️</div>
 </div>
 <input type="file" id="fileInput" hidden />
 
@@ -68,7 +68,7 @@
 <div id="modal" style="display:none;">
   <div class="modal-content">
     <!-- JOBB FELÜL X GOMB -->
-    <div class="modal-close" onclick="closeModal()">×</div>
+    <div class="modal-close" id="avatarModalClose">×</div>
     <div class="editor-layout">
       
       <!-- BAL: crop -->
@@ -89,7 +89,7 @@
     <!-- ZOOM -->
     <input type="range" id="zoomSlider" min="0" max="3" step="0.01" value="1">
 
-    <button onclick="saveAvatar()">Mentés</button>
+    <button id="avatarSaveBtn">Mentés</button>
   </div>
 </div>
 <script src="/js/profile-init.js?v=20260619"></script>

@@ -52,6 +52,7 @@ class RotatingLogger {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     this.currentLogFile = path.join(this.logDir, `padli-api-${timestamp}.log`);
     this.currentLogStream = fs.createWriteStream(this.currentLogFile, { flags: 'a' });
+    this.currentSize = 0;
     
     console.log(`📝 Log file: ${this.currentLogFile}`);
   }
@@ -73,23 +74,26 @@ class RotatingLogger {
     
     // File output
     this.currentLogStream.write(logLine);
+    this.currentSize = (this.currentSize || 0) + Buffer.byteLength(logLine);
     
     // Check rotation
     this.checkRotation();
   }
 
+  // A méretet memóriában számoljuk (eddig minden naplósornál szinkron
+  // stat), a régi fájlok takarítása pedig legfeljebb percenként fut
+  // (eddig minden sornál readdir + fájlonként 2 stat — blokkolta a
+  // kiszolgálást).
   checkRotation() {
     try {
-      const stats = fs.statSync(this.currentLogFile);
-      
-      // Ha a file túl nagy (>10MB)
-      if (stats.size > this.maxFileSize) {
+      if (this.currentSize > this.maxFileSize) {
         this.rotate();
       }
-      
-      // Teljes log size ellenőrzés
-      this.cleanupOldLogs();
-      
+      const now = Date.now();
+      if (!this.lastCleanup || now - this.lastCleanup > 60e3) {
+        this.lastCleanup = now;
+        this.cleanupOldLogs();
+      }
     } catch (err) {
       console.error('Log rotation check error:', err);
     }

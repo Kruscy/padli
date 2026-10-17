@@ -148,6 +148,10 @@ async function slugTaken(folder) {
 
 // „Ez egy másik mű” jelzések naplózása (fájlonként is jön a kérés → egyszer/óra/mappa)
 const overrideLogged = new Map();
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, at] of overrideLogged) if (now - at > 3600e3) overrideLogged.delete(k);
+}, 3600e3).unref();
 function logSeriesOverride(req, folder, found) {
   const key = `${req.session.user.id}\n${folder}`;
   const prev = overrideLogged.get(key);

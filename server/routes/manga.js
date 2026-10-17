@@ -7,8 +7,15 @@ import { requireLogin } from "../middleware/auth.js";
 import { getPresignedUrl, mangaImageToR2Key, objectExists, listFiles, localPathToR2Key } from "../r2.js";
 import { isAdultVerified, resolveAdultMode, ADULT_GENRE_EXISTS_SQL } from "../lib/age.js";
 import { denyReason, flagsFromRows, getChapterFlags } from "../lib/chapter-access.js";
+import { createTtlCache } from "../lib/ttl-cache.js";
 
 const router = express.Router();
+
+// /image: fejezetenkénti útvonal- és jogosultsági adatok (lásd lent)
+const imageChapterCache = createTtlCache({ ttlMs: 60 * 1000, maxEntries: 2000 });
+// Kezdőlapi / lista-végpontok: minden oldalbetöltésnél a teljes mangatáblán
+// aggregáltak; rövid ideig (a változás max. ennyi késéssel látszik) cache-eljük
+const listCache = createTtlCache({ ttlMs: 60 * 1000, maxEntries: 20 });
 /* ================= HELPERS ================= */
 
 function extractPageNumber(filename) {
@@ -38,7 +45,7 @@ router.get("/manga", requireLogin, async (req, res) => {
     // elrejtve a felületen.
     const adultMode = await resolveAdultMode(pool, req);
 
-    const { rows } = await pool.query(`
+    const rows = await listCache.wrap(`manga|${adultMode}`, async () => (await pool.query(`
       SELECT m.title, m.slug, m.cover_url,
         COUNT(DISTINCT c.id)::int AS chapter_count
       FROM manga m
@@ -46,7 +53,7 @@ router.get("/manga", requireLogin, async (req, res) => {
       WHERE ${ADULT_GENRE_EXISTS_SQL} = $1
       GROUP BY m.id
       ORDER BY m.title
-    `, [adultMode]);
+    `, [adultMode])).rows);
     res.json(rows);
   } catch (e) {
     console.error(e);
@@ -55,7 +62,7 @@ router.get("/manga", requireLogin, async (req, res) => {
 });
 router.get("/manga-list", requireLogin, async (_req, res) => {
   try {
-    const { rows } = await pool.query(`
+    const rows = await listCache.wrap("manga-list", async () => (await pool.query(`
       SELECT
         m.slug,
     m.anilist_id,
@@ -70,7 +77,7 @@ router.get("/manga-list", requireLogin, async (_req, res) => {
       LEFT JOIN manga_tag mt ON mt.manga_id = m.id
       LEFT JOIN tag t ON t.id = mt.tag_id
       GROUP BY m.id
-    `);
+    `)).rows);
 
     // slug → { genres, tags } map
     const result = {};
@@ -340,7 +347,9 @@ router.get("/image/:library/:slug/:chapter/:file", requireLogin, async (req, res
   // sort, de duplikált slug esetén (ha véletlenül ugyanabban a
   // könyvtárban is előfordulna) LIMIT 1 nélkül minden jelöltet
   // megnézünk, és azt választjuk, amelyiknél tényleg létezik a fájl.
-  const result = await pool.query(
+  // Egy fejezet megnyitása 60+ képkérés ugyanarra a fejezetre: a fejezet
+  // adatait rövid ideig memóriában tartjuk (korábban képenként DB-lekérdezés)
+  const result = { rows: await imageChapterCache.wrap(`${library}\n${slug}\n${chapter}`, async () => (await pool.query(
     `
     SELECT
       l.path AS library_path,
@@ -354,7 +363,7 @@ router.get("/image/:library/:slug/:chapter/:file", requireLogin, async (req, res
     WHERE l.name = $1 AND m.slug = $2 AND c.folder = $3
     `,
     [library, slug, chapter]
-  );
+  )).rows) };
 
   if (!result.rows.length) return res.status(404).end();
 
@@ -397,13 +406,17 @@ router.get("/image/:library/:slug/:chapter/:file", requireLogin, async (req, res
 
   async function proxyR2(r2Key) {
     const url = `${R2_PUBLIC}/${r2Key}`;
-    const r2Res = await fetch(url);
+    const r2Res = await fetch(url, { signal: AbortSignal.timeout(20000) });
     if (!r2Res.ok) {
       // R2-ből nem jön → fallback lokális SSD-re (pl. új feltöltés még nem scannelt)
       serveLocal();
       return;
     }
     res.setHeader("Content-Type", r2Res.headers.get("content-type") || "image/jpeg");
+    for (const h of ["content-length", "etag", "last-modified"]) {
+      const v = r2Res.headers.get(h);
+      if (v) res.setHeader(h, v);
+    }
     res.setHeader("Cache-Control", cacheControl);
     Readable.fromWeb(r2Res.body).pipe(res);
   }
@@ -414,18 +427,19 @@ router.get("/image/:library/:slug/:chapter/:file", requireLogin, async (req, res
     return proxyR2(r2Key).catch(() => serveLocal());
   }
 
-  // R2-ről próbál elsőnek — ha ott van, proxy
+  // Nem migrált manga: elsőként a helyi fájl (ez sosem régebbi az R2-nél —
+  // a javítások mindkét helyre íródnak). Korábban minden képnél előbb egy
+  // R2 HEAD + R2 GET futott, akkor is, ha a fájl helyben megvolt.
+  if (fs.existsSync(imgPath)) return serveLocal();
+
+  // Helyben nincs (pl. a migráció már feltöltötte és törölte) → R2
   try {
     const r2Key = mangaImageToR2Key(library_path, manga_folder, chapter, file);
-    if (await objectExists(r2Key)) {
-      return proxyR2(r2Key).catch(() => serveLocal());
-    }
+    return proxyR2(r2Key).catch(() => res.status(404).end());
   } catch (r2Err) {
-    console.warn("R2 lookup failed, falling back to local:", r2Err.message);
+    console.warn("R2 key error:", r2Err.message);
+    return res.status(404).end();
   }
-
-  // Fallback: lokális fájl
-  serveLocal();
 });
 
 /* ================= NEXT / PREV ================= */
@@ -458,6 +472,13 @@ ORDER BY
 
 router.get("/featured", requireLogin, async (req, res) => {
   const adultMode = await resolveAdultMode(pool, req);
+  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+
+  // A napi kiválasztás egy napon belül ugyanaz → nem kell minden
+  // kezdőlap-betöltésnél az összes leírást lekérni és újrakeverni
+  const cached = listCache.get(`featured|${today}|${adultMode}`);
+  if (cached) return res.json(cached);
+
   const { rows } = await pool.query(`
     SELECT title, slug, cover_url, description
     FROM manga m
@@ -465,8 +486,6 @@ router.get("/featured", requireLogin, async (req, res) => {
       AND description IS NOT NULL
       AND ${ADULT_GENRE_EXISTS_SQL} = $1
   `, [adultMode]);
-
-  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
 
   // egyszerű seedelt random
   function seededRandom(seed) {
@@ -484,7 +503,9 @@ router.get("/featured", requireLogin, async (req, res) => {
 
   const shuffled = [...rows].sort(() => rand() - 0.5);
 
-  res.json(shuffled.slice(0, 5));
+  const featured = shuffled.slice(0, 5);
+  listCache.set(`featured|${today}|${adultMode}`, featured);
+  res.json(featured);
 });
 
 export default router;

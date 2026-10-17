@@ -14,6 +14,13 @@ export const pool = new Pool({
   // A session store is ezt a poolt használja (korábban saját, 10-es pool
   // mellett) — a 20 megtartja a korábbi összes kapcsolatszámot.
   max: Number(process.env.PG_POOL_MAX) || 20,
+  // Ha a DB nem fogad kapcsolatot (vagy a pool kimerült), a kérés ennyi
+  // idő után hibával tér vissza, ne várakozzon a végtelenségig
+  connectionTimeoutMillis: Number(process.env.PG_CONNECT_TIMEOUT_MS) || 10000,
+  idleTimeoutMillis: 30000,
+  // Opcionális lekérdezés-időkorlát (ms); alapból nincs, mert a háttér-
+  // szkriptek (scan, migrációk) is ezt a poolt használják
+  ...(Number(process.env.PG_STATEMENT_TIMEOUT_MS) ? { statement_timeout: Number(process.env.PG_STATEMENT_TIMEOUT_MS) } : {}),
 });
 
 // Egy tétlen kapcsolat hibája (pl. DB-újraindítás, hálózati szakadás)

@@ -3,6 +3,12 @@ import { pool } from "../db.js";
 const lastUpdateMap = new Map();
 const THROTTLE_MS = 60 * 1000; // 60 mp
 
+// A régi bejegyzések takarítása (eddig a Map minden valaha belépett userrel nőtt)
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, at] of lastUpdateMap) if (now - at > THROTTLE_MS) lastUpdateMap.delete(id);
+}, 10 * 60 * 1000).unref();
+
 export async function activityTracker(req, res, next) {
   const user = req.session?.user;
 

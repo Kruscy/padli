@@ -1,5 +1,10 @@
 (async function () {
   const heroContent = document.getElementById("heroContent");
+  // A kiírás-gombok kattintása (inline onclick helyett — CSP: script-src-attr)
+  heroContent?.addEventListener("click", e => {
+    const btn = e.target.closest("[data-announcement]");
+    if (btn) window.openAnnouncement(Number(btn.dataset.announcement));
+  });
   const heroInner = heroContent.querySelector(".hero-inner");
   const prevBtn = document.getElementById("heroPrev");
   const nextBtn = document.getElementById("heroNext");
@@ -85,14 +90,14 @@
       <div class="hero-card announcement-card ${hasImage ? 'has-image' : ''}">
         ${hasImage ? `
           <div class="hero-card-image">
-            <img src="${item.image_url}" alt="${escHtml(item.title)}">
+            <img src="${escHtml(item.image_url)}" alt="${escHtml(item.title)}">
           </div>
         ` : ""}
         <div class="hero-card-body">
           <div class="hero-card-tag">Kiírás</div>
           <h2>${escHtml(item.title)}</h2>
           <div class="hero-card-text">${formatBody(item.body || "")}</div>
-          <button class="hero-btn" onclick="openAnnouncement(${item.id})">
+          <button class="hero-btn" data-announcement="${Number(item.id)}">
             Részletek →
           </button>
         </div>
@@ -108,7 +113,7 @@
       return `
         <div class="poll-option-row" data-poll="${item.id}" data-opt="${opt.id}">
           <div class="poll-opt-top">
-            ${opt.image_url ? `<img src="${opt.image_url}" class="poll-opt-img" alt="">` : ""}
+            ${opt.image_url ? `<img src="${escHtml(opt.image_url)}" class="poll-opt-img" alt="">` : ""}
             <span class="poll-opt-label">${escHtml(opt.title)}</span>
             <span class="poll-opt-pct">${item.voted ? pct + "%" : ""}</span>
           </div>
@@ -149,7 +154,7 @@
     heroInner.innerHTML = `
       <div class="hero-card manga-card">
         <div class="hero-card-image">
-          <img src="${item.cover_url}" alt="${escHtml(item.title)}">
+          <img src="${escHtml(item.cover_url)}" alt="${escHtml(item.title)}">
         </div>
         <div class="hero-card-body">
           <div class="hero-card-tag">Manga</div>
@@ -215,9 +220,9 @@
   function formatBody(text) {
     if (!text) return "";
     return text
-      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
       .replace(/\r\n|\n/g, "<br>")
-      .replace(/(https?:\/\/[^\s<]+)/g, (match) => {
+      .replace(/(https?:\/\/[^\s<"]+?)(?=&quot;|[\s<]|$)/g, (match) => {
         // A záró írásjeleket (pl. mondat végi ")" vagy ",") ne vegyük bele
         // a linkbe, ha "(https://...)" formában van a szövegben írva —
         // különben a link maga a ")"-t is tartalmazza.
@@ -304,7 +309,7 @@
     modal.innerHTML = `
       <div id="ann-backdrop"></div>
       <div id="ann-box">
-        ${a.image_url ? `<img src="${a.image_url}" id="ann-img">` : ""}
+        ${a.image_url ? `<img src="${escHtml(a.image_url)}" id="ann-img">` : ""}
         <h2>${escHtml(a.title)}</h2>
         <div id="ann-body">${formatBody(a.body || "")}</div>
         <button id="ann-close">Bezárás</button>
