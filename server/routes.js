@@ -152,9 +152,20 @@ router.post("/auth/register", async (req, res) => {
     if (!username || !email || !password || !birthDate) {
       return res.status(400).json({ error: "Minden mező kötelező" });
     }
+    if (typeof username !== "string" || typeof email !== "string" || typeof password !== "string") {
+      return res.status(400).json({ error: "Érvénytelen adatok" });
+    }
 
     if (username.length < 3) {
       return res.status(400).json({ error: "A felhasználónév túl rövid" });
+    }
+    if (username.length > 32) {
+      return res.status(400).json({ error: "A felhasználónév legfeljebb 32 karakter lehet" });
+    }
+    // HTML-/URL-jelölő és vezérlőkarakter nélkül (a nevet sok helyen
+    // megjelenítjük; korábban pl. "<b>…</b>" is regisztrálható volt)
+    if (/[<>"'`&\\/]|\p{C}/u.test(username) || username !== username.trim()) {
+      return res.status(400).json({ error: "A felhasználónév nem tartalmazhat < > \" ' ` & / \\ karaktert, és nem kezdődhet/végződhet szóközzel" });
     }
 
     const pwError = validatePassword(password);
