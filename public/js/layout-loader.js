@@ -244,7 +244,7 @@ document.body.appendChild(birthJS);
 
 if (!document.getElementById("chatWidget")) {
   const chatJS = document.createElement("script");
-  chatJS.src = "/js/chat.js?v=20260828a";
+  chatJS.src = "/js/chat.js?v=20261017";
   chatJS.onload = () => {
   if (typeof initChat === "function") initChat();
   };

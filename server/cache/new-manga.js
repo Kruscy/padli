@@ -1,31 +1,58 @@
+/* ═══════════════════════════════════════════════════════════
+   FILE-BASED CACHE - FIXED PATH
+   ═══════════════════════════════════════════════════════════ */
+
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
-/* A „legújabb mangák” cache-t a scan.js külön folyamatként építi fel, ezért
-   memóriában nem érné el a webszervert — JSON-fájlon keresztül adjuk át
-   (server/cache/new-manga.json, git-ignorált). A webszerver a fájl
-   módosítási ideje alapján csak változáskor olvassa újra. */
-const CACHE_FILE = path.join(path.dirname(fileURLToPath(import.meta.url)), "new-manga.json");
+// ✅ ABSZOLÚT ÚTVONAL (ESM-kompatibilis)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-let memo = { mtimeMs: 0, data: null };
+const CACHE_FILE = path.join(__dirname, "new-manga.json");
+
+// Ensure cache directory exists
+if (!fs.existsSync(path.dirname(CACHE_FILE))) {
+  fs.mkdirSync(path.dirname(CACHE_FILE), { recursive: true });
+}
 
 export function getNewMangaCache() {
   try {
-    const { mtimeMs } = fs.statSync(CACHE_FILE);
-    if (mtimeMs !== memo.mtimeMs) {
-      memo = { mtimeMs, data: JSON.parse(fs.readFileSync(CACHE_FILE, "utf8")) };
+    if (!fs.existsSync(CACHE_FILE)) {
+      return null;
     }
-    return memo.data;
-  } catch {
-    return memo.data; // nincs még fájl vagy olvasási hiba → a legutóbbi ismert adat
+    
+    const data = fs.readFileSync(CACHE_FILE, "utf8");
+    const parsed = JSON.parse(data);
+    
+    return parsed.data;
+  } catch (err) {
+    console.error("❌ Failed to read new manga cache:", err);
+    return null;
   }
 }
 
 export function setNewMangaCache(data) {
-  // Atomikus csere: a webszerver soha ne lásson félig kiírt fájlt
-  const tmp = `${CACHE_FILE}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(data));
-  fs.renameSync(tmp, CACHE_FILE);
-  memo = { mtimeMs: fs.statSync(CACHE_FILE).mtimeMs, data };
+  try {
+    const cache = {
+      data,
+      updatedAt: new Date().toISOString()
+    };
+    
+    fs.writeFileSync(CACHE_FILE, JSON.stringify(cache, null, 2), "utf8");
+    console.log(`✅ New manga cache saved to: ${CACHE_FILE}`);
+  } catch (err) {
+    console.error("❌ Failed to write new manga cache:", err);
+  }
+}
+
+export function clearNewMangaCache() {
+  try {
+    if (fs.existsSync(CACHE_FILE)) {
+      fs.unlinkSync(CACHE_FILE);
+    }
+  } catch (err) {
+    console.error("❌ Failed to clear new manga cache:", err);
+  }
 }

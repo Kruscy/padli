@@ -184,12 +184,15 @@ app.use((req, res, next) => {
   } catch { next(); }
 });
 
-// Verziózott (?v=) CSS/JS: a tartalom egy verzión belül nem változik, a
+// Verziózott CSS/JS: a tartalom egy verzión belül nem változik, a
 // böngésző és a Cloudflare egy évig tárolhatja (eddig max-age=0 → minden
-// oldalbetöltésnél újraellenőrzés). Verzió nélkül marad az ETag-alapú
-// újraellenőrzés (pl. a modulok egymás közti importjai).
+// oldalbetöltésnél újraellenőrzés). CSAK az injectVersion által beírt,
+// újraindításonként változó BUILD_VER-re: a JS-fájlokba kézzel írt ?v=
+// értékek (pl. layout-loader.js → chat.js?v=…) nem változnak a tartalommal
+// együtt, azokra egy éves tárolás a régi fájlt ragasztaná a böngészőkbe.
+// Verzió nélkül / kézi verzióval marad az ETag-alapú újraellenőrzés.
 app.use((req, res, next) => {
-  if (req.query.v && /^\/(css|js)\//.test(req.path)) {
+  if ([].concat(req.query.v || []).includes(BUILD_VER) && /^\/(css|js)\//.test(req.path)) {
     res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
   } else if (req.path.startsWith("/assets/")) {
     res.setHeader("Cache-Control", "public, max-age=86400");
