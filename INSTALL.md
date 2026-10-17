@@ -11,10 +11,20 @@ cp .env.example .env
 # Szerkeszd a .env fájlt (legalább PGPASSWORD, SITE_URL, SESSION_SECRET, MAIL_* kötelező)
 nano .env
 
+# Az app konténer nem rootként, hanem a "node" (uid 1000) felhasználóként fut:
+# a bind mountolt mappák legyenek az övéi, különben a feltöltés/naplózás nem tud írni
+mkdir -p uploads logs public/blog
+sudo chown -R 1000:1000 uploads logs public/blog
+
 docker compose up -d
 ```
 
 Az első indításkor a `db` service automatikusan betölti a `schema.sql` sémát.
+
+Az app konténernek van healthchecke (`GET /api/health` — a szerver és az
+adatbázis elérhetőségét jelzi); állapota: `docker compose ps`.
+Éles módban (`NODE_ENV=production` a `.env`-ben) a szerver `SESSION_SECRET`
+nélkül nem indul el.
 
 Az oldal elérhető: `http://localhost:3000`
 
@@ -39,7 +49,7 @@ docker compose logs -f   # logok követése
 
 | Szoftver | Minimális verzió |
 |----------|-----------------|
-| Node.js  | 20+             |
+| Node.js  | 22 LTS (min. 20.9) |
 | PostgreSQL | 15+           |
 | npm      | 10+             |
 

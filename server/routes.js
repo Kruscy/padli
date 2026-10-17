@@ -86,6 +86,17 @@ function verificationEmailHtml(username, link) {
   </div>`;
 }
 
+/* ===== HEALTH (Docker healthcheck / monitoring) ===== */
+// Nem ad ki belső adatot: csak azt jelzi, hogy a szerver és a DB elérhető.
+router.get("/health", async (_req, res) => {
+  try {
+    await pool.query("SELECT 1");
+    res.set("Cache-Control", "no-store").json({ ok: true });
+  } catch {
+    res.status(503).set("Cache-Control", "no-store").json({ ok: false });
+  }
+});
+
 /* ===== READING PROGRESS → lásd routes/progress.js ===== */
 /* ===== online ===== */
 router.get("/online-count", async (req, res) => {
