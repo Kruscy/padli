@@ -1,6 +1,8 @@
 // Hozzáférés-védelem: zárolt (Patreon) és 18+ fejezetek, AI-proxyk, health.
 import { test, describe, before, after } from "node:test";
 import assert from "node:assert/strict";
+import fs from "fs";
+import path from "path";
 import { hasDb, startApp, client } from "../helpers/server.mjs";
 import { createFixtures, PASSWORD } from "../helpers/fixtures.mjs";
 
@@ -42,6 +44,12 @@ describe("hozzáférés-védelem", { skip: !hasDb && "nincs teszt-adatbázis (PG
     assert.match((await img("patron", "free", "Ch02")).headers.get("cache-control"), /^private/);
     assert.match((await img("user", "adult", "Ch01")).headers.get("cache-control"), /^private/);
     assert.match((await img("user", "free", "Ch01")).headers.get("cache-control"), /^public/);
+  });
+
+  test("képvégpont: nem képfájl nem szolgálható ki (saját originről futó HTML)", async () => {
+    fs.writeFileSync(path.join(fx.libDir, fx.manga.free.folder, "Ch01", "x.html"), "<script>alert(1)</script>");
+    const r = await c.admin.request(`/api/image/${encodeURIComponent(fx.libName)}/${fx.manga.free.slug}/Ch01/x.html`);
+    assert.equal(r.status, 404);
   });
 
   test("oldallista: zárolás és korhatár", async () => {
