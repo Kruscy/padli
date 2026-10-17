@@ -29,6 +29,9 @@ router.post("/", async (req, res) => {
   const { slug, chapter, page } = req.body;
 
   if (!userId) return res.status(401).json({ error: "Not logged in" });
+  if (typeof slug !== "string" || !slug || typeof chapter !== "string" || !chapter) {
+    return res.status(400).json({ error: "Hibás adatok" });
+  }
 
   // Duplikált slug esetén (két manga-bejegyzés ugyanazzal a slug-gal)
   // azt a bejegyzést részesítjük előnyben, amelyiknél TÉNYLEGESEN

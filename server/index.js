@@ -1,4 +1,6 @@
 import express from "express";
+import { errorHandler } from "./lib/async-errors.js";
+import { pool } from "./db.js";
 import path from "path";
 import { Readable } from "stream";
 import { fileURLToPath } from "url";
@@ -129,7 +131,9 @@ app.use(express.urlencoded({ limit: "50mb", extended: false }));
 app.use(
   session({
     store: new PgSession({
-      conString: `postgresql://${process.env.PGUSER}:${process.env.PGPASSWORD}@${process.env.PGHOST || "localhost"}:${process.env.PGPORT || 5432}/${process.env.PGDATABASE}`,
+      // Közös pool az alkalmazással (külön conString-gel egy második,
+      // hibakezelő nélküli pool jött létre)
+      pool,
       tableName: "session",
       pruneSessionInterval: 60 * 60,
     }),
@@ -221,6 +225,9 @@ app.get("/blog/:slug", (req, res) => {
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "../public/index.html"));
 });
+
+/* ===== HIBAKEZELŐ (mindig a route-ok után) ===== */
+app.use(errorHandler);
 
 /* ===== BLOG AUTO-GENERÁTOR CRON (H/Sze/P 10:00) ===== */
 // Heti 3 poszt: hétfő, szerda, péntek reggel 10-kor

@@ -66,7 +66,7 @@ router.post("/send", requireLogin, async (req, res) => {
   const { content } = req.body;
   const user = req.session.user;
 
-  if (!content?.trim()) return res.status(400).json({ error: "Empty message" });
+  if (typeof content !== "string" || !content.trim()) return res.status(400).json({ error: "Empty message" });
   if (content.length > 500) return res.status(400).json({ error: "Too long" });
 
   try {
