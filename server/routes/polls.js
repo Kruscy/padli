@@ -233,7 +233,20 @@ router.post("/:id/vote", requireLogin, async (req, res) => {
   const { optionId, changeVote } = req.body;
   const userId = req.session.user.id;
 
+  if (!Number.isInteger(pollId) || !Number.isInteger(Number(optionId))) {
+    return res.status(400).json({ error: "Érvénytelen opció" });
+  }
+
   try {
+    // Csak a szavazáshoz tartozó opcióra, és csak nyitott szavazásnál
+    // (korábban bármely opció-azonosító és lezárt szavazás is elfogadott volt)
+    const { rows: valid } = await pool.query(
+      `SELECT 1 FROM poll_options o JOIN polls p ON p.id = o.poll_id
+       WHERE o.id = $1 AND p.id = $2 AND p.active = true AND p.ends_at > now()`,
+      [Number(optionId), pollId]
+    );
+    if (!valid.length) return res.status(400).json({ error: "Érvénytelen opció vagy lezárt szavazás" });
+
     if (changeVote) {
       // Szavazat csere: frissítjük a meglévő sort
       const result = await pool.query(
