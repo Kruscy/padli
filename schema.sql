@@ -676,3 +676,94 @@ CREATE TABLE IF NOT EXISTS public.subtitle_translation_requests (
     status          TEXT NOT NULL DEFAULT 'pending',
     created_at      TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- ─────────────────────────────────────────────────────────────
+-- Sémaszinkron (2026-10-18): a kód által használt, de eddig itt hiányzó
+-- táblák és oszlopok. A típusokat a kódbeli használatból vezettük le —
+-- élesben ezek már léteznek (IF NOT EXISTS: ott nem változtat semmit).
+-- Ellenőrzés: a kódban lévő SQL-ek PREPARE-rel futtatva hiba nélkül
+-- elemezhetők ezen a sémán.
+-- ─────────────────────────────────────────────────────────────
+
+-- Számlázási adatok (routes/user.js, middleware/billingAddressGate.js, routes/shop.js)
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS billing_name          TEXT;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS billing_address       TEXT;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS force_billing_address BOOLEAN DEFAULT false;
+
+-- Külső azonosítók (metadata-scan.js, refresh-metadata.js, routes/wishlist.js)
+ALTER TABLE public.manga    ADD COLUMN IF NOT EXISTS mal_id      INTEGER;
+ALTER TABLE public.manga    ADD COLUMN IF NOT EXISTS mangadex_id TEXT;
+ALTER TABLE public.manga    ADD COLUMN IF NOT EXISTS metadata_source TEXT;
+ALTER TABLE public.wishlist ADD COLUMN IF NOT EXISTS mal_id      INTEGER;
+ALTER TABLE public.wishlist ADD COLUMN IF NOT EXISTS mangadex_id TEXT;
+ALTER TABLE public.wishlist ADD COLUMN IF NOT EXISTS source      TEXT;
+-- MAL / MangaDex forrásból felvett tételnek nincs mindig AniList-azonosítója
+ALTER TABLE public.wishlist ALTER COLUMN anilist_id DROP NOT NULL;
+
+-- Hibajegyek (routes/bug-reports.js, routes/chapter-bug-reports.js)
+ALTER TABLE public.bug_reports ADD COLUMN IF NOT EXISTS type TEXT DEFAULT 'other';
+-- a leírás nélküli bejelentés NULL-t ment
+ALTER TABLE public.bug_reports ALTER COLUMN description DROP NOT NULL;
+ALTER TABLE public.chapter_bug_reports ADD COLUMN IF NOT EXISTS report_count INTEGER DEFAULT 1;
+
+-- Patreon nyers (szinkron előtti) állapot (patreon-sync.js, routes/patreon.js)
+ALTER TABLE public.patreon_status ADD COLUMN IF NOT EXISTS patreon_raw_active BOOLEAN;
+ALTER TABLE public.patreon_status ADD COLUMN IF NOT EXISTS patreon_raw_tier   TEXT;
+
+-- Discordról érkező chat-üzenet megjelenített neve (discord-bot.js)
+ALTER TABLE public.chat_messages ADD COLUMN IF NOT EXISTS display_name TEXT;
+
+-- Gemini API-kulcsok (lib/gemini-client.js, routes/admin.js, routes/anime-subtitles.js)
+CREATE TABLE IF NOT EXISTS public.gemini_keys (
+    id             SERIAL PRIMARY KEY,
+    label          TEXT NOT NULL,
+    api_key        TEXT NOT NULL,
+    is_active      BOOLEAN DEFAULT true,
+    contributed_by INTEGER REFERENCES public.users(id),
+    created_at     TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Külső API-hívások naplója (lib/gemini-client.js, lib/translate.js, admin /api-usage)
+CREATE TABLE IF NOT EXISTS public.api_key_usage (
+    id            SERIAL PRIMARY KEY,
+    provider      TEXT NOT NULL,
+    key_label     TEXT,
+    success       BOOLEAN NOT NULL,
+    status_code   INTEGER,
+    error_message TEXT,
+    source        TEXT,
+    created_at    TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS api_key_usage_created_idx ON public.api_key_usage (created_at);
+
+-- Belső OCR / inpaint szolgáltatás hívásai (routes/ocr.js, routes/inpaint.js, admin /remote-usage)
+CREATE TABLE IF NOT EXISTS public.remote_service_usage (
+    id            SERIAL PRIMARY KEY,
+    service       TEXT NOT NULL,
+    success       BOOLEAN NOT NULL,
+    status_code   INTEGER,
+    duration_ms   INTEGER,
+    error_message TEXT,
+    created_at    TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS remote_service_usage_created_idx ON public.remote_service_usage (created_at);
+
+-- Manga/fejezet törlések naplója (routes/admin.js, routes/manga-admin.js)
+CREATE TABLE IF NOT EXISTS public.admin_delete_log (
+    id             SERIAL PRIMARY KEY,
+    admin_id       INTEGER REFERENCES public.users(id) ON DELETE SET NULL,
+    admin_username TEXT,
+    target_type    TEXT NOT NULL,
+    target_id      INTEGER,
+    target_title   TEXT,
+    details        JSONB,
+    created_at     TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Feltöltő-alias → felhasználó (lib/wishlist-auto-claim.js)
+CREATE TABLE IF NOT EXISTS public.uploader_user_map (
+    id            SERIAL PRIMARY KEY,
+    uploader_name TEXT NOT NULL,
+    user_id       INTEGER NOT NULL REFERENCES public.users(id) ON DELETE CASCADE
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uploader_user_map_name_idx ON public.uploader_user_map (lower(uploader_name));
