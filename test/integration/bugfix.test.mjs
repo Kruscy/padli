@@ -15,8 +15,18 @@ describe("bugfix-feltöltés", { skip: !hasDb && "nincs teszt-adatbázis (PG* k�
     c = client(app.baseUrl);
     assert.equal((await c.login(fx.users.user.username, PASSWORD)).status, 200);
     jpeg = await sharp({ create: { width: 10, height: 10, channels: 3, background: { r: 0, g: 0, b: 255 } } }).jpeg().toBuffer();
+    for (const idx of [0, 1]) {
+      await app.pool.query(
+        `INSERT INTO bug_reports (provider, manga_slug, chapter, image_file, image_index, image_url, user_id, username, description, report_count)
+         VALUES ($1, $2, 'Ch01', '001.jpg', $3, 'x', $4, 'teszt', 'teszt', 1)`,
+        [fx.libName, fx.manga.free.slug, idx, fx.users.user.id]);
+    }
   });
-  after(async () => { await fx?.cleanup(); await app?.close(); });
+  after(async () => {
+    await app?.pool.query(`DELETE FROM notifications WHERE user_id = ANY($1)`, [Object.values(fx.users).map(u => u.id)]).catch(() => {});
+    await app?.pool.query(`DELETE FROM bug_reports WHERE manga_slug = $1`, [fx?.manga.free.slug]);
+    await fx?.cleanup(); await app?.close();
+  });
 
   const upload = (fields, file = jpeg, name = "fix.jpg") => {
     const form = new FormData();
@@ -31,6 +41,25 @@ describe("bugfix-feltöltés", { skip: !hasDb && "nincs teszt-adatbázis (PG* k�
     const file = path.join(process.cwd(), r.data.url);
     assert.ok(file.startsWith(path.join(process.cwd(), "uploads", "bugs", "javitott") + path.sep));
     assert.ok(fs.existsSync(file));
+  });
+
+  test("jóváhagyáskor a javítás az eredeti oldalt cseréli, nem új oldalt hoz létre", async () => {
+    const up = await upload({ manga_slug: fx.manga.free.slug, chapter: "Ch01", image_index: "0" });
+    assert.equal(up.status, 200);
+    assert.equal(up.data.fix.image_file, "001.jpg");
+    // a hibajegy-adminság a Patreon "Admin" szintjéhez kötött
+    await app.pool.query(`INSERT INTO patreon_status (patreon_user_id, user_id, tier, active) VALUES ($1, $2, 'Admin', true)`,
+      [`${fx.run}_adm`, fx.users.admin.id]);
+    const admin = client(app.baseUrl);
+    assert.equal((await admin.login(fx.users.admin.username, PASSWORD)).status, 200);
+    assert.equal((await admin.request(`/api/bug-reports/fix/${up.data.fix.id}/apply`, { method: "POST" })).status, 200);
+    const dir = path.join(fx.libDir, fx.manga.free.folder, "Ch01");
+    assert.deepEqual(fs.readdirSync(dir).sort(), ["001.jpg"]);
+    assert.ok(fs.readFileSync(path.join(dir, "001.jpg")).equals(jpeg));
+  });
+
+  test("hibajegy nélküli képre nem tölthető fel javítás", async () => {
+    assert.equal((await upload({ manga_slug: fx.manga.free.slug, chapter: "Ch01", image_index: "7" })).status, 404);
   });
 
   test("nem létező fejezet, hibás név vagy index elutasítva", async () => {

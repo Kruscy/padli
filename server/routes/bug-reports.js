@@ -488,6 +488,19 @@ router.post("/fix/upload", requireLogin, upload.single("image"), async (req, res
     if (!(await findChapter(manga_slug, chapter))) return res.status(404).json({ error: "Fejezet nem található" });
     if (!(await isImageBuffer(req.file.buffer))) return res.status(400).json({ error: "A fájl nem kép" });
 
+    // Az eredeti oldal fájlneve a képhez tartozó hibajegyből: ezt cseréli le
+    // az applyBugFix. Korábban a staging-fájl neve ("0_65.jpg") került ide,
+    // így jóváhagyáskor az eredeti oldal helyett egy új, plusz oldal jött létre.
+    const { rows: reportRows } = await pool.query(
+      `SELECT image_file FROM bug_reports
+       WHERE manga_slug=$1 AND chapter=$2 AND image_index=$3 AND image_file IS NOT NULL
+       ORDER BY is_closed, id DESC LIMIT 1`,
+      [manga_slug, chapter, imgIdx]
+    );
+    const originalFile = reportRows[0]?.image_file.split("?")[0];
+    if (!originalFile) return res.status(404).json({ error: "Ehhez a képhez nincs hibajegy" });
+    if (!isSafeName(originalFile)) return res.status(400).json({ error: "Érvénytelen fájlnév" });
+
     // Mappa struktúra: uploads/bugs/javitott/manga_slug/chapter/
     const fs = fsSync;
 
@@ -511,9 +524,10 @@ router.post("/fix/upload", requireLogin, upload.single("image"), async (req, res
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW(),true)
       ON CONFLICT (manga_slug, chapter, image_index, fixed_by)
       DO UPDATE SET fixed_image_url = EXCLUDED.fixed_image_url,
+                    image_file = EXCLUDED.image_file,
                     fixed_at = NOW()
       RETURNING *
-    `, [providerVal, manga_slug, chapter, imgIdx, filename, fixedUrl, userId, username]);
+    `, [providerVal, manga_slug, chapter, imgIdx, originalFile, fixedUrl, userId, username]);
 
     res.json({ ok: true, fix: rows[0], url: fixedUrl });
   } catch (err) {
