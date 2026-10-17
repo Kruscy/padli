@@ -9,6 +9,19 @@ import { pool } from "./db.js";
 const PgSession = connectPgSimple(session);
 const isProd = process.env.NODE_ENV === "production";
 
+// Éles módban nem indulunk el session-kulcs nélkül: a korábbi csendes
+// alapérték ("dev-secret-change-me") nyilvános, azzal bárki hamisíthatott
+// volna session-sütit.
+if (!process.env.SESSION_SECRET) {
+  if (isProd) {
+    console.error("❌ SESSION_SECRET nincs beállítva — a szerver nem indul el.");
+    process.exit(1);
+  }
+  console.warn("⚠️  SESSION_SECRET nincs beállítva — fejlesztői alapérték használatban.");
+} else if (process.env.SESSION_SECRET.length < 32) {
+  console.warn("⚠️  SESSION_SECRET rövid (32 karakternél rövidebb) — érdemes hosszabb, véletlenszerű értékre cserélni.");
+}
+
 export const sessionMiddleware = session({
   store: new PgSession({
     // Közös pool az alkalmazással (külön conString-gel egy második,

@@ -27,6 +27,7 @@ const router = express.Router();
 
 /* ── KONFIG ──────────────────────────────────────────────── */
 const JWT_SECRET     = process.env.MANGA_JWT_SECRET;
+if (!JWT_SECRET) console.warn("⚠️  MANGA_JWT_SECRET nincs beállítva — a PadliCrome-bővítmény belépése nem fog működni.");
 const TORII_API_KEY  = process.env.TORII_API_KEY;
 const TORII_API_URL  = "https://api.toriitranslate.com/api/v2/upload";
 const PROJECT_ROOT   = "/mnt/manga2/padlicrome";
