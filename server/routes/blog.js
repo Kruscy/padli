@@ -3,6 +3,7 @@ import express from "express";
 import { pool } from "../db.js";
 import { generateStaticPost, regenerateIndex } from "../blog-static-generator.js";
 import { generateSitemap } from "../sitemap-generator.js";
+import { serverError } from "../lib/async-errors.js";
 
 const router = express.Router();
 
@@ -113,7 +114,7 @@ Válaszolj CSAK valid JSON tömbben, semmi más szöveg.`
     res.json(suggestions.slice(0, 20));
   } catch (err) {
     console.error("suggest-topics hiba:", err.message);
-    res.status(500).json({ error: err.message });
+    serverError(res, err);
   }
 });
 
@@ -134,7 +135,7 @@ router.get("/auto-topics", requireAdmin, async (req, res) => {
       exists: existingSlugs.has(t.slug),
     })));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    serverError(res, err);
   }
 });
 
@@ -251,7 +252,7 @@ Formázás: HTML (h2, h3, p, ul/li, strong). Legyen benne FAQ szekció. Ne legye
       .then(post => post && console.log(`[BlogAdmin] Egyedi poszt létrehozva: ${post.slug}`))
       .catch(err => console.error("[BlogAdmin] Egyedi generálás hiba:", err.message));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    serverError(res, err);
   }
 });
 
@@ -270,7 +271,7 @@ router.post("/auto-generate", requireAdmin, async (req, res) => {
       .then(post => post && console.log(`[BlogAdmin] Létrehozva: ${post.slug}`))
       .catch(err => console.error("[BlogAdmin] Generálás hiba:", err.message));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    serverError(res, err);
   }
 });
 
@@ -282,7 +283,7 @@ router.post("/regenerate-static", requireAdmin, async (req, res) => {
     const count = await regenerateAllPosts();
     res.json({ ok: true, count, message: count + " statikus blog oldal újragenerálva" });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    serverError(res, err);
   }
 });
 

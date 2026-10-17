@@ -7,6 +7,7 @@ import Stripe  from "stripe";
 import { pool } from "../db.js";
 import { requireLogin } from "../middleware/auth.js";
 import { createInvoice } from "../billingo.js";
+import { serverError } from "../lib/async-errors.js";
 
 const router = express.Router();
 
@@ -249,7 +250,7 @@ router.post("/subscribe", requireLogin, async (req, res) => {
     res.json({ url: session.url });
   } catch (err) {
     console.error("[SHOP] subscribe error:", err);
-    res.status(500).json({ error: "Stripe hiba: " + err.message });
+    res.status(500).json({ error: "Stripe hiba, próbáld újra később." });
   }
 });
 
@@ -268,7 +269,7 @@ router.delete("/subscription", requireLogin, async (req, res) => {
 
     res.json({ ok: true, message: "Előfizetés lemondva — az aktuális időszak végéig aktív marad." });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    serverError(res, err);
   }
 });
 
@@ -281,7 +282,7 @@ router.get("/my-subscription", requireLogin, async (req, res) => {
     `, [userId]);
     res.json(rows[0] || null);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    serverError(res, err);
   }
 });
 

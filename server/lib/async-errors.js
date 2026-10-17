@@ -68,6 +68,14 @@ export function errorHandler(err, req, res, _next) {
   }
 }
 
+// Elkapott, váratlan hiba válasza: a részletek csak a naplóba kerülnek, a
+// kliens általános üzenetet kap (az err.message belső útvonalat, SQL-
+// vagy szolgáltatás-részletet árulhat el).
+export function serverError(res, err) {
+  console.error(`[HIBA] ${res.req?.method} ${res.req?.originalUrl}:`, err);
+  if (!res.headersSent) res.status(500).json({ error: "Szerver hiba" });
+}
+
 // Router-on kívüli (pl. időzített, háttérben futó) promise-hibák: naplózzuk,
 // de ne állítsák le a folyamatot.
 process.on("unhandledRejection", (reason) => {

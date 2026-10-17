@@ -2,6 +2,7 @@
 import express from "express";
 import { pool } from "../db.js";
 import { spendPoints } from "../lib/points-ledger.js";
+import { serverError } from "../lib/async-errors.js";
 
 const router = express.Router();
 
@@ -63,7 +64,7 @@ router.get("/balance", requireLogin, async (req, res) => {
     });
   } catch (err) {
     console.error("Points balance error:", err);
-    res.status(500).json({ error: err.message });
+    serverError(res, err);
   }
 });
 
@@ -89,7 +90,7 @@ router.get("/my-gifts", requireLogin, async (req, res) => {
     res.json(rows);
   } catch (err) {
     console.error("My gifts error:", err);
-    res.status(500).json({ error: err.message });
+    serverError(res, err);
   }
 });
 
@@ -186,7 +187,7 @@ router.get("/leaderboard", async (req, res) => {
     res.json(rows);
   } catch (err) {
     console.error("Leaderboard error:", err);
-    res.status(500).json({ error: err.message });
+    serverError(res, err);
   }
 });
 

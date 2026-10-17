@@ -8,6 +8,7 @@ import { PutObjectCommand } from "@aws-sdk/client-s3";
 import multer from "multer";
 import { applyBugFix } from "../lib/apply-bug-fix.js";
 import { BUGFIX_STAGING_DIR, findChapter, isImageBuffer, isSafeName, resolveInside } from "../lib/safe-path.js";
+import { serverError } from "../lib/async-errors.js";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
@@ -132,7 +133,7 @@ router.get("/image", requireLogin, async (req, res) => {
     `, [manga_slug, chapter, parseInt(image_index)]);
 
     res.json({ reports: rows, fix: fix.rows[0] || null });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { serverError(res, err); }
 });
 
 /* ── NOTIFICATIONS – specifikus route-ok ELŐBB, :id wildcard UTÁNA ── */
@@ -244,7 +245,7 @@ router.get("/:id", requireLogin, async (req, res) => {
     res.json(rows[0]);
   } catch (err) {
     console.error("Get bug report error:", err);
-    res.status(500).json({ error: err.message });
+    serverError(res, err);
   }
 });
 
@@ -313,7 +314,7 @@ router.post("/", requireLogin, async (req, res) => {
     res.status(201).json(rows[0]);
   } catch (err) {
     console.error("Bug report create error:", err);
-    res.status(500).json({ error: err.message });
+    serverError(res, err);
   }
 });
 
@@ -358,7 +359,7 @@ router.post("/:id/close", requireAdmin, async (req, res) => {
     res.json({ success: true, bug_report: rows[0] });
   } catch (err) {
     console.error("Close bug report error:", err);
-    res.status(500).json({ error: err.message });
+    serverError(res, err);
   }
 });
 
@@ -383,7 +384,7 @@ router.post("/:id/reopen", requireAdmin, async (req, res) => {
     res.json({ success: true, bug_report: rows[0] });
   } catch (err) {
     console.error("Reopen bug report error:", err);
-    res.status(500).json({ error: err.message });
+    serverError(res, err);
   }
 });
 
@@ -402,7 +403,7 @@ router.delete("/:id", requireAdmin, async (req, res) => {
     res.json({ success: true, deleted_id: parseInt(req.params.id) });
   } catch (err) {
     console.error("Delete bug report error:", err);
-    res.status(500).json({ error: err.message });
+    serverError(res, err);
   }
 });
 
@@ -422,7 +423,7 @@ router.patch("/:id/close", requireAdmin, async (req, res) => {
       WHERE id = $2 RETURNING *
     `, [req.session.user.id, req.params.id]);
     res.json(rows[0]);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { serverError(res, err); }
 });
 
 /* (A korábbi POST /api/bug-reports/fix végpont — ami a kliens által
@@ -456,7 +457,7 @@ router.post("/fix/:id/vote", requireLogin, async (req, res) => {
     `, [fixId]);
 
     res.json(rows[0]);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { serverError(res, err); }
 });
 
 /* ── PATCH /api/bug-reports/fix/:id/award-points – pontrendszer toggle ── */
@@ -469,7 +470,7 @@ router.patch("/fix/:id/award-points", requireAdmin, async (req, res) => {
     );
     if (!rows.length) return res.status(404).json({ error: "Nem található" });
     res.json({ ok: true, ...rows[0] });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { serverError(res, err); }
 });
 
 /* ── POST /api/bug-reports/fix/upload – javított kép feltöltése ── */
@@ -532,7 +533,7 @@ router.post("/fix/upload", requireLogin, upload.single("image"), async (req, res
     res.json({ ok: true, fix: rows[0], url: fixedUrl });
   } catch (err) {
     console.error("Fix upload error:", err);
-    res.status(500).json({ error: err.message });
+    serverError(res, err);
   }
 });
 
@@ -607,7 +608,7 @@ router.post("/fix/:id/correct", requireAdmin, upload.single("image"), async (req
     res.json({ ok: true });
   } catch (err) {
     console.error("Fix correct error:", err);
-    res.status(500).json({ error: err.message });
+    serverError(res, err);
   }
 });
 

@@ -9,6 +9,7 @@ import { requestScan, getScanStatus } from "../lib/scan-runner.js";
 import { findExistingSeries } from "../lib/manga-duplicates.js";
 import { logSecurityEvent } from "../lib/security-log.js";
 import { isImageBuffer } from "../lib/safe-path.js";
+import { serverError } from "../lib/async-errors.js";
 
 const r2 = new S3Client({
   region: "auto",
@@ -252,7 +253,7 @@ router.get("/files", requireUploader, async (req, res) => {
 
     res.json({ path: relativePath, items });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    serverError(res, err);
   }
 });
 
@@ -369,7 +370,7 @@ router.post("/upload", requireUploader, upload.single("file"), async (req, res) 
 
     res.json({ ok: true, path: relativePath });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    serverError(res, err);
   }
 });
 
@@ -446,7 +447,7 @@ router.delete("/file", requireUploader, express.json(), async (req, res) => {
     }
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    serverError(res, err);
   }
 });
 
@@ -488,7 +489,7 @@ router.post("/mkdir", requireUploader, express.json(), async (req, res) => {
     fs.mkdirSync(fullPath, { recursive: true });
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    serverError(res, err);
   }
 });
 

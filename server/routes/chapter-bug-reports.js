@@ -6,6 +6,7 @@ import { r2, BUCKET, localPathToR2Key } from "../r2.js";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { applyAllFixesForChapter, applyBugFix } from "../lib/apply-bug-fix.js";
 import { stagedFixPath } from "../lib/safe-path.js";
+import { serverError } from "../lib/async-errors.js";
 
 const router = express.Router();
 
@@ -60,7 +61,7 @@ router.get("/", requireLogin, async (req, res) => {
     query += " ORDER BY cbr.report_count DESC, cbr.created_at DESC";
     const { rows } = await pool.query(query, params);
     res.json(rows.map(r => ({ ...r, manga_title: r.manga_title_db || r.manga_title || r.manga_slug, fixed_by_name: r.fixed_by_name_db })));
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { serverError(res, err); }
 });
 
 /* ── POST /api/chapter-bugs – új bejelentés ──────────────── */
@@ -108,7 +109,7 @@ router.post("/", requireLogin, async (req, res) => {
     `, [manga_slug, chapter, provider || null, type, description?.trim() || null, mangaTitle, userId, username]);
 
     res.status(201).json(rows[0]);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { serverError(res, err); }
 });
 
 /* ── POST /api/chapter-bugs/:id/fix – adminként javítva ─── */
@@ -146,7 +147,7 @@ router.post("/:id/fix", requireAdmin, async (req, res) => {
     const purgeResult = await purgeChapterCache(b.manga_slug, b.chapter);
 
     res.json({ ok: true, fixesApplied: applyResult, uploaded: uploadResult.uploaded, purged: purgeResult });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { serverError(res, err); }
 });
 
 /* ── POST /api/chapter-bugs/fix/:fixId/approve – EGY kép jóváhagyása ──
@@ -160,7 +161,7 @@ router.post("/fix/:fixId/approve", requireAdmin, async (req, res) => {
 
     const result = await applyBugFix(req.params.fixId, req.session.user.id);
     res.json({ ok: true, ...result });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { serverError(res, err); }
 });
 
 /* ── POST /api/chapter-bugs/fix/:fixId/reject – EGY kép elutasítása ──
@@ -222,7 +223,7 @@ router.post("/fix/:fixId/reject", requireAdmin, async (req, res) => {
     }
 
     res.json({ ok: true });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { serverError(res, err); }
 });
 
 /* ── POST /api/chapter-bugs/purge – R2 újrafeltöltés + CF cache ── */
@@ -241,7 +242,7 @@ router.post("/purge", requireAdmin, async (req, res) => {
     }
     const purgeResult = await purgeChapterCache(manga_slug, chapter);
     res.json({ ok: true, uploaded: uploadResult.uploaded, purged: purgeResult });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { serverError(res, err); }
 });
 
 /* ── DELETE /api/chapter-bugs/:id ────────────────────────── */
@@ -271,7 +272,7 @@ router.delete("/:id", requireAdmin, async (req, res) => {
 
     await pool.query(`DELETE FROM chapter_bug_reports WHERE id=$1`, [req.params.id]);
     res.json({ ok: true, cleanedFixes: fixes.length });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { serverError(res, err); }
 });
 
 /* ══════════════════════════════════════════════════════════

@@ -952,7 +952,7 @@ router.post("/import-bug-image", requireAuth, async (req, res) => {
     res.json({ ok: true, imageId: id });
   } catch (err) {
     console.error("[PADLICROME] import-bug-image:", err);
-    res.status(500).json({ error: "Kép importálási hiba: " + err.message });
+    res.status(500).json({ error: "Kép importálási hiba" });
   }
 });
 
@@ -1046,7 +1046,7 @@ router.post("/import-chapter", requireAuth, async (req, res) => {
     res.json({ ok: true, added, skipped, total: files.length });
   } catch (err) {
     console.error("[PADLICROME] import-chapter:", err);
-    res.status(500).json({ error: "Fejezet importálási hiba: " + err.message });
+    res.status(500).json({ error: "Fejezet importálási hiba" });
   }
 });
 
@@ -1132,7 +1132,7 @@ router.post("/submit-bug-fix", requireAuth, async (req, res) => {
     res.json({ ok: true, fixId, fixedImageUrl, chapterBugClosed, noMeta: !mangaSlug || !chapter });
   } catch (err) {
     console.error("[PADLICROME] submit-bug-fix:", err);
-    res.status(500).json({ error: "Szerver hiba: " + err.message });
+    res.status(500).json({ error: "Szerver hiba" });
   }
 });
 

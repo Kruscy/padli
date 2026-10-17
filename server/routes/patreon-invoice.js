@@ -1,6 +1,7 @@
 import express from "express";
 import rateLimit from "express-rate-limit";
 import { requireAdmin } from "../middleware/auth.js";
+import { serverError } from "../lib/async-errors.js";
 
 const router = express.Router();
 
@@ -96,7 +97,7 @@ router.post("/", invoiceRateLimit, requireAdmin, async (req, res) => {
     res.json({ ok: true, invoiceNumber: invoice.invoice_number, invoiceId: invoice.id, amount: nettoAr });
   } catch (err) {
     console.error("[PatreonInvoice] ❌", err.message);
-    res.status(500).json({ error: err.message });
+    serverError(res, err);
   }
 });
 
