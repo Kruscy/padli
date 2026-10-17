@@ -7,7 +7,8 @@ import adminRoutes from "./routes/admin.js";
 import { SCAN_OWNER_USER_ID } from "./lib/scan-runner.js";
 import { logSecurityEvent } from "./lib/security-log.js";
 import { validatePassword, comparePasswordSafe, hashToken, destroyUserSessions,
-         findUserByLogin, resolveStoredEmail } from "./lib/auth-security.js";
+         findUserByLogin, resolveStoredEmail, loginLockRemaining,
+         registerLoginFailure, clearLoginFailures } from "./lib/auth-security.js";
 import { randomBytes, createHash } from "crypto";
 import { sendMail } from "./mail.js";
 import wishlistRoutes from "./routes/wishlist.js";
@@ -84,6 +85,17 @@ function verificationEmailHtml(username, link) {
     <p style="color:#555;font-size:0.78rem">PadlizsanFanSub · padlizsanfansub.hu</p>
   </div>`;
 }
+
+/* ===== HEALTH (Docker healthcheck / monitoring) ===== */
+// Nem ad ki belső adatot: csak azt jelzi, hogy a szerver és a DB elérhető.
+router.get("/health", async (_req, res) => {
+  try {
+    await pool.query("SELECT 1");
+    res.set("Cache-Control", "no-store").json({ ok: true });
+  } catch {
+    res.status(503).set("Cache-Control", "no-store").json({ ok: false });
+  }
+});
 
 /* ===== READING PROGRESS → lásd routes/progress.js ===== */
 /* ===== online ===== */
@@ -272,9 +284,18 @@ router.post("/auth/login", async (req, res) => {
     const rows = found ? [found] : [];
 
     const loginKey = String(login).slice(0, 120);
+    // Fiókszintű zárolás: létező fióknál a fiókra (név és e-mail is ugyanaz),
+    // különben a beírt névre
+    const throttleKey = rows.length ? `user:${rows[0].id}` : `name:${loginKey}`;
+    const lockedFor = loginLockRemaining(throttleKey);
+    if (lockedFor) {
+      res.setHeader("Retry-After", String(lockedFor));
+      return res.status(429).json({ error: "Túl sok sikertelen próbálkozás ezzel a fiókkal, próbáld újra később." });
+    }
     // Nem létező fióknál is lefut egy bcrypt-összehasonlítás (időzítés-kiegyenlítés)
     const ok = await comparePasswordSafe(password, rows[0]?.password_hash);
     if (!rows.length) {
+      registerLoginFailure(throttleKey);
       logSecurityEvent({ req, type: "login_failed", severity: "info", dedupeKey: `${loginKey}|nouser`,
                          details: { login: loginKey, reason: "no_such_user" } });
       return res.status(401).json({ error: "Invalid login" });
@@ -282,11 +303,14 @@ router.post("/auth/login", async (req, res) => {
 
     const user = rows[0];
     if (!ok) {
-      logSecurityEvent({ req, type: "login_failed", severity: "info", dedupeKey: `${loginKey}|badpw`,
+      const nowLocked = registerLoginFailure(throttleKey);
+      logSecurityEvent({ req, type: nowLocked ? "login_account_locked" : "login_failed",
+                         severity: nowLocked ? "warn" : "info", dedupeKey: `${loginKey}|badpw`,
                          userId: user.id, username: user.username,
                          details: { login: loginKey, reason: "bad_password", admin: user.role === "admin" } });
       return res.status(401).json({ error: "Invalid login" });
     }
+    clearLoginFailures(throttleKey);
     logSecurityEvent({ req, type: "login_success", userId: user.id, username: user.username,
                        dedupeKey: `ok|${user.id}`, details: { admin: user.role === "admin" } });
 

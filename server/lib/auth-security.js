@@ -72,3 +72,54 @@ export async function destroyUserSessions(userId, exceptSid = null) {
   );
   return rowCount;
 }
+
+/* ── Fiókszintű brute-force védelem ───────────────────────────
+   Az IP-alapú korlát (index.js) sok IP-ről elosztott próbálkozás ellen nem
+   véd. Itt belépési névenként (kisbetűsítve) számoljuk a sikertelen
+   próbálkozásokat: LOGIN_MAX_FAILS hiba LOGIN_WINDOW_MS-en belül után a
+   fiókra LOGIN_LOCK_MS-ig 429-et adunk — helyes jelszóval is, különben a
+   zárolás alatt is lehetne találgatni. A sikeres belépés törli a
+   számlálót. Memóriában tárolt (egy folyamat), újraindításkor nullázódik. */
+const LOGIN_MAX_FAILS = 8;
+const LOGIN_WINDOW_MS = 15 * 60e3;
+const LOGIN_LOCK_MS = 15 * 60e3;
+const loginFails = new Map(); // kulcs → { first, count, lockedUntil }
+
+const loginKeyOf = login => String(login ?? "").trim().toLowerCase().slice(0, 200);
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of loginFails) {
+    if (now - v.first > LOGIN_WINDOW_MS && now > v.lockedUntil) loginFails.delete(k);
+  }
+}, 60e3).unref();
+
+// Hány másodperc van még hátra a zárolásból (0 = nincs zárolva)
+export function loginLockRemaining(login) {
+  const e = loginFails.get(loginKeyOf(login));
+  if (!e || Date.now() >= e.lockedUntil) return 0;
+  return Math.ceil((e.lockedUntil - Date.now()) / 1000);
+}
+
+// true, ha ezzel a hibával a fiók zárolásba került
+export function registerLoginFailure(login) {
+  const key = loginKeyOf(login);
+  if (!key) return false;
+  const now = Date.now();
+  let e = loginFails.get(key);
+  if (!e || now - e.first > LOGIN_WINDOW_MS) e = { first: now, count: 0, lockedUntil: 0 };
+  e.count++;
+  let locked = false;
+  if (e.count >= LOGIN_MAX_FAILS) {
+    e.lockedUntil = now + LOGIN_LOCK_MS;
+    e.first = now;
+    e.count = 0;
+    locked = true;
+  }
+  loginFails.set(key, e);
+  return locked;
+}
+
+export function clearLoginFailures(login) {
+  loginFails.delete(loginKeyOf(login));
+}

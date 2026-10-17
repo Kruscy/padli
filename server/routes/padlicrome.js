@@ -11,19 +11,23 @@ import fetch    from "node-fetch";
 import sharp    from "sharp";
 import fs       from "fs";
 import path     from "path";
+import { createHash } from "crypto";
 import { pool } from "../db.js";
 import { logSecurityEvent } from "../lib/security-log.js";
-import { comparePasswordSafe, findUserByLogin } from "../lib/auth-security.js";
+import { comparePasswordSafe, findUserByLogin, loginLockRemaining,
+         registerLoginFailure, clearLoginFailures } from "../lib/auth-security.js";
 import { localPathToR2Key, listFiles } from "../r2.js";
 import { callGemini } from "../lib/gemini-client.js";
 import { BUGFIX_STAGING_DIR, findChapter, isSafeName, resolveInside } from "../lib/safe-path.js";
 import { denyReason, getChapterFlags } from "../lib/chapter-access.js";
 import { getBalance, spendPoints, refundPoints } from "../lib/points-ledger.js";
+import { safeFetch } from "../lib/safe-fetch.js";
 
 const router = express.Router();
 
 /* ── KONFIG ──────────────────────────────────────────────── */
 const JWT_SECRET     = process.env.MANGA_JWT_SECRET;
+if (!JWT_SECRET) console.warn("⚠️  MANGA_JWT_SECRET nincs beállítva — a PadliCrome-bővítmény belépése nem fog működni.");
 const TORII_API_KEY  = process.env.TORII_API_KEY;
 const TORII_API_URL  = "https://api.toriitranslate.com/api/v2/upload";
 const PROJECT_ROOT   = "/mnt/manga2/padlicrome";
@@ -84,8 +88,20 @@ async function isSubscriber(userId) {
   return r.rows.length > 0;
 }
 
-/* ── AUTH: session VAGY JWT ──────────────────────────────── */
-function requireAuth(req, res, next) {
+/* ── AUTH: session VAGY JWT ──────────────────────────────────
+   A JWT a jelszó-hash ujjlenyomatát (pwv) is tartalmazza, és minden
+   kérésnél összevetjük a DB-vel: jelszócsere/-visszaállítás után, vagy
+   törölt fióknál a korábban kiadott tokenek azonnal érvénytelenek
+   (eddig 7 napig minden körülmények között működtek). ── */
+const JWT_OPTIONS = { algorithms: ["HS256"] };
+const pwFingerprint = hash => createHash("sha256").update(String(hash || "")).digest("hex").slice(0, 16);
+
+function signToken(user) {
+  return jwt.sign({ id: user.id, username: user.username, pwv: pwFingerprint(user.password_hash) },
+                  JWT_SECRET, { expiresIn: "7d", algorithm: "HS256" });
+}
+
+async function requireAuth(req, res, next) {
   if (req.session?.user?.id) {
     req.authUser = { id: req.session.user.id, username: req.session.user.username };
     return next();
@@ -93,12 +109,18 @@ function requireAuth(req, res, next) {
   const auth = req.headers.authorization || "";
   const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
   if (!token) return res.status(401).json({ error: "Nem vagy bejelentkezve" });
+  let payload;
   try {
-    req.authUser = jwt.verify(token, JWT_SECRET);
-    next();
+    payload = jwt.verify(token, JWT_SECRET, JWT_OPTIONS);
   } catch {
     return res.status(401).json({ error: "Érvénytelen token" });
   }
+  const { rows } = await pool.query("SELECT id, username, password_hash FROM users WHERE id = $1", [payload.id]);
+  if (!rows.length || !payload.pwv || payload.pwv !== pwFingerprint(rows[0].password_hash)) {
+    return res.status(401).json({ error: "Érvénytelen token" });
+  }
+  req.authUser = { id: rows[0].id, username: rows[0].username };
+  next();
 }
 
 /* ── CORS (addon) ─────────────────────────────────────────── */
@@ -138,9 +160,11 @@ async function validateAndConvertImage(buffer) {
 }
 
 /* ── HTTP LETÖLTÉS REFERER-REL ───────────────────────────── */
-async function downloadImage(url, refererOverride) {
+// trusted: saját (R2) forrás; minden más, kliensből jövő URL a
+// safeFetch-en megy át (belső hálózati címek tiltva, SSRF ellen)
+async function downloadImage(url, refererOverride, { trusted = false } = {}) {
   const referer = refererOverride || (new URL(url).origin + "/");
-  const resp = await fetch(url, {
+  const resp = await (trusted ? fetch : safeFetch)(url, {
     headers: {
       "Referer": referer,
       "User-Agent": USER_AGENT,
@@ -207,7 +231,7 @@ async function scrapeMangaDex(chapterUrl) {
   const chapterId = match[1];
 
   const apiUrl = `https://api.mangadex.org/at-home/server/${chapterId}`;
-  const resp = await fetch(apiUrl, {
+  const resp = await safeFetch(apiUrl, {
     headers: { "User-Agent": USER_AGENT },
     timeout: 10000,
   });
@@ -224,7 +248,7 @@ async function scrapeMangaDex(chapterUrl) {
 }
 
 async function scrapeGenericWordPress(chapterUrl) {
-  const resp = await fetch(chapterUrl, {
+  const resp = await safeFetch(chapterUrl, {
     headers: {
       "User-Agent": USER_AGENT,
       "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -328,8 +352,16 @@ router.post("/login", async (req, res) => {
     // Ugyanazokkal a fiókokkal működik, mint a fő belépés — ezért ugyanúgy
     // naplózzuk, és a kérésszám-korlát is rajta van (server/index.js).
     const loginKey = String(username).slice(0, 120);
+    // Ugyanaz a fiókszintű zárolás, mint a fő belépésnél (közös számláló)
+    const throttleKey = rows.length ? `user:${rows[0].id}` : `name:${loginKey}`;
+    const lockedFor = loginLockRemaining(throttleKey);
+    if (lockedFor) {
+      res.setHeader("Retry-After", String(lockedFor));
+      return res.status(429).json({ error: "Túl sok sikertelen próbálkozás ezzel a fiókkal, próbáld újra később." });
+    }
     const ok = await comparePasswordSafe(password, rows[0]?.password_hash);
     if (!ok) {
+      registerLoginFailure(throttleKey);
       logSecurityEvent({ req, type: "login_failed", severity: "info",
                          dedupeKey: `${loginKey}|${rows.length ? "badpw" : "nouser"}`,
                          userId: rows[0]?.id ?? null, username: rows[0]?.username ?? null,
@@ -337,10 +369,11 @@ router.post("/login", async (req, res) => {
       return res.status(401).json({ error: "Hibás felhasználónév vagy jelszó" });
     }
     const user = rows[0];
+    clearLoginFailures(throttleKey);
     logSecurityEvent({ req, type: "login_success", userId: user.id, username: user.username,
                        dedupeKey: `ok|${user.id}|pc`, details: { source: "padlicrome" } });
     const points = await getPoints(user.id);
-    const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: "7d" });
+    const token = signToken(user);
     res.json({ token, username: user.username, points });
   } catch (err) {
     console.error("[PADLICROME] login:", err);
@@ -825,6 +858,15 @@ router.post("/import-bug-image", requireAuth, async (req, res) => {
     ensureUserDirs(userId);
 
     // imageUrl lehet relatív (/api/image/...) vagy abszolút
+    if (typeof imageUrl !== "string") return res.status(400).json({ error: "imageUrl kötelező" });
+    // A saját oldalra mutató abszolút URL-t a helyi (ellenőrzött) úton kezeljük
+    for (const base of [process.env.SITE_URL, process.env.BASE_URL]) {
+      try {
+        const origin = base && new URL(base).origin;
+        if (origin && imageUrl.startsWith(origin + "/api/image/")) imageUrl = imageUrl.slice(origin.length);
+      } catch {}
+    }
+
     let jpgBuf;
     const localMatch = imageUrl.match(/^\/api\/image\/([^/]+)\/([^/]+)\/([^/]+)\/(.+)$/);
     if (localMatch) {
@@ -861,7 +903,7 @@ router.post("/import-bug-image", requireAuth, async (req, res) => {
         // Nincs lokálisan → R2-ről töltjük le
         const r2Key = localPathToR2Key(imgPath);
         const R2_PUBLIC = process.env.R2_PUBLIC_URL;
-        buf = await downloadImage(`${R2_PUBLIC}/${r2Key}`);
+        buf = await downloadImage(`${R2_PUBLIC}/${r2Key}`, undefined, { trusted: true });
       }
       jpgBuf = await sharp(buf).jpeg({ quality: 92 }).toBuffer();
     } else {
@@ -967,7 +1009,7 @@ router.post("/import-chapter", requireAuth, async (req, res) => {
       let buf;
       if (useR2) {
         const r2Key = localPathToR2Key(path.join(chapterDir, file));
-        buf = await downloadImage(`${R2_PUBLIC}/${r2Key}`);
+        buf = await downloadImage(`${R2_PUBLIC}/${r2Key}`, undefined, { trusted: true });
       } else {
         buf = fs.readFileSync(path.join(chapterDir, file));
       }

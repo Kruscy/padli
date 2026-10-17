@@ -18,7 +18,11 @@ const PORT = process.env.PADLI_API_PORT || 5001;
 
 // ── Konfiguráció ────────────────────────────────────────────────────────────
 const SECRET_KEY = process.env.PADLI_SECRET_KEY || 'CHANGE_THIS_TO_RANDOM_STRING';
+// Nem állunk le miatta: a meglévő aktiválási kulcsok ebből származnak,
+// csere esetén az újonnan kiadottak eltérnének — de jelezni kell.
+if (!process.env.PADLI_SECRET_KEY) console.warn('⚠️  PADLI_SECRET_KEY nincs beállítva — nyilvános alapérték használatban, az aktiválási kulcsok kiszámíthatók!');
 const API_KEY = process.env.PADLI_API_KEY || null;
+if (!API_KEY) console.warn('⚠️  PADLI_API_KEY nincs beállítva — az API-kulcsos végpontok védelem nélkül futnak!');
 
 const APP_VERSION = '1.0.0'; // ← FRISSÍTSD MINDEN VERZIÓVAL!
 const DOWNLOAD_URL = process.env.PADLI_DOWNLOAD_URL || `${process.env.SITE_URL || 'http://localhost:3000'}/downloads/Padli-Keposszefu.exe`;

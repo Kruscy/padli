@@ -1,31 +1,33 @@
 import express from "express";
 import { errorHandler } from "./lib/async-errors.js";
-import { pool } from "./db.js";
 import path from "path";
 import { Readable } from "stream";
 import { fileURLToPath } from "url";
-import session from "express-session";
-import connectPgSimple from "connect-pg-simple";
+import { sessionMiddleware } from "./session.js";
 import helmet from "helmet";
 import { rateLimit, ipKeyGenerator } from "express-rate-limit";
 import routes from "./routes.js";
 import { securityMonitor } from "./middleware/security-monitor.js";
-import { getClientIp } from "./lib/client-ip.js";
+import { getClientIp, isInternalIp } from "./lib/client-ip.js";
 import { logSecurityEvent } from "./lib/security-log.js";
 import userRoutes from "./routes/user.js";
 import { activityTracker } from "./middleware/activity.js";
+import { sessionRefresh } from "./middleware/session-refresh.js";
 import { billingAddressGate } from "./middleware/billingAddressGate.js";
 import "./discord-bot.js";
 import cron from "node-cron";
 import { generateBlogPost } from "./scripts/blog-auto-generator.js";
 import { generateSitemap } from "./sitemap-generator.js";
 
-const PgSession = connectPgSimple(session);
-
 const app = express();
 const PORT = process.env.PORT || 3000;
 const isProd = process.env.NODE_ENV === "production";
-app.set("trust proxy", 1);
+// Az X-Forwarded-* fejléceket csak akkor fogadjuk el, ha a közvetlen
+// kapcsolat belső hálózatról (a fordított proxytól / Docker-hálózatból)
+// jön. A korábbi "1" bárkinek elhitte: egy proxy nélkül, közvetlenül
+// csatlakozó kliens tetszőleges IP-t adhatott meg magának, és ezzel
+// kijátszhatta a belépési kéréskorlátot.
+app.set("trust proxy", (addr, hop) => hop === 0 && isInternalIp(addr));
 /* ===== ES MODULE __dirname FIX ===== */
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -127,28 +129,8 @@ app.use("/api/patreon/webhook", express.raw({ type: "application/json" }));
 /* ===== BODY PARSER ===== */
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: false }));
-/* ===== SESSION (AUTH) ===== */
-app.use(
-  session({
-    store: new PgSession({
-      // Közös pool az alkalmazással (külön conString-gel egy második,
-      // hibakezelő nélküli pool jött létre)
-      pool,
-      tableName: "session",
-      pruneSessionInterval: 60 * 60,
-    }),
-    name: "padlizsan.sid",
-    secret: process.env.SESSION_SECRET || "dev-secret-change-me",
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      httpOnly: true,
-      secure: isProd,
-      sameSite: "lax",
-      maxAge: 30 * 24 * 60 * 60 * 1000,
-    },
-  })
-);
+/* ===== SESSION (AUTH) — lásd server/session.js ===== */
+app.use(sessionMiddleware);
 
 /* ===== BUILD VERSION (cache busting) ===== */
 import { readFileSync, existsSync } from "fs";
@@ -181,6 +163,7 @@ app.use(express.static(PUBLIC_DIR));
 app.use(activityTracker);
 
 /* ===== API ROUTES ===== */
+app.use("/api", sessionRefresh);
 app.use("/api", billingAddressGate);
 app.use("/api", routes);
 app.use("/api/user", userRoutes);

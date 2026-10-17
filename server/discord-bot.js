@@ -1,6 +1,7 @@
 import { Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
 import { WebSocketServer } from "ws";
 import { pool } from "./db.js";
+import { sessionMiddleware } from "./session.js";
 import { handleChatMessageForAI } from "./padli-ai.js";
 
 const CHANNEL_ID = process.env.DISCORD_CHANNEL_ID;
@@ -75,7 +76,19 @@ async function handleCompromisedAccount(guild, user, messages) {
 
 // WebSocket szerver a klienseknek
 
-const wss = new WebSocketServer({ port: parseInt(process.env.WS_PORT || "3001") });
+// Csak bejelentkezett felhasználó kapcsolódhat: a kézfogás sütijéből a
+// webszerverrel közös session-middleware azonosít (korábban bárki
+// hallgathatta a chat élő adását, a /chat/history viszont belépéshez kötött).
+const wss = new WebSocketServer({
+  port: parseInt(process.env.WS_PORT || "3001"),
+  maxPayload: 64 * 1024, // a kliens nem küld üzenetet ezen át, csak fogad
+  verifyClient: (info, done) => {
+    sessionMiddleware(info.req, {}, () => {
+      if (info.req.session?.user?.id) done(true);
+      else done(false, 401, "Unauthorized");
+    });
+  },
+});
 const clients = new Set();
 
 // Ha a port foglalt (pl. EADDRINUSE), a 'ws' csomag 'error' eseményt emittál
