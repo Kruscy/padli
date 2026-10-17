@@ -7,6 +7,7 @@ import { r2, BUCKET, localPathToR2Key } from "../r2.js";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import multer from "multer";
 import { applyBugFix } from "../lib/apply-bug-fix.js";
+import { BUGFIX_STAGING_DIR, findChapter, isImageBuffer, isSafeName, resolveInside } from "../lib/safe-path.js";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
@@ -424,43 +425,10 @@ router.patch("/:id/close", requireAdmin, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-/* ── POST /api/bug-reports/fix – javítás mentése ────────── */
-router.post("/fix", requireLogin, async (req, res) => {
-  try {
-    const { manga_slug, chapter, image_index, image_file, fixed_image_url } = req.body;
-    const userId   = req.session.user.id;
-    const username = req.session.user.username;
-
-    const { rows } = await pool.query(`
-      INSERT INTO bug_fixes
-        (manga_slug, chapter, image_index, image_file, fixed_image_url,
-         fixed_by, fixed_by_name, fixed_at)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())
-      ON CONFLICT DO NOTHING
-      RETURNING *
-    `, [manga_slug, chapter, image_index, image_file, fixed_image_url, userId, username]);
-
-    if (rows[0]) {
-      // Értesítés az összes adminnak
-      try {
-        const { rows: admins } = await pool.query(`SELECT id FROM users WHERE role = 'admin'`);
-        const msg  = `🖊️ ${username} javított egy képet — ${manga_slug} ${chapter} #${image_index ?? image_file}. Jóváhagyás szükséges!`;
-        const link = `/bug-reports.html`;
-        for (const admin of admins) {
-          if (admin.id === userId) continue;
-          await pool.query(
-            `INSERT INTO notifications (user_id, type, message, link) VALUES ($1, 'fix_submitted', $2, $3)`,
-            [admin.id, msg, link]
-          );
-        }
-      } catch (notifErr) {
-        console.warn("[fix] értesítés hiba:", notifErr.message);
-      }
-    }
-
-    res.status(201).json(rows[0]);
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
+/* (A korábbi POST /api/bug-reports/fix végpont — ami a kliens által
+   megadott fixed_image_url / image_file útvonalat mentette ellenőrzés
+   nélkül, és ezzel a jóváhagyáskor tetszőleges fájl felülírását/törlését
+   tette lehetővé — megszűnt; a kliens a /fix/upload-ot használja.) */
 
 /* ── POST /api/bug-reports/fix/:id/vote – szavazás ─────── */
 router.post("/fix/:id/vote", requireLogin, async (req, res) => {
@@ -513,23 +481,29 @@ router.post("/fix/upload", requireLogin, upload.single("image"), async (req, res
 
     if (!req.file) return res.status(400).json({ error: "Nincs fájl" });
 
+    // A slug/fejezet a kliensből jön → csak létező fejezetre, a nevek
+    // ellenőrzésével (különben "../" részekkel bárhová lehetett írni)
+    const imgIdx = Number(image_index);
+    if (!Number.isInteger(imgIdx) || imgIdx < 0) return res.status(400).json({ error: "Hibás képindex" });
+    if (!(await findChapter(manga_slug, chapter))) return res.status(404).json({ error: "Fejezet nem található" });
+    if (!(await isImageBuffer(req.file.buffer))) return res.status(400).json({ error: "A fájl nem kép" });
+
     // Mappa struktúra: uploads/bugs/javitott/manga_slug/chapter/
     const fs = fsSync;
-    const path = pathSync;
 
-    const dir = path.join(process.cwd(), "uploads", "bugs", "javitott",
-      manga_slug, chapter);
+    const dir = resolveInside(BUGFIX_STAGING_DIR, manga_slug, chapter);
+    if (!dir) return res.status(400).json({ error: "Érvénytelen útvonal" });
     fs.mkdirSync(dir, { recursive: true });
 
     // Fájlnév: image_index_userId.jpg (egy user csak egyet tölthet fel képenként)
-    const filename = `${image_index}_${userId}.jpg`;
-    const filepath = path.join(dir, filename);
+    const filename = `${imgIdx}_${userId}.jpg`;
+    const filepath = pathSync.join(dir, filename);
     fs.writeFileSync(filepath, req.file.buffer);
 
-    const fixedUrl = `/uploads/bugs/javitott/${manga_slug}/${chapter}/${image_index}_${userId}.jpg`;
+    const fixedUrl = `/uploads/bugs/javitott/${manga_slug}/${chapter}/${filename}`;
 
     // DB mentés — ha már van javítása, frissítjük
-    const providerVal = provider || "unknown";
+    const providerVal = typeof provider === "string" && provider ? provider : "unknown";
     const { rows } = await pool.query(`
       INSERT INTO bug_fixes
         (provider, manga_slug, chapter, image_index, image_file, fixed_image_url,
@@ -539,7 +513,7 @@ router.post("/fix/upload", requireLogin, upload.single("image"), async (req, res
       DO UPDATE SET fixed_image_url = EXCLUDED.fixed_image_url,
                     fixed_at = NOW()
       RETURNING *
-    `, [providerVal, manga_slug, chapter, parseInt(image_index), filename, fixedUrl, userId, username]);
+    `, [providerVal, manga_slug, chapter, imgIdx, filename, fixedUrl, userId, username]);
 
     res.json({ ok: true, fix: rows[0], url: fixedUrl });
   } catch (err) {
@@ -573,7 +547,10 @@ router.post("/fix/:id/correct", requireAdmin, upload.single("image"), async (req
       [fix.manga_slug, fix.chapter, fix.image_index]
     );
     if (!reportRows.length) return res.status(404).json({ error: "Bug report nem található" });
-    const originalFilename = reportRows[0].image_file.split("?")[0];
+    const originalFilename = String(reportRows[0].image_file || "").split("?")[0];
+    // A bug_reports.image_file a bejelentő által küldött kép-URL-ből jön
+    if (!isSafeName(originalFilename)) return res.status(400).json({ error: "Érvénytelen fájlnév" });
+    if (!(await isImageBuffer(req.file.buffer))) return res.status(400).json({ error: "A fájl nem kép" });
 
     const { rows: pathRows } = await pool.query(
       `SELECT l.path AS library_path, m.folder AS manga_folder
@@ -590,7 +567,8 @@ router.post("/fix/:id/correct", requireAdmin, upload.single("image"), async (req
     const fs = fsSync;
     const path = pathSync;
 
-    const originalPath = path.join(library_path, manga_folder, fix.chapter, originalFilename);
+    const originalPath = resolveInside(library_path, manga_folder, fix.chapter, originalFilename);
+    if (!originalPath) return res.status(400).json({ error: "Érvénytelen útvonal" });
     fs.mkdirSync(path.dirname(originalPath), { recursive: true });
     fs.writeFileSync(originalPath, req.file.buffer);
 

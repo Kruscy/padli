@@ -5,6 +5,7 @@ import { pool } from "../db.js";
 import { r2, BUCKET, localPathToR2Key } from "../r2.js";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { applyAllFixesForChapter, applyBugFix } from "../lib/apply-bug-fix.js";
+import { stagedFixPath } from "../lib/safe-path.js";
 
 const router = express.Router();
 
@@ -177,8 +178,8 @@ router.post("/fix/:fixId/reject", requireAdmin, async (req, res) => {
     // Staged fájl törlése lemezről
     try {
       if (fix.fixed_image_url) {
-        const p = path.join(process.cwd(), fix.fixed_image_url);
-        if (fs.existsSync(p)) fs.unlinkSync(p);
+        const p = stagedFixPath(fix.fixed_image_url);
+        if (p && fs.existsSync(p)) fs.unlinkSync(p);
       }
     } catch (_) {}
 
@@ -260,8 +261,8 @@ router.delete("/:id", requireAdmin, async (req, res) => {
     for (const fix of fixes) {
       try {
         if (fix.fixed_image_url) {
-          const p = path.join(process.cwd(), fix.fixed_image_url);
-          if (fs.existsSync(p)) fs.unlinkSync(p);
+          const p = stagedFixPath(fix.fixed_image_url);
+          if (p && fs.existsSync(p)) fs.unlinkSync(p);
         }
       } catch (_) {}
       await pool.query(`DELETE FROM user_points WHERE fix_id = $1`, [fix.id]);

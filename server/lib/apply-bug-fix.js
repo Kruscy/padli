@@ -3,6 +3,7 @@ import path from "path";
 import { pool } from "../db.js";
 import { r2, BUCKET, localPathToR2Key } from "../r2.js";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
+import { isSafeName, resolveInside, stagedFixPath } from "./safe-path.js";
 
 /* ── Egy bug_fixes sor tényleges alkalmazása ───────────────────
    Kiszervezve, hogy egyaránt hívható legyen:
@@ -20,10 +21,16 @@ export async function applyBugFix(fixId, adminUserId) {
 
   const originalFilename = fix.image_file;
   if (!originalFilename) throw new Error("A javításhoz nincs eredeti fájlnév rögzítve");
+  // A slug/fejezet/fájlnév a beküldőtől származik — csak ellenőrzött
+  // nevekkel és a várt mappákon belül dolgozunk (path traversal ellen)
+  if (!isSafeName(originalFilename) || !isSafeName(fix.manga_slug) || !isSafeName(fix.chapter)) {
+    throw new Error("A javítás érvénytelen fájl- vagy mappanevet tartalmaz");
+  }
 
-  const fixedDir = path.join(process.cwd(), "uploads", "bugs", "javitott", fix.manga_slug, fix.chapter);
   if (!fix.fixed_image_url) throw new Error("A javítás nem tartalmaz fájl URL-t");
-  const fixedFile = path.join(fixedDir, path.basename(fix.fixed_image_url));
+  const fixedFile = stagedFixPath(fix.fixed_image_url);
+  if (!fixedFile) throw new Error("A javítás fájl URL-je érvénytelen");
+  const fixedDir = path.dirname(fixedFile);
   if (!fs.existsSync(fixedFile)) throw new Error("Javított kép fájl nem található: " + fixedFile);
 
   // Az adott FEJEZET saját library_id-jét használjuk, nem a mangáét — a manga
@@ -39,8 +46,9 @@ export async function applyBugFix(fixId, adminUserId) {
   if (!pathRows.length) throw new Error("Manga/fejezet nem található az adatbázisban: " + fix.manga_slug + " " + fix.chapter);
 
   const { library_path, manga_folder } = pathRows[0];
-  const chapterDir = path.join(library_path, manga_folder, fix.chapter);
-  const originalPath = path.join(chapterDir, originalFilename);
+  const chapterDir = resolveInside(library_path, manga_folder, fix.chapter);
+  const originalPath = chapterDir && resolveInside(chapterDir, originalFilename);
+  if (!originalPath) throw new Error("Érvénytelen fejezet-útvonal");
 
   // A helyi lemezen a fejezet mappája hiányozhat (korábban törölve, mert
   // R2-n már megvolt teljes egészében — l. helyi lemez tisztítás). Ilyenkor
@@ -110,8 +118,8 @@ export async function applyBugFix(fixId, adminUserId) {
       );
       for (const other of otherFixes) {
         try {
-          const p = path.join(process.cwd(), other.fixed_image_url);
-          if (fs.existsSync(p)) fs.unlinkSync(p);
+          const p = stagedFixPath(other.fixed_image_url);
+          if (p && fs.existsSync(p)) fs.unlinkSync(p);
         } catch (_) {}
       }
     }

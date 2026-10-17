@@ -16,6 +16,7 @@ import { logSecurityEvent } from "../lib/security-log.js";
 import { comparePasswordSafe, findUserByLogin } from "../lib/auth-security.js";
 import { localPathToR2Key, listFiles } from "../r2.js";
 import { callGemini } from "../lib/gemini-client.js";
+import { BUGFIX_STAGING_DIR, findChapter, isSafeName, resolveInside } from "../lib/safe-path.js";
 
 const router = express.Router();
 
@@ -771,7 +772,8 @@ router.get("/download/:type/:filename", requireAuth, (req, res) => {
   const dirs = { originals: originalsDir(userId), translated: translatedDir(userId), merged: mergedDir(userId) };
   const dir = dirs[req.params.type];
   if (!dir) return res.status(400).end();
-  const filePath = path.join(dir, req.params.filename);
+  const filePath = isSafeName(req.params.filename) && resolveInside(dir, req.params.filename);
+  if (!filePath) return res.status(403).end();
   if (!fs.existsSync(filePath)) return res.status(404).end();
   res.download(filePath);
 });
@@ -826,11 +828,15 @@ router.post("/import-bug-image", requireAuth, async (req, res) => {
     if (localMatch) {
       // Direkt fájlrendszer olvasás a DB-ből
       const [, library, slug, chapterFolder, file] = localMatch;
-      const decodedFile = decodeURIComponent(file).split("?")[0];
-      // URL-ből auto-kitöltés ha a body-ból hiányzik
-      if (!mangaSlug) mangaSlug = slug;
-      if (!chapter) chapter = chapterFolder;
-      if (!imageFile) imageFile = decodedFile;
+      let decodedFile;
+      try { decodedFile = decodeURIComponent(file.split("?")[0]); } catch { decodedFile = null; }
+      if (!isSafeName(decodedFile)) return res.status(400).json({ error: "Érvénytelen fájlnév" });
+      // A javítás célja mindig a ténylegesen beolvasott kép — a törzsben
+      // küldött slug/fejezet/fájlnév nem írhatja felül (különben a
+      // submit-bug-fix bárhová írhatott a lemezen)
+      mangaSlug = slug;
+      chapter = chapterFolder;
+      imageFile = decodedFile;
       const { rows } = await pool.query(
         `SELECT l.path AS library_path, m.folder AS manga_folder
          FROM chapter c
@@ -842,7 +848,8 @@ router.post("/import-bug-image", requireAuth, async (req, res) => {
       );
       if (!rows.length) return res.status(404).json({ error: "Kép nem található az adatbázisban" });
       const { library_path, manga_folder } = rows[0];
-      const imgPath = path.resolve(path.join(library_path, manga_folder, chapterFolder, decodedFile));
+      const imgPath = resolveInside(library_path, manga_folder, chapterFolder, decodedFile);
+      if (!imgPath) return res.status(400).json({ error: "Érvénytelen útvonal" });
       let buf;
       if (fs.existsSync(imgPath)) {
         buf = fs.readFileSync(imgPath);
@@ -854,7 +861,11 @@ router.post("/import-bug-image", requireAuth, async (req, res) => {
       }
       jpgBuf = await sharp(buf).jpeg({ quality: 92 }).toBuffer();
     } else {
-      // Abszolút URL — HTTP letöltés
+      // Abszolút URL — HTTP letöltés. A törzsben kapott slug/fejezet/fájlnév
+      // csak címke; a submit-bug-fix a DB alapján újra ellenőrzi.
+      if ([mangaSlug, chapter, imageFile].some(v => v != null && v !== "" && !isSafeName(String(v)))) {
+        return res.status(400).json({ error: "Érvénytelen manga/fejezet/fájlnév" });
+      }
       const buf = await downloadImage(imageUrl);
       jpgBuf = await sharp(buf).jpeg({ quality: 92 }).toBuffer();
     }
@@ -994,12 +1005,18 @@ router.post("/submit-bug-fix", requireAuth, async (req, res) => {
     let chapterBugClosed = false;
 
     if (mangaSlug && chapter) {
-      // Cél: uploads/bugs/javitott/{mangaSlug}/{chapter}/
-      const fixedDir = path.join(process.cwd(), "uploads", "bugs", "javitott", mangaSlug, chapter);
-      fs.mkdirSync(fixedDir, { recursive: true });
+      // A bugFix-adatok a kliens importjából származnak — csak létező
+      // fejezetre és ellenőrzött fájlnévvel írunk, az átmeneti mappán belül
+      if (!(await findChapter(mangaSlug, chapter))) {
+        return res.status(400).json({ error: "A kép mangája/fejezete nem található" });
+      }
+      const targetFilename = String(imageFile || img.filename).split("?")[0];
+      const fixedDir = resolveInside(BUGFIX_STAGING_DIR, mangaSlug, chapter);
+      const destPath = isSafeName(targetFilename) && fixedDir && resolveInside(fixedDir, targetFilename);
+      if (!destPath) return res.status(400).json({ error: "Érvénytelen fájlnév" });
 
-      const targetFilename = (imageFile || img.filename).split("?")[0];
-      const destPath = path.join(fixedDir, targetFilename);
+      // Cél: uploads/bugs/javitott/{mangaSlug}/{chapter}/
+      fs.mkdirSync(fixedDir, { recursive: true });
       fs.copyFileSync(srcPath, destPath);
 
       fixedImageUrl = `/uploads/bugs/javitott/${mangaSlug}/${chapter}/${targetFilename}`;
