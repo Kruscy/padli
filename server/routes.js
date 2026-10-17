@@ -44,8 +44,29 @@ import padlicromeRoutes from "./routes/padlicrome.js";
 import gdprRoutes from "./routes/gdpr.js";
 import patreonInvoiceRoutes from "./routes/patreon-invoice.js";
 import animeSubtitlesRoutes from "./routes/anime-subtitles.js";
+import { rateLimit } from "express-rate-limit";
 
 const router = express.Router();
+
+/* ── AI-/OCR-/inpaint-proxyk korlátja ─────────────────────────
+   Ezek fizetős API-kvótát (DeepL/Gemini) és a belső hálózat gépeit
+   (OCR, IOPaint) használják — korábban bejelentkezés nélkül is hívhatók
+   voltak. Bejelentkezés kell hozzájuk, és felhasználónként korlátozzuk a
+   kérésszámot (a bug-fix editor buborékonként 1-1 kérést küld). */
+function aiLimiter(name, max) {
+  return rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => `${name}:${req.session.user.id}`,
+    handler: (req, res, _next, options) => {
+      logSecurityEvent({ req, type: "ai_rate_limited", severity: "warn", userId: req.session.user.id,
+                         username: req.session.user.username, details: { endpoint: name } });
+      res.status(options.statusCode).json({ error: "Túl sok kérés, próbáld újra később." });
+    },
+  });
+}
 
 /* ── Email verifikációs sablon ────────────────────────────── */
 function verificationEmailHtml(username, link) {
@@ -544,9 +565,9 @@ router.use("/admin/padli", padliAdminRoutes);
 router.use("/bug-reports", bugReportsRoutes);
 router.use("/chapter-bugs", chapterBugRoutes);
 router.use("/uploader", uploaderRoutes);
-router.use("/inpaint", inpaintRoutes);
-router.use("/translate", translateRoutes);
-router.use("/ocr", ocrRoutes);
+router.use("/inpaint", requireLogin, aiLimiter("inpaint", 100), inpaintRoutes);
+router.use("/translate", requireLogin, aiLimiter("translate", 200), translateRoutes);
+router.use("/ocr", requireLogin, aiLimiter("ocr", 200), ocrRoutes);
 router.use("/gemini-proxy", geminiProxyRoutes);
 router.use("/points", pointsRoutes);
 router.use("/padlicrome", padlicromeRoutes);

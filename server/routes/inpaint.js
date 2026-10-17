@@ -20,7 +20,7 @@ router.post("/", async (req, res) => {
 
   try {
     const { imageBase64, maskBase64 } = req.body;
-    if (!imageBase64 || !maskBase64)
+    if (typeof imageBase64 !== "string" || typeof maskBase64 !== "string" || !imageBase64 || !maskBase64)
       return res.status(400).json({ error: "image és mask szükséges" });
 
     const imgBuf  = Buffer.from(imageBase64.replace(/^data:image\/\w+;base64,/, ""), "base64");
@@ -93,13 +93,13 @@ router.post("/", async (req, res) => {
     } catch (e) {
       clearTimeout(timeoutId);
       logUsage(false, 504, Date.now() - startedAt, "timeout: " + e.message);
-      return res.status(504).json({ error: "LaMa timeout: " + e.message });
+      return res.status(504).json({ error: "A képjavító szolgáltatás nem válaszolt időben." });
     }
 
     if (!lamaRes.ok) {
       const errText = await lamaRes.text().catch(() => "?");
       logUsage(false, lamaRes.status, Date.now() - startedAt, errText.slice(0, 300));
-      return res.status(500).json({ error: "LaMa hiba (" + lamaRes.status + "): " + errText.slice(0, 300) });
+      return res.status(502).json({ error: "A képjavító szolgáltatás hibát adott." });
     }
 
     const imgBuffer = await lamaRes.buffer();
@@ -110,7 +110,7 @@ router.post("/", async (req, res) => {
   } catch (e) {
     console.error("[inpaint]", e);
     logUsage(false, null, Date.now() - startedAt, e.message);
-    return res.status(500).json({ error: e.message });
+    return res.status(500).json({ error: "Képjavítási hiba" });
   }
 });
 

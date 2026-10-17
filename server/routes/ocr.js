@@ -17,7 +17,7 @@ router.post("/", async (req, res) => {
   const startedAt = Date.now();
   try {
     const { imageBase64 } = req.body;
-    if (!imageBase64)
+    if (typeof imageBase64 !== "string" || !imageBase64)
       return res.status(400).json({ error: "imageBase64 szükséges" });
 
     const ocrRes = await fetch(`${OCR_URL}/ocr`, {
@@ -30,7 +30,7 @@ router.post("/", async (req, res) => {
     if (!ocrRes.ok) {
       const err = await ocrRes.text().catch(() => "?");
       logUsage(false, ocrRes.status, Date.now() - startedAt, err.slice(0, 300));
-      return res.status(500).json({ error: "OCR hiba: " + err.slice(0, 200) });
+      return res.status(502).json({ error: "Az OCR szolgáltatás hibát adott." });
     }
 
     const data = await ocrRes.json();
@@ -40,7 +40,7 @@ router.post("/", async (req, res) => {
   } catch (e) {
     console.error("[ocr]", e);
     logUsage(false, null, Date.now() - startedAt, e.message);
-    return res.status(500).json({ error: e.message });
+    return res.status(500).json({ error: "OCR hiba" });
   }
 });
 

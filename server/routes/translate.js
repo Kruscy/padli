@@ -7,7 +7,8 @@ const router = express.Router();
 router.post("/", async (req, res) => {
   try {
     const { text } = req.body;
-    if (!text?.trim()) return res.status(400).json({ error: "Nincs szöveg" });
+    if (typeof text !== "string" || !text.trim()) return res.status(400).json({ error: "Nincs szöveg" });
+    if (text.length > 5000) return res.status(400).json({ error: "Túl hosszú szöveg" });
 
     const translatedText = await translateToHungarian(text);
     if (translatedText === text) {
