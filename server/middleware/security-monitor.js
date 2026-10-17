@@ -21,6 +21,12 @@ const WRITE_EXCLUDE = /^\/api\/(uploader|progress|anilist\/queue|chat\/send|padl
 // lehet) és az olvasási állás (olvasás közben sűrűn mentődik; a régi
 // listaoldalak — régi böngésző-cache-ből — mangánként kértek le állást).
 const FLOOD_EXCLUDE = /^\/api\/(image\/|pages\/|progress(\/|$))/;
+// A feltöltő kéréseit csak a válasz után számoljuk (ott már látszik a
+// munkamenet): bejelentkezett feltöltő sikeres kérése nem számít — egy
+// nagy feltöltés 4 párhuzamos szállal könnyen 600+ kérés/perc (2026-10-14
+// és -16: téves „kérés-áradat” riasztás Ascyra feltöltésére). Belépés
+// nélküli vagy elutasított kérés továbbra is számít.
+const FLOOD_DEFERRED = /^\/api\/uploader\//;
 
 const WRITE_WINDOW_MS = 5 * 60e3;
 const WRITE_LIMIT_USER = 120;   // írás / 5 perc / bejelentkezett user
@@ -36,6 +42,15 @@ function bump(map, key, windowMs) {
   let c = map.get(key);
   if (!c || now - c.start > windowMs) { c = { start: now, n: 0, reported: false }; map.set(key, c); }
   c.n++;
+  return c;
+}
+
+function countFlood(req, ip) {
+  const c = bump(floodCounts, ip, 60e3);
+  if (c.n > FLOOD_LIMIT && !c.reported) {
+    c.reported = true;
+    logSecurityEvent({ req, type: "request_flood", severity: "high", details: { count: c.n, enforced: ENFORCE_FLOOD } });
+  }
   return c;
 }
 
@@ -63,21 +78,17 @@ export function securityMonitor(req, res, next) {
   }
 
   // 3a. Kérés-áradat (/api, képek nélkül)
-  if (req.path.startsWith("/api/") && !FLOOD_EXCLUDE.test(req.path)) {
-    const c = bump(floodCounts, ip, 60e3);
-    if (c.n > FLOOD_LIMIT) {
-      if (!c.reported) {
-        c.reported = true;
-        logSecurityEvent({ req, type: "request_flood", severity: "high", details: { count: c.n, enforced: ENFORCE_FLOOD } });
-      }
-      if (ENFORCE_FLOOD) return res.status(429).json({ error: "Túl sok kérés, próbáld újra később." });
-    }
+  const deferFlood = FLOOD_DEFERRED.test(req.path);
+  if (req.path.startsWith("/api/") && !FLOOD_EXCLUDE.test(req.path) && !deferFlood) {
+    const c = countFlood(req, ip);
+    if (c.n > FLOOD_LIMIT && ENFORCE_FLOOD) return res.status(429).json({ error: "Túl sok kérés, próbáld újra később." });
   }
 
   // 3b. Válasz utáni ellenőrzések
   res.on("finish", () => {
     const status = res.statusCode;
     const p = req.originalUrl || "";
+    if (deferFlood && !(req.session?.user && status < 400)) countFlood(req, ip);
     if (status === 429) {
       logSecurityEvent({ req, type: "rate_limited", severity: "warn" });
     } else if (status === 403 && /^\/api\/admin(\/|$)/.test(p) && req.session?.user?.role !== "admin") {
