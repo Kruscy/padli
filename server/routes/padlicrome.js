@@ -919,6 +919,18 @@ router.post("/import-chapter", requireAuth, async (req, res) => {
     if (!rows.length) return res.status(404).json({ error: "Manga nem található" });
     const { library_name, library_path, manga_folder } = rows[0];
 
+    // A fejezet-hibajegy azonosítója csak akkor kerül a projektbe, ha
+    // tényleg ehhez a fejezethez tartozik (a beküldéskor ez zárja le)
+    let linkedChapterBugId = null;
+    const cbId = parseInt(chapterBugId, 10);
+    if (cbId) {
+      const { rowCount } = await pool.query(
+        `SELECT 1 FROM chapter_bug_reports WHERE id = $1 AND manga_slug = $2 AND chapter = $3`,
+        [cbId, mangaSlug, chapter]
+      );
+      if (rowCount) linkedChapterBugId = cbId;
+    }
+
     const chapterDir = path.join(library_path, manga_folder, chapter);
     const IMAGE_EXTS = new Set([".jpg", ".jpeg", ".png", ".webp", ".avif", ".gif"]);
 
@@ -968,7 +980,7 @@ router.post("/import-chapter", requireAuth, async (req, res) => {
         id, filename,
         name: `${mangaSlug} ${chapter} #${i + 1}`,
         active: true, translated: false, merged: false,
-        bugFix: { reportId: "", chapterBugId: chapterBugId || null, mangaSlug, chapter, imageIndex: i, imageFile: file, mangaTitle: null, library: library_name },
+        bugFix: { reportId: "", chapterBugId: linkedChapterBugId, mangaSlug, chapter, imageIndex: i, imageFile: file, mangaTitle: null, library: library_name },
       });
       added++;
     }
@@ -1044,11 +1056,14 @@ router.post("/submit-bug-fix", requireAuth, async (req, res) => {
       if (chapterBugId) {
         const cbId = parseInt(chapterBugId);
         if (cbId) {
-          await pool.query(
-            `UPDATE chapter_bug_reports SET is_fixed = true, fixed_by = $1, fixed_at = NOW() WHERE id = $2 AND is_fixed = false`,
-            [userId, cbId]
+          // Csak az ugyanehhez a mangához/fejezethez tartozó hibajegyet
+          // (korábban bármely azonosítójú hibajegy lezárható volt)
+          const { rowCount } = await pool.query(
+            `UPDATE chapter_bug_reports SET is_fixed = true, fixed_by = $1, fixed_at = NOW()
+             WHERE id = $2 AND manga_slug = $3 AND chapter = $4 AND is_fixed = false`,
+            [userId, cbId, mangaSlug, chapter]
           );
-          chapterBugClosed = true;
+          chapterBugClosed = rowCount > 0;
         }
       }
     }
