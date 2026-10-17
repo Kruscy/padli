@@ -46,36 +46,52 @@ if (isProd) {
 app.use(securityMonitor);
 
 /* ===== SECURITY HEADERS ===== */
+const cspDirectives = {
+  defaultSrc:      ["'self'"],
+  scriptSrc:       ["'self'",
+                    "'sha256-KbDJwwq2mVzpJQquothLjsd2EGAi2C42lhXRTSlCHJ8='",
+                    "'sha256-uWTbFw+oMWAOmFt0aWbGK/DHjclUg7piNA/N+aXguMg='",
+                    "'sha256-SN6gRQ39qgoFcepC8OZB+rrT0j5FXFctW1bmQUQqC/I='",
+                    "https://mamato.csimota.duckdns.org",
+                    ...(process.env.PADLI_API_ORIGIN ? [process.env.PADLI_API_ORIGIN] : [])],
+  scriptSrcAttr:   ["'unsafe-inline'"],
+  styleSrc:        ["'self'", "'unsafe-inline'",
+                    "https://fonts.googleapis.com",
+                    "https://cdn.jsdelivr.net"],
+  fontSrc:         ["'self'", "https://fonts.gstatic.com"],
+  imgSrc:          ["'self'", "data:", "blob:", "https:"],
+  connectSrc:      ["'self'",
+                    (process.env.SITE_URL || "").replace(/^https?/, "wss"),
+                    process.env.SITE_URL || "",
+                    ...(process.env.PADLI_API_ORIGIN ? [process.env.PADLI_API_ORIGIN] : [])].filter(Boolean),
+  mediaSrc:        ["'self'", "https:"],
+  frameSrc:        ["'none'"],
+  objectSrc:       ["'none'"],
+  upgradeInsecureRequests: [],
+};
+
 app.use(helmet({
   contentSecurityPolicy: {
-    directives: {
-      defaultSrc:      ["'self'"],
-      scriptSrc:       ["'self'",
-                        "'sha256-KbDJwwq2mVzpJQquothLjsd2EGAi2C42lhXRTSlCHJ8='",
-                        "'sha256-uWTbFw+oMWAOmFt0aWbGK/DHjclUg7piNA/N+aXguMg='",
-                        "'sha256-SN6gRQ39qgoFcepC8OZB+rrT0j5FXFctW1bmQUQqC/I='",
-                        "https://mamato.csimota.duckdns.org",
-                        ...(process.env.PADLI_API_ORIGIN ? [process.env.PADLI_API_ORIGIN] : [])],
-      scriptSrcAttr:   ["'unsafe-inline'"],
-      styleSrc:        ["'self'", "'unsafe-inline'",
-                        "https://fonts.googleapis.com",
-                        "https://cdn.jsdelivr.net"],
-      fontSrc:         ["'self'", "https://fonts.gstatic.com"],
-      imgSrc:          ["'self'", "data:", "blob:", "https:"],
-      connectSrc:      ["'self'",
-                        (process.env.SITE_URL || "").replace(/^https?/, "wss"),
-                        process.env.SITE_URL || "",
-                        ...(process.env.PADLI_API_ORIGIN ? [process.env.PADLI_API_ORIGIN] : [])].filter(Boolean),
-      mediaSrc:        ["'self'", "https:"],
-      frameSrc:        ["'none'"],
-      objectSrc:       ["'none'"],
-      upgradeInsecureRequests: [],
-    },
+    directives: cspDirectives,
   },
   crossOriginEmbedderPolicy: false,
   hsts: false, // Cloudflare kezeli, kettős header elkerülése
   crossOriginOpenerPolicy: isProd ? { policy: "same-origin" } : false,
   originAgentCluster: isProd,
+}));
+
+/* ── CSP Report-Only: az inline eseménykezelők (onclick= stb.) felmérése ──
+   Az éles CSP még engedi őket (script-src-attr 'unsafe-inline'), mert a
+   szerkesztő- és adminfelületeken sok van. Ez a második, csak jelentő
+   fejléc ugyanazzal a szabályzattal, de inline kezelők nélkül: a böngésző
+   minden még meglévő inline kezelőt jelent a /api/csp-report-ra (semmit
+   nem tilt le). Ha a jelentések elfogynak, az éles szabályban is
+   'none'-ra állítható. */
+app.use(helmet.contentSecurityPolicy({
+  directives: { ...cspDirectives, scriptSrcAttr: ["'none'"], reportUri: ["/api/csp-report"],
+                // Report-Only fejlécben nem értelmezett → kihagyjuk
+                upgradeInsecureRequests: null },
+  reportOnly: true,
 }));
 
 app.use((_req, res, next) => {
