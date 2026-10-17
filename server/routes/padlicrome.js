@@ -8,6 +8,7 @@ import jwt      from "jsonwebtoken";
 import multer   from "multer";
 import FormData from "form-data";
 import fetch    from "node-fetch";
+import rateLimit from "express-rate-limit";
 import sharp    from "sharp";
 import fs       from "fs";
 import path     from "path";
@@ -625,8 +626,23 @@ router.post("/translate/:id", requireAuth, async (req, res) => {
    Nem helyettesíti a fenti /translate/:id-t (ami a manga-image-translator
    szolgáltatást hívja és renderelt, kép-visszaírt eredményt ad) — ez csak
    szöveg-kinyerést + fordítást ad vissza JSON-ban, minőség-összehasonlításhoz.
-   Nincs pontlevonás, mert kísérleti/teszt funkció. ── */
-router.post("/translate-gemini/:id", requireAuth, async (req, res) => {
+   Nincs pontlevonás, mert kísérleti/teszt funkció — ezért felhasználónként
+   óránként korlátozott (korábban korlátlanul hívható volt, a fizetős
+   Gemini-kvóta terhére). ── */
+const geminiTestLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 40,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `pc-gemini:${req.authUser.id}`,
+  handler: (req, res, _next, options) => {
+    logSecurityEvent({ req, type: "ai_rate_limited", severity: "warn", userId: req.authUser.id,
+                       username: req.authUser.username, details: { endpoint: "padlicrome-translate-gemini" } });
+    res.status(options.statusCode).json({ error: "Túl sok teszt-fordítás, próbáld újra később." });
+  },
+});
+
+router.post("/translate-gemini/:id", requireAuth, geminiTestLimiter, async (req, res) => {
   const userId = req.authUser.id;
   const project = readProject(userId);
   if (!project) return res.status(404).json({ error: "Nincs projekt" });
@@ -680,7 +696,7 @@ Ha nincs szöveg a képen, üres tömböt ([]) adj vissza.`;
     res.json({ ok: true, segments });
   } catch (err) {
     console.error("[PADLICROME] translate-gemini:", err);
-    res.status(500).json({ error: "Szerver hiba: " + err.message });
+    res.status(500).json({ error: "Szerver hiba" });
   }
 });
 
