@@ -8,7 +8,7 @@ import helmet from "helmet";
 import { rateLimit, ipKeyGenerator } from "express-rate-limit";
 import routes from "./routes.js";
 import { securityMonitor } from "./middleware/security-monitor.js";
-import { getClientIp } from "./lib/client-ip.js";
+import { getClientIp, isInternalIp } from "./lib/client-ip.js";
 import { logSecurityEvent } from "./lib/security-log.js";
 import userRoutes from "./routes/user.js";
 import { activityTracker } from "./middleware/activity.js";
@@ -22,7 +22,12 @@ import { generateSitemap } from "./sitemap-generator.js";
 const app = express();
 const PORT = process.env.PORT || 3000;
 const isProd = process.env.NODE_ENV === "production";
-app.set("trust proxy", 1);
+// Az X-Forwarded-* fejléceket csak akkor fogadjuk el, ha a közvetlen
+// kapcsolat belső hálózatról (a fordított proxytól / Docker-hálózatból)
+// jön. A korábbi "1" bárkinek elhitte: egy proxy nélkül, közvetlenül
+// csatlakozó kliens tetszőleges IP-t adhatott meg magának, és ezzel
+// kijátszhatta a belépési kéréskorlátot.
+app.set("trust proxy", (addr, hop) => hop === 0 && isInternalIp(addr));
 /* ===== ES MODULE __dirname FIX ===== */
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
