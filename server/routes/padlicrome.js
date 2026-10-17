@@ -11,9 +11,11 @@ import fetch    from "node-fetch";
 import sharp    from "sharp";
 import fs       from "fs";
 import path     from "path";
+import { createHash } from "crypto";
 import { pool } from "../db.js";
 import { logSecurityEvent } from "../lib/security-log.js";
-import { comparePasswordSafe, findUserByLogin } from "../lib/auth-security.js";
+import { comparePasswordSafe, findUserByLogin, loginLockRemaining,
+         registerLoginFailure, clearLoginFailures } from "../lib/auth-security.js";
 import { localPathToR2Key, listFiles } from "../r2.js";
 import { callGemini } from "../lib/gemini-client.js";
 import { BUGFIX_STAGING_DIR, findChapter, isSafeName, resolveInside } from "../lib/safe-path.js";
@@ -84,8 +86,20 @@ async function isSubscriber(userId) {
   return r.rows.length > 0;
 }
 
-/* ── AUTH: session VAGY JWT ──────────────────────────────── */
-function requireAuth(req, res, next) {
+/* ── AUTH: session VAGY JWT ──────────────────────────────────
+   A JWT a jelszó-hash ujjlenyomatát (pwv) is tartalmazza, és minden
+   kérésnél összevetjük a DB-vel: jelszócsere/-visszaállítás után, vagy
+   törölt fióknál a korábban kiadott tokenek azonnal érvénytelenek
+   (eddig 7 napig minden körülmények között működtek). ── */
+const JWT_OPTIONS = { algorithms: ["HS256"] };
+const pwFingerprint = hash => createHash("sha256").update(String(hash || "")).digest("hex").slice(0, 16);
+
+function signToken(user) {
+  return jwt.sign({ id: user.id, username: user.username, pwv: pwFingerprint(user.password_hash) },
+                  JWT_SECRET, { expiresIn: "7d", algorithm: "HS256" });
+}
+
+async function requireAuth(req, res, next) {
   if (req.session?.user?.id) {
     req.authUser = { id: req.session.user.id, username: req.session.user.username };
     return next();
@@ -93,12 +107,18 @@ function requireAuth(req, res, next) {
   const auth = req.headers.authorization || "";
   const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
   if (!token) return res.status(401).json({ error: "Nem vagy bejelentkezve" });
+  let payload;
   try {
-    req.authUser = jwt.verify(token, JWT_SECRET);
-    next();
+    payload = jwt.verify(token, JWT_SECRET, JWT_OPTIONS);
   } catch {
     return res.status(401).json({ error: "Érvénytelen token" });
   }
+  const { rows } = await pool.query("SELECT id, username, password_hash FROM users WHERE id = $1", [payload.id]);
+  if (!rows.length || !payload.pwv || payload.pwv !== pwFingerprint(rows[0].password_hash)) {
+    return res.status(401).json({ error: "Érvénytelen token" });
+  }
+  req.authUser = { id: rows[0].id, username: rows[0].username };
+  next();
 }
 
 /* ── CORS (addon) ─────────────────────────────────────────── */
@@ -328,8 +348,16 @@ router.post("/login", async (req, res) => {
     // Ugyanazokkal a fiókokkal működik, mint a fő belépés — ezért ugyanúgy
     // naplózzuk, és a kérésszám-korlát is rajta van (server/index.js).
     const loginKey = String(username).slice(0, 120);
+    // Ugyanaz a fiókszintű zárolás, mint a fő belépésnél (közös számláló)
+    const throttleKey = rows.length ? `user:${rows[0].id}` : `name:${loginKey}`;
+    const lockedFor = loginLockRemaining(throttleKey);
+    if (lockedFor) {
+      res.setHeader("Retry-After", String(lockedFor));
+      return res.status(429).json({ error: "Túl sok sikertelen próbálkozás ezzel a fiókkal, próbáld újra később." });
+    }
     const ok = await comparePasswordSafe(password, rows[0]?.password_hash);
     if (!ok) {
+      registerLoginFailure(throttleKey);
       logSecurityEvent({ req, type: "login_failed", severity: "info",
                          dedupeKey: `${loginKey}|${rows.length ? "badpw" : "nouser"}`,
                          userId: rows[0]?.id ?? null, username: rows[0]?.username ?? null,
@@ -337,10 +365,11 @@ router.post("/login", async (req, res) => {
       return res.status(401).json({ error: "Hibás felhasználónév vagy jelszó" });
     }
     const user = rows[0];
+    clearLoginFailures(throttleKey);
     logSecurityEvent({ req, type: "login_success", userId: user.id, username: user.username,
                        dedupeKey: `ok|${user.id}|pc`, details: { source: "padlicrome" } });
     const points = await getPoints(user.id);
-    const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: "7d" });
+    const token = signToken(user);
     res.json({ token, username: user.username, points });
   } catch (err) {
     console.error("[PADLICROME] login:", err);
