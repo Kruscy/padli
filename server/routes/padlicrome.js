@@ -31,7 +31,7 @@ const JWT_SECRET     = process.env.MANGA_JWT_SECRET;
 if (!JWT_SECRET) console.warn("⚠️  MANGA_JWT_SECRET nincs beállítva — a PadliCrome-bővítmény belépése nem fog működni.");
 const TORII_API_KEY  = process.env.TORII_API_KEY;
 const TORII_API_URL  = "https://api.toriitranslate.com/api/v2/upload";
-const PROJECT_ROOT   = "/mnt/manga2/padlicrome";
+const PROJECT_ROOT   = process.env.PADLICROME_DIR || "/mnt/manga2/padlicrome";
 const MAX_IMAGES     = 30;
 const MAX_FILE_SIZE  = 5 * 1024 * 1024;       // 5MB
 const MAX_IMG_HEIGHT = 65000;                  // px - a JPEG formátum kemény határa 65535px, ez alatt biztonsági ráhagyással; Torii API-val élesben tesztelve idáig működik
@@ -450,15 +450,6 @@ router.post("/project/start", requireAuth, async (req, res) => {
   const { url } = req.body || {};
   if (!url) return res.status(400).json({ error: "Hiányzó URL" });
 
-  // Meglévő projekt törlése
-  const existingProject = readProject(userId);
-  if (existingProject) {
-    const dir = userDir(userId);
-    if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true });
-  }
-
-  ensureUserDirs(userId);
-
   // Scrape
   let imageUrls;
   try {
@@ -466,6 +457,15 @@ router.post("/project/start", requireAuth, async (req, res) => {
   } catch (err) {
     return res.status(422).json({ error: err.message });
   }
+
+  // A meglévő projekt csak sikeres scrape UTÁN törlődik (korábban előtte:
+  // hibás URL-nél a felhasználó elvesztette a folyamatban lévő munkáját)
+  if (readProject(userId)) {
+    const dir = userDir(userId);
+    if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true });
+  }
+
+  ensureUserDirs(userId);
 
   const referer = new URL(url).origin + "/";
   const project = {

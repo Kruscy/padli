@@ -3,6 +3,9 @@
 // adja meg (CI: GitHub Actions postgres service); ha hiányoznak, a
 // tesztek kihagyódnak — éles adatbázisra soha ne mutasson.
 
+import os from "os";
+import path from "path";
+
 export const hasDb = !!(process.env.PGDATABASE && process.env.PGHOST);
 
 const defaults = {
@@ -15,6 +18,7 @@ const defaults = {
   R2_ACCOUNT_ID: "test", R2_ACCESS_KEY_ID: "test", R2_SECRET_ACCESS_KEY: "test",
   R2_BUCKET_NAME: "test", R2_PUBLIC_URL: "http://127.0.0.1:9",
   SITE_URL: "http://localhost", BASE_URL: "http://localhost",
+  PADLICROME_DIR: path.join(os.tmpdir(), "padli-test-padlicrome"),
 };
 for (const [k, v] of Object.entries(defaults)) if (process.env[k] === undefined) process.env[k] = v;
 
