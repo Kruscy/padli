@@ -5,6 +5,7 @@ import { pool } from "./db.js";
 import { requireLogin } from "./middleware/auth.js";
 import adminRoutes from "./routes/admin.js";
 import { SCAN_OWNER_USER_ID } from "./lib/scan-runner.js";
+import { getClientIp } from "./lib/client-ip.js";
 import { logSecurityEvent } from "./lib/security-log.js";
 import { validatePassword, comparePasswordSafe, hashToken, destroyUserSessions,
          findUserByLogin, resolveStoredEmail, loginLockRemaining,
@@ -106,8 +107,16 @@ router.get("/health", async (_req, res) => {
 // és a végpont belépés nélkül hívható — különben a valódi forgalom zaja vagy
 // kitalált jelentések elárasztanák a security_events-et (és kiszorítanák a
 // valódi eseményeket az írási plafonból).
+// A keretet egy IP legfeljebb CSP_REPORT_PER_IP új bejegyzéssel töltheti, és
+// CSP_REPORT_WINDOW_MS-enként újraindul — korábban egy támadó kitalált
+// jelentésekkel újraindításig betölthette a 300 helyet, és onnantól
+// semmilyen valódi jelentés nem került a naplóba.
 const CSP_REPORT_MAX = 300;
+const CSP_REPORT_PER_IP = 20;
+const CSP_REPORT_WINDOW_MS = 6 * 60 * 60 * 1000;
 const cspReportSeen = new Set();
+const cspReportPerIp = new Map();
+setInterval(() => { cspReportSeen.clear(); cspReportPerIp.clear(); }, CSP_REPORT_WINDOW_MS).unref();
 router.post("/csp-report", express.json({ type: ["application/csp-report", "application/json"], limit: "16kb" }), (req, res) => {
   const r = req.body?.["csp-report"] || {};
   let page = "";
@@ -117,8 +126,11 @@ router.post("/csp-report", express.json({ type: ["application/csp-report", "appl
   // Csak az inline eseménykezelők jelentései érdekesek (a többi irányelvet
   // az éles CSP ugyanígy kikényszeríti, azok csak zajt adnának)
   const key = `${page}|${directive}|${sample}`;
-  if (directive.startsWith("script-src-attr") && !cspReportSeen.has(key) && cspReportSeen.size < CSP_REPORT_MAX) {
+  const ip = getClientIp(req);
+  if (directive.startsWith("script-src-attr") && !cspReportSeen.has(key) && cspReportSeen.size < CSP_REPORT_MAX &&
+      (cspReportPerIp.get(ip) || 0) < CSP_REPORT_PER_IP) {
     cspReportSeen.add(key);
+    cspReportPerIp.set(ip, (cspReportPerIp.get(ip) || 0) + 1);
     logSecurityEvent({ req, type: "csp_violation", severity: "info",
                        dedupeKey: key,
                        details: { page, directive, sample,
