@@ -6,7 +6,12 @@ on:
       - main
 
 jobs:
+  # Az image csak zöld tesztekkel épül (ugyanaz a workflow, mint push/PR-nél)
+  test:
+    uses: ./.github/workflows/test.yml
+
   build-and-push:
+    needs: test
     runs-on: ubuntu-latest
 
     steps:

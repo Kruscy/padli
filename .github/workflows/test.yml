@@ -1,0 +1,63 @@
+name: Tesztek
+
+on:
+  push:
+  pull_request:
+  workflow_call:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: padli
+          POSTGRES_PASSWORD: padli-ci
+          POSTGRES_DB: padli_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U padli -d padli_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    # Csak a CI saját, eldobható adatbázisa — éles adatbázisra soha ne mutasson
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGUSER: padli
+      PGPASSWORD: padli-ci
+      PGDATABASE: padli_ci
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Függőségek
+        run: npm ci
+
+      - name: Szintaxis-ellenőrzés
+        run: npm run check
+
+      - name: Sérülékeny függőségek (magas/kritikus)
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Adatbázis-séma és migrációk
+        run: |
+          psql -v ON_ERROR_STOP=1 -q -f schema.sql
+          for f in server/scripts/migrations/*.sql; do
+            echo "→ $f"
+            psql -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+
+      - name: Tesztek
+        run: npm test
