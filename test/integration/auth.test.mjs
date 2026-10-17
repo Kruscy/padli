@@ -37,6 +37,14 @@ describe("belépés", { skip: !hasDb && "nincs teszt-adatbázis (PG* környezeti
     assert.equal((await client(app.baseUrl).request("/api/padlicrome/me", { headers: auth })).status, 401);
   });
 
+  test("elfelejtett jelszó: létező és nem létező címre ugyanaz a válasz (levélküldési hiba esetén is)", async () => {
+    const c = client(app.baseUrl);
+    const known = await c.request("/api/auth/forgot-password", { method: "POST", json: { email: `${fx.users.patron.username}@example.test` } });
+    const unknown = await c.request("/api/auth/forgot-password", { method: "POST", json: { email: `nincs-${fx.run}@example.test` } });
+    assert.deepEqual([known.status, known.data], [200, { ok: true }]);
+    assert.deepEqual([unknown.status, unknown.data], [200, { ok: true }]);
+  });
+
   test("hibás típusú bemenet 400, a szerver tovább fut", async () => {
     const c = client(app.baseUrl);
     await c.login(fx.users.patron.username, PASSWORD);
