@@ -17,6 +17,7 @@ import { comparePasswordSafe, findUserByLogin } from "../lib/auth-security.js";
 import { localPathToR2Key, listFiles } from "../r2.js";
 import { callGemini } from "../lib/gemini-client.js";
 import { BUGFIX_STAGING_DIR, findChapter, isSafeName, resolveInside } from "../lib/safe-path.js";
+import { denyReason, getChapterFlags } from "../lib/chapter-access.js";
 
 const router = express.Router();
 
@@ -74,6 +75,16 @@ async function deductPoint(userId) {
     "INSERT INTO user_points (user_id, fix_id, points, approved_by, earned_at, spent) VALUES ($1, NULL, -1, NULL, NOW(), false)",
     [userId]
   );
+}
+
+// Ugyanaz a zárolás/korhatár-döntés, mint az olvasóban: importálni csak
+// olyan fejezetet lehet, amit a user amúgy is olvashat (korábban bármely
+// zárolt vagy 18+ fejezet képei importálhatók és letölthetők voltak).
+// A JWT-ben nincs szerepkör, ezért azt a DB-ből olvassuk.
+async function chapterDenyReason(userId, slug, chapter) {
+  const { rows } = await pool.query("SELECT role FROM users WHERE id = $1", [userId]);
+  if (!rows.length) return "login";
+  return denyReason({ id: userId, role: rows[0].role }, await getChapterFlags(slug, chapter));
 }
 
 async function isSubscriber(userId) {
@@ -837,6 +848,8 @@ router.post("/import-bug-image", requireAuth, async (req, res) => {
       mangaSlug = slug;
       chapter = chapterFolder;
       imageFile = decodedFile;
+      const denied = await chapterDenyReason(userId, slug, chapterFolder);
+      if (denied) return res.status(403).json({ error: "Ehhez a fejezethez nincs hozzáférésed" });
       const { rows } = await pool.query(
         `SELECT l.path AS library_path, m.folder AS manga_folder
          FROM chapter c
@@ -899,7 +912,9 @@ router.post("/import-chapter", requireAuth, async (req, res) => {
   try {
     const userId = req.authUser.id;
     const { mangaSlug, chapter, chapterBugId } = req.body;
-    if (!mangaSlug || !chapter) return res.status(400).json({ error: "mangaSlug és chapter kötelező" });
+    if (!isSafeName(mangaSlug) || !isSafeName(chapter)) return res.status(400).json({ error: "mangaSlug és chapter kötelező" });
+    const denied = await chapterDenyReason(userId, mangaSlug, chapter);
+    if (denied) return res.status(403).json({ error: "Ehhez a fejezethez nincs hozzáférésed" });
 
     ensureUserDirs(userId);
 

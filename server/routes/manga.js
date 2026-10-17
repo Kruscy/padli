@@ -6,6 +6,7 @@ import { pool } from "../db.js";
 import { requireLogin } from "../middleware/auth.js";
 import { getPresignedUrl, mangaImageToR2Key, objectExists, listFiles, localPathToR2Key } from "../r2.js";
 import { isAdultVerified, resolveAdultMode, ADULT_GENRE_EXISTS_SQL } from "../lib/age.js";
+import { denyReason, flagsFromRows, getChapterFlags } from "../lib/chapter-access.js";
 
 const router = express.Router();
 /* ================= HELPERS ================= */
@@ -234,58 +235,16 @@ res.json({ chapters: result, lockHours: parseInt(process.env.LOCK_HOURS || "24",
 /* ================= PAGE LIST ================= */
 router.get("/pages/:slug/:chapter", requireLogin, async (req, res) => {
   const { slug, chapter } = req.params;
-  const userId = req.session.user?.id;
-  const userRole = req.session.user?.role;
-
-  // ===== 18+ KORHATÁR ELLENŐRZÉS =====
-  // Ez a valódi biztonsági határ — nem bypass-olható, függetlenül attól,
-  // hogy a fejezetlista (/chapters) mit jelzett előre a kliensnek.
+  // ===== 18+ KORHATÁR + ZÁROLÁS (Patreon) ELLENŐRZÉS =====
+  // Közös döntés a képekkel (/image) és a PadliCrome-importtal
+  // (lib/chapter-access.js). Hiba esetén zárva marad (korábban a
+  // zárolás-ellenőrzés hibája átengedte a kérést).
   try {
-    if (userRole !== "admin" && await isAdultManga(slug)) {
-      const u = await pool.query(`SELECT birth_date FROM users WHERE id = $1`, [userId]);
-      if (!isAdultVerified(u.rows[0]?.birth_date)) {
-        return res.status(403).json({ error: "age_restricted" });
-      }
-    }
-  } catch (ageErr) {
-    console.error("Age check error:", ageErr);
-    return res.status(403).json({ error: "age_restricted" }); // hiba esetén fail closed
-  }
-
-  // ===== ZÁROLÁS ELLENŐRZÉS (Patreon) =====
-  try {
-    if (userRole !== "admin") {
-      const ps = await pool.query(
-        `SELECT active FROM patreon_status WHERE user_id = $1 LIMIT 1`,
-        [userId]
-      );
-      const isPatron = ps.rows.length && ps.rows[0].active === true;
-
-      if (!isPatron) {
-
-// Duplikált slug esetén (két manga-bejegyzés ugyanazzal a slug-gal)
-// előfordulhat, hogy ugyanaz a fejezetnév mindkét oldalon szerepel,
-// eltérő unlocks_at-tal. Csak akkor zárjuk, ha MINDEN jelölt még zárt —
-// ha bármelyik duplikátum alatt már fel van oldva, ne akadályozzuk.
-const chRes = await pool.query(
-  `SELECT c.unlocks_at FROM chapter c
-   JOIN manga m ON m.id = c.manga_id
-   WHERE m.slug = $1 AND c.folder = $2`,
-  [slug, chapter]
-);
-
-if (chRes.rows.length) {
-  const now = new Date();
-  const allLocked = chRes.rows.every(r => r.unlocks_at && new Date(r.unlocks_at) > now);
-  if (allLocked) {
+    const reason = await denyReason(req.session.user, await getChapterFlags(slug, chapter));
+    if (reason) return res.status(reason === "login" ? 401 : 403).json({ error: reason });
+  } catch (accessErr) {
+    console.error("Chapter access check error:", accessErr);
     return res.status(403).json({ error: "locked" });
-  }
-}
-
-}
-    }
-  } catch (lockErr) {
-    console.error("Lock check error:", lockErr);
   }
 
   // Duplikált slug esetén (két manga-bejegyzés ugyanazzal a slug-gal,
@@ -374,7 +333,7 @@ if (chRes.rows.length) {
 
 /* ================= IMAGE ================= */
 
-router.get("/image/:library/:slug/:chapter/:file", async (req, res) => {
+router.get("/image/:library/:slug/:chapter/:file", requireLogin, async (req, res) => {
   const { library, slug, chapter, file } = req.params;
 
   // A library.name szűrés a legtöbb esetben már egyértelművé teszi a
@@ -386,7 +345,9 @@ router.get("/image/:library/:slug/:chapter/:file", async (req, res) => {
     SELECT
       l.path AS library_path,
       m.folder AS manga_folder,
-      m.r2_migrated
+      m.r2_migrated,
+      c.unlocks_at,
+      ${ADULT_GENRE_EXISTS_SQL} AS is_adult
     FROM chapter c
     JOIN manga m ON m.id = c.manga_id
     JOIN library l ON l.id = c.library_id
@@ -396,6 +357,14 @@ router.get("/image/:library/:slug/:chapter/:file", async (req, res) => {
   );
 
   if (!result.rows.length) return res.status(404).end();
+
+  // Zárolt / 18+ fejezet képe csak jogosultnak (korábban bejelentkezés
+  // nélkül is letölthető volt). A jogosultsághoz kötött választ a
+  // Cloudflare nem tárolhatja (private), különben bárkinek kiadná.
+  const flags = flagsFromRows(result.rows);
+  const reason = await denyReason(req.session.user, flags);
+  if (reason) return res.status(reason === "login" ? 401 : 403).end();
+  const cacheControl = (flags.locked || flags.adult) ? "private, max-age=3600" : "public, max-age=86400";
 
   let chosen = result.rows[0];
   if (result.rows.length > 1) {
@@ -422,6 +391,7 @@ router.get("/image/:library/:slug/:chapter/:file", async (req, res) => {
 
   function serveLocal() {
     if (!fs.existsSync(imgPath)) return res.status(404).end();
+    res.setHeader("Cache-Control", cacheControl);
     res.sendFile(imgPath);
   }
 
@@ -434,7 +404,7 @@ router.get("/image/:library/:slug/:chapter/:file", async (req, res) => {
       return;
     }
     res.setHeader("Content-Type", r2Res.headers.get("content-type") || "image/jpeg");
-    res.setHeader("Cache-Control", "public, max-age=86400");
+    res.setHeader("Cache-Control", cacheControl);
     Readable.fromWeb(r2Res.body).pipe(res);
   }
 
