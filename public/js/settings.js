@@ -179,6 +179,12 @@ document.getElementById("gdprExportBtn")?.addEventListener("click", async () => 
 
 document.getElementById("gdprDeleteBtn")?.addEventListener("click", async () => {
   const statusEl = document.getElementById("gdprStatus");
+  const password = document.getElementById("gdprPassword")?.value || "";
+  if (!password) {
+    statusEl.textContent = "Add meg a jelszavad a törlés megerősítéséhez.";
+    statusEl.style.color = "#f87171";
+    return;
+  }
   const ok = confirm(
     "Biztosan véglegesen törlöd a fiókodat?\n\nMinden adatod (olvasási előrehaladás, kedvencek, értékelések) visszavonhatatlanul törlődik."
   );
@@ -190,7 +196,11 @@ document.getElementById("gdprDeleteBtn")?.addEventListener("click", async () => 
   statusEl.textContent = "Törlés folyamatban...";
   statusEl.style.color = "#f87171";
 
-  const res = await fetch("/api/gdpr/account", { method: "DELETE" });
+  const res = await fetch("/api/gdpr/account", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password }),
+  });
   if (res.ok) {
     statusEl.textContent = "Fiók törölve. Átirányítás...";
     setTimeout(() => { window.location.href = "/"; }, 1500);

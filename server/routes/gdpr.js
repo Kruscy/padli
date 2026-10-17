@@ -2,6 +2,7 @@ import express from "express";
 import { pool } from "../db.js";
 import { requireLogin } from "../middleware/auth.js";
 import { removeTierRoles } from "../lib/discord-roles.js";
+import { comparePasswordSafe } from "../lib/auth-security.js";
 
 const router = express.Router();
 
@@ -83,6 +84,16 @@ router.get("/export", requireLogin, async (req, res) => {
 
 router.delete("/account", requireLogin, async (req, res) => {
   const userId = req.session.user.id;
+
+  // Újrahitelesítés: egy ellopott / nyitva hagyott munkamenettel ne
+  // lehessen a fiókot véglegesen törölni
+  const { rows: pw } = await pool.query(`SELECT password_hash FROM users WHERE id = $1`, [userId]);
+  if (!pw.length) return res.status(404).json({ error: "A fiók nem található." });
+  const password = typeof req.body?.password === "string" ? req.body.password : "";
+  if (!(await comparePasswordSafe(password, pw[0].password_hash))) {
+    return res.status(403).json({ error: "Hibás jelszó." });
+  }
+
   const client = await pool.connect();
 
   try {
@@ -117,6 +128,8 @@ router.delete("/account", requireLogin, async (req, res) => {
     await client.query(`UPDATE bug_reports      SET user_id = NULL WHERE user_id = $1`, [userId]);
 
     await client.query(`DELETE FROM users WHERE id = $1`, [userId]);
+    // A fiók minden munkamenete (más eszközökön is) azonnal megszűnik
+    await client.query(`DELETE FROM session WHERE (sess->'user'->>'id')::int = $1`, [userId]);
 
     await client.query("COMMIT");
 
