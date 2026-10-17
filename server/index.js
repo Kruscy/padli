@@ -133,7 +133,8 @@ app.use(express.urlencoded({ limit: "50mb", extended: false }));
 app.use(sessionMiddleware);
 
 /* ===== BUILD VERSION (cache busting) ===== */
-import { readFileSync, existsSync } from "fs";
+import { readFileSync, statSync } from "fs";
+import { resolveInside } from "./lib/safe-path.js";
 const BUILD_VER = Date.now().toString(36);
 const PUBLIC_DIR = path.join(__dirname, "../public");
 
@@ -146,17 +147,40 @@ function injectVersion(html) {
 /* ===== STATIC FRONTEND ===== */
 app.use('/downloads', express.static(path.join(PUBLIC_DIR, 'downloads')));
 
-// Minden .html kérést verzióval szolgálunk ki
+// Minden .html kérést verzióval szolgálunk ki. A verziózott HTML-t
+// memóriában tartjuk (a fájl módosítási ideje alapján frissül), nem
+// olvassuk és alakítjuk át minden oldalbetöltésnél.
+const htmlCache = new Map(); // fájl → { mtimeMs, html }
 app.use((req, res, next) => {
   if (!req.path.endsWith(".html")) return next();
-  const filePath = path.join(PUBLIC_DIR, req.path);
-  if (!existsSync(filePath)) return next();
+  let rel;
+  try { rel = decodeURIComponent(req.path); } catch { return next(); }
+  const filePath = resolveInside(PUBLIC_DIR, "." + rel);
+  if (!filePath) return next();
   try {
-    const html = injectVersion(readFileSync(filePath, "utf8"));
+    const { mtimeMs } = statSync(filePath);
+    let hit = htmlCache.get(filePath);
+    if (!hit || hit.mtimeMs !== mtimeMs) {
+      hit = { mtimeMs, html: injectVersion(readFileSync(filePath, "utf8")) };
+      htmlCache.set(filePath, hit);
+    }
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Content-Type", "text/html; charset=utf-8");
-    res.send(html);
+    res.send(hit.html);
   } catch { next(); }
+});
+
+// Verziózott (?v=) CSS/JS: a tartalom egy verzión belül nem változik, a
+// böngésző és a Cloudflare egy évig tárolhatja (eddig max-age=0 → minden
+// oldalbetöltésnél újraellenőrzés). Verzió nélkül marad az ETag-alapú
+// újraellenőrzés (pl. a modulok egymás közti importjai).
+app.use((req, res, next) => {
+  if (req.query.v && /^\/(css|js)\//.test(req.path)) {
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+  } else if (req.path.startsWith("/assets/")) {
+    res.setHeader("Cache-Control", "public, max-age=86400");
+  }
+  next();
 });
 
 app.use(express.static(PUBLIC_DIR));
