@@ -21,6 +21,7 @@ import { callGemini } from "../lib/gemini-client.js";
 import { BUGFIX_STAGING_DIR, findChapter, isSafeName, resolveInside } from "../lib/safe-path.js";
 import { denyReason, getChapterFlags } from "../lib/chapter-access.js";
 import { getBalance, spendPoints, refundPoints } from "../lib/points-ledger.js";
+import { safeFetch } from "../lib/safe-fetch.js";
 
 const router = express.Router();
 
@@ -158,9 +159,11 @@ async function validateAndConvertImage(buffer) {
 }
 
 /* ── HTTP LETÖLTÉS REFERER-REL ───────────────────────────── */
-async function downloadImage(url, refererOverride) {
+// trusted: saját (R2) forrás; minden más, kliensből jövő URL a
+// safeFetch-en megy át (belső hálózati címek tiltva, SSRF ellen)
+async function downloadImage(url, refererOverride, { trusted = false } = {}) {
   const referer = refererOverride || (new URL(url).origin + "/");
-  const resp = await fetch(url, {
+  const resp = await (trusted ? fetch : safeFetch)(url, {
     headers: {
       "Referer": referer,
       "User-Agent": USER_AGENT,
@@ -227,7 +230,7 @@ async function scrapeMangaDex(chapterUrl) {
   const chapterId = match[1];
 
   const apiUrl = `https://api.mangadex.org/at-home/server/${chapterId}`;
-  const resp = await fetch(apiUrl, {
+  const resp = await safeFetch(apiUrl, {
     headers: { "User-Agent": USER_AGENT },
     timeout: 10000,
   });
@@ -244,7 +247,7 @@ async function scrapeMangaDex(chapterUrl) {
 }
 
 async function scrapeGenericWordPress(chapterUrl) {
-  const resp = await fetch(chapterUrl, {
+  const resp = await safeFetch(chapterUrl, {
     headers: {
       "User-Agent": USER_AGENT,
       "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -854,6 +857,15 @@ router.post("/import-bug-image", requireAuth, async (req, res) => {
     ensureUserDirs(userId);
 
     // imageUrl lehet relatív (/api/image/...) vagy abszolút
+    if (typeof imageUrl !== "string") return res.status(400).json({ error: "imageUrl kötelező" });
+    // A saját oldalra mutató abszolút URL-t a helyi (ellenőrzött) úton kezeljük
+    for (const base of [process.env.SITE_URL, process.env.BASE_URL]) {
+      try {
+        const origin = base && new URL(base).origin;
+        if (origin && imageUrl.startsWith(origin + "/api/image/")) imageUrl = imageUrl.slice(origin.length);
+      } catch {}
+    }
+
     let jpgBuf;
     const localMatch = imageUrl.match(/^\/api\/image\/([^/]+)\/([^/]+)\/([^/]+)\/(.+)$/);
     if (localMatch) {
@@ -890,7 +902,7 @@ router.post("/import-bug-image", requireAuth, async (req, res) => {
         // Nincs lokálisan → R2-ről töltjük le
         const r2Key = localPathToR2Key(imgPath);
         const R2_PUBLIC = process.env.R2_PUBLIC_URL;
-        buf = await downloadImage(`${R2_PUBLIC}/${r2Key}`);
+        buf = await downloadImage(`${R2_PUBLIC}/${r2Key}`, undefined, { trusted: true });
       }
       jpgBuf = await sharp(buf).jpeg({ quality: 92 }).toBuffer();
     } else {
@@ -996,7 +1008,7 @@ router.post("/import-chapter", requireAuth, async (req, res) => {
       let buf;
       if (useR2) {
         const r2Key = localPathToR2Key(path.join(chapterDir, file));
-        buf = await downloadImage(`${R2_PUBLIC}/${r2Key}`);
+        buf = await downloadImage(`${R2_PUBLIC}/${r2Key}`, undefined, { trusted: true });
       } else {
         buf = fs.readFileSync(path.join(chapterDir, file));
       }
