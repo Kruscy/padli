@@ -101,6 +101,13 @@ router.get("/health", async (_req, res) => {
 // A böngésző küldi, ha egy oldalon még inline eseménykezelő (onclick= stb.)
 // fut. Csak naplózzuk (security_events, "csp_violation"), oldalanként és
 // kódrészletenként deduplikálva — ebből látszik, hol van még átírnivaló.
+// Minden oldal+kódrészlet páros folyamatonként CSAK EGYSZER kerül a naplóba,
+// és legfeljebb CSP_REPORT_MAX különböző: minden látogató böngészője jelent,
+// és a végpont belépés nélkül hívható — különben a valódi forgalom zaja vagy
+// kitalált jelentések elárasztanák a security_events-et (és kiszorítanák a
+// valódi eseményeket az írási plafonból).
+const CSP_REPORT_MAX = 300;
+const cspReportSeen = new Set();
 router.post("/csp-report", express.json({ type: ["application/csp-report", "application/json"], limit: "16kb" }), (req, res) => {
   const r = req.body?.["csp-report"] || {};
   let page = "";
@@ -109,9 +116,11 @@ router.post("/csp-report", express.json({ type: ["application/csp-report", "appl
   const sample = String(r["script-sample"] || "").slice(0, 120);
   // Csak az inline eseménykezelők jelentései érdekesek (a többi irányelvet
   // az éles CSP ugyanígy kikényszeríti, azok csak zajt adnának)
-  if (directive.startsWith("script-src-attr")) {
+  const key = `${page}|${directive}|${sample}`;
+  if (directive.startsWith("script-src-attr") && !cspReportSeen.has(key) && cspReportSeen.size < CSP_REPORT_MAX) {
+    cspReportSeen.add(key);
     logSecurityEvent({ req, type: "csp_violation", severity: "info",
-                       dedupeKey: `${page}|${directive}|${sample}`,
+                       dedupeKey: key,
                        details: { page, directive, sample,
                                   line: r["line-number"] || null, source: String(r["source-file"] || "").slice(0, 200) } });
   }

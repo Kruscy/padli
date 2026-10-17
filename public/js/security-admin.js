@@ -12,6 +12,9 @@
     ip_auto_blocked: "Automatikus tiltás (24 óra)", auto_block_skipped: "Automatikus tiltás kihagyva",
     patreon_webhook_bad_signature: "Patreon webhook: hibás aláírás",
     upload_series_override: "Feltöltés: „másik mű” jelölés",
+    ai_rate_limited: "AI-eszköz korlátja (OCR/fordítás/képjavítás)",
+    login_account_locked: "Fiók zárolva (sok hibás jelszó)",
+    csp_violation: "CSP: inline eseménykezelő (felmérés)",
   };
   const label = t => TYPE_LABEL[t] ? `${TYPE_LABEL[t]} <span class="sec-code">${esc(t)}</span>` : `<span class="sec-code">${esc(t)}</span>`;
   const sev = s => `<span class="sec-sev ${esc(s)}">${{ info: "info", warn: "figyelmeztetés", high: "súlyos" }[s] || esc(s)}</span>`;
