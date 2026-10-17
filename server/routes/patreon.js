@@ -4,6 +4,7 @@ import crypto from "crypto";
 import { pool } from "../db.js";
 import { syncPatreon } from "../patreon-sync.js";
 import { logSecurityEvent } from "../lib/security-log.js";
+import { issueOAuthState, consumeOAuthState } from "../lib/oauth-state.js";
 
 const router = express.Router();
 
@@ -120,12 +121,13 @@ router.get("/connect", (req, res) => {
     response_type: "code",
     client_id: process.env.PATREON_CLIENT_ID,
     redirect_uri: `${process.env.BASE_URL}/api/patreon/callback`,
-    scope: "identity identity.memberships"
+    scope: "identity identity.memberships",
+    state: issueOAuthState(req, "patreon"),
   });
 
-  res.redirect(
+  req.session.save(() => res.redirect(
     `https://www.patreon.com/oauth2/authorize?${params.toString()}`
-  );
+  ));
 });
 
 /* ===============================
@@ -137,8 +139,12 @@ router.get("/callback", async (req, res) => {
     return res.redirect("/login.html");
   }
  
-  const { code, error } = req.query;
+  const { code, error, state } = req.query;
   const userId = req.session.user.id;
+
+  if (!consumeOAuthState(req, "patreon", state)) {
+    return res.redirect("/settings.html?patreon=error&reason=state");
+  }
   
   if (error) {
     console.error("❌ Patreon OAuth error:", error);

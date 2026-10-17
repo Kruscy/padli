@@ -2,6 +2,7 @@ import { pool } from "../db.js";
 import express from "express";
 import fetch from "node-fetch";
 import { requireLogin } from "../middleware/auth.js";
+import { issueOAuthState, consumeOAuthState } from "../lib/oauth-state.js";
 import { searchMangaList } from "../lib/jikan.js";
 import { searchMangaList as searchMangaDexList } from "../lib/mangadex.js";
 
@@ -259,13 +260,21 @@ router.get("/search-wishlist", requireLogin, async (req, res) => {
 });
 
 router.get("/connect", requireLogin, (req, res) => {
-  const url = `https://anilist.co/api/v2/oauth/authorize?client_id=${process.env.ANILIST_CLIENT_ID}&response_type=code&redirect_uri=${process.env.ANILIST_REDIRECT}`;
-  res.redirect(url);
+  const params = new URLSearchParams({
+    client_id: process.env.ANILIST_CLIENT_ID || "",
+    response_type: "code",
+    redirect_uri: process.env.ANILIST_REDIRECT || "",
+    state: issueOAuthState(req, "anilist"),
+  });
+  req.session.save(() => res.redirect(`https://anilist.co/api/v2/oauth/authorize?${params}`));
 });
 
 router.get("/callback", requireLogin, async (req, res) => {
   try {
-    const { code } = req.query;
+    const { code, state } = req.query;
+      if (!consumeOAuthState(req, "anilist", state)) {
+        return res.redirect("/settings.html?error=anilist");
+      }
       if (!code) {
         return res.redirect("/settings.html?error=anilist");
       }
@@ -280,8 +289,6 @@ router.get("/callback", requireLogin, async (req, res) => {
         code
       })
     });
-
-console.log("SESSION:", req.session);
 
 const data = await tokenRes.json();
 
