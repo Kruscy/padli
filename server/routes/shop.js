@@ -402,22 +402,41 @@ async function handlePointsPurchase(session, meta, userId) {
   const packageId = meta.packageId;
   const pkg       = PACKAGES[packageId];
 
-  // Duplikáció védelem
-  const existing = await pool.query(
-    "SELECT 1 FROM shop_orders WHERE stripe_session_id = $1", [session.id]
-  );
-  if (existing.rows.length) return;
+  if (!Number.isInteger(points) || points <= 0) {
+    console.error(`[SHOP] Érvénytelen pontszám a metadatában: session=${session.id}`);
+    return;
+  }
 
-  await pool.query(
-    `INSERT INTO user_points (user_id, fix_id, points, approved_by, earned_at, spent)
-     VALUES ($1, NULL, $2, NULL, NOW(), false)`,
-    [userId, points]
-  );
-  await pool.query(
-    `INSERT INTO shop_orders (user_id, stripe_session_id, package_id, points, amount_huf, created_at)
-     VALUES ($1, $2, $3, $4, $5, NOW())`,
-    [userId, session.id, packageId, points, pkg?.price || 0]
-  );
+  // Duplikáció védelem: a rendelés rögzítése és a pontjóváírás EGY
+  // tranzakcióban, a stripe_session_id egyedi kulcsára építve. Korábban
+  // előbb a pont került be, és csak utána a rendelés — egy párhuzamosan
+  // újraküldött webhooknál (a Stripe ilyet küld) a pont kétszer íródott jóvá.
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const order = await client.query(
+      `INSERT INTO shop_orders (user_id, stripe_session_id, package_id, points, amount_huf, created_at)
+       VALUES ($1, $2, $3, $4, $5, NOW())
+       ON CONFLICT (stripe_session_id) DO NOTHING
+       RETURNING id`,
+      [userId, session.id, packageId, points, pkg?.price || 0]
+    );
+    if (!order.rowCount) {
+      await client.query("ROLLBACK");
+      return; // már feldolgozott session
+    }
+    await client.query(
+      `INSERT INTO user_points (user_id, fix_id, points, approved_by, earned_at, spent)
+       VALUES ($1, NULL, $2, NULL, NOW(), false)`,
+      [userId, points]
+    );
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
 
   // Billingo számla — a felhasználó saját maga megadott, ellenőrzött
   // (Geoapify-vel validált) valódi nevét és címét használjuk, NEM a
