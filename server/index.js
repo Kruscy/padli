@@ -14,6 +14,7 @@ import { getClientIp } from "./lib/client-ip.js";
 import { logSecurityEvent } from "./lib/security-log.js";
 import userRoutes from "./routes/user.js";
 import { activityTracker } from "./middleware/activity.js";
+import { sessionRefresh } from "./middleware/session-refresh.js";
 import { billingAddressGate } from "./middleware/billingAddressGate.js";
 import "./discord-bot.js";
 import cron from "node-cron";
@@ -181,6 +182,7 @@ app.use(express.static(PUBLIC_DIR));
 app.use(activityTracker);
 
 /* ===== API ROUTES ===== */
+app.use("/api", sessionRefresh);
 app.use("/api", billingAddressGate);
 app.use("/api", routes);
 app.use("/api/user", userRoutes);
