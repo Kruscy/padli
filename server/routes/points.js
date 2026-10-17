@@ -1,6 +1,7 @@
 // server/routes/points.js
 import express from "express";
 import { pool } from "../db.js";
+import { spendPoints } from "../lib/points-ledger.js";
 
 const router = express.Router();
 
@@ -43,11 +44,13 @@ router.get("/balance", requireLogin, async (req, res) => {
       ORDER BY up.earned_at DESC
     `, [userId]);
 
-    // Elköltött pontok összege
+    // Elköltött pontok: a régi, elköltöttre jelölt sorok + az új,
+    // negatív levonás-sorok (lib/points-ledger.js)
     const { rows: spentRows } = await pool.query(`
-      SELECT COALESCE(SUM(points), 0) as spent_points
+      SELECT COALESCE(SUM(points) FILTER (WHERE spent), 0)
+           - COALESCE(SUM(points) FILTER (WHERE NOT spent AND points < 0), 0) AS spent_points
       FROM user_points
-      WHERE user_id = $1 AND spent = true
+      WHERE user_id = $1
     `, [userId]);
 
     const spentPoints = parseInt(spentRows[0].spent_points);
@@ -90,139 +93,74 @@ router.get("/my-gifts", requireLogin, async (req, res) => {
   }
 });
 
-/* ── POST /api/points/purchase-gift – előfizetés vásárlás ──── */
+/* ── POST /api/points/purchase-gift – előfizetés vásárlás ────
+   Az egyenleg-ellenőrzés, a levonás és a gift-kód lefoglalása egy
+   tranzakcióban, a felhasználóra vett zár alatt (lib/points-ledger.js).
+   Korábban két párhuzamos kérés ugyanazzal a 100 ponttal két kódot
+   vehetett, és a teljes sorok elköltöttre jelölése a maradékot is elvitte. */
 router.post("/purchase-gift", requireLogin, async (req, res) => {
-  const client = await pool.connect();
-  
-  try {
-    await client.query('BEGIN');
-    
-    const userId = req.session.user.id;
-    const costPoints = 100; // Fix ár
+  const userId = req.session.user.id;
+  const costPoints = 100; // Fix ár
 
-    // 1. Ellenőrzés: van-e elég pont?
-    const { rows: balanceRows } = await client.query(`
-      SELECT COALESCE(SUM(points), 0) as total_points
-      FROM user_points
-      WHERE user_id = $1 AND NOT spent
-    `, [userId]);
-
-    const availablePoints = parseInt(balanceRows[0].total_points);
-
-    if (availablePoints < costPoints) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ 
-        error: `Nincs elég pontod! Szükséges: ${costPoints}, Jelenlegi: ${availablePoints}` 
-      });
-    }
-
-    // 2. Van-e elérhető gift kód?
-    const { rows: giftRows } = await client.query(`
+  const spend = await spendPoints(userId, costPoints, async (client) => {
+    // SKIP LOCKED: egyidejű vásárlók más-más kódot kapnak, nem várnak egymásra
+    const { rows } = await client.query(`
       SELECT id, gift_code, patreon_link, duration_months
       FROM patreon_gifts
       WHERE status = 'available'
       ORDER BY created_at ASC
       LIMIT 1
-      FOR UPDATE
+      FOR UPDATE SKIP LOCKED
     `);
-
-    if (!giftRows.length) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ 
-        error: "Jelenleg nincs elérhető gift kód. Kérlek próbáld később!" 
-      });
-    }
-
-    const gift = giftRows[0];
-
-    // 3. Pontok megjelölése elköltöttként (FIFO - legrégebbi pontok először)
-    // Addig jelölünk meg sorokat, amíg összesen costPoints-nyi pontot el nem érünk
-    let remainingCost = costPoints;
-    
-    const { rows: pointRows } = await client.query(`
-      SELECT id, points, spent FROM user_points
-      WHERE user_id = $1 AND spent = false
-      ORDER BY earned_at ASC
-    `, [userId]);
-
-    const idsToSpend = [];
-    for (const row of pointRows) {
-      if (remainingCost <= 0) break;
-      
-      idsToSpend.push(row.id);
-      remainingCost -= row.points;
-    }
-
-    if (idsToSpend.length === 0) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ 
-        error: `Hiba a pontok levonásakor.` 
-      });
-    }
-
-    await client.query(`
-      UPDATE user_points
-      SET spent = true
-      WHERE id = ANY($1)
-    `, [idsToSpend]);
-
-    // 4. Gift kód hozzárendelése a userhez
+    if (!rows.length) return null;
     await client.query(`
       UPDATE patreon_gifts
-      SET 
-        purchased_by = $1,
-        purchased_at = NOW(),
-        cost_points = $2,
-        status = 'purchased'
+      SET purchased_by = $1, purchased_at = NOW(), cost_points = $2, status = 'purchased'
       WHERE id = $3
-    `, [userId, costPoints, gift.id]);
+    `, [userId, costPoints, rows[0].id]);
+    return rows[0];
+  });
 
-    await client.query('COMMIT');
-
-    // Ellenőrzés: ha ≤1 elérhető gift maradt → értesítés az összes adminnak
-    try {
-      const { rows: remRows } = await pool.query(
-        `SELECT COUNT(*) AS cnt FROM patreon_gifts WHERE status = 'available'`
-      );
-      const remaining = parseInt(remRows[0].cnt);
-      if (remaining <= 1) {
-        const { rows: admins } = await pool.query(
-          `SELECT id FROM users WHERE role = 'admin'`
-        );
-        const msg = remaining === 0
-          ? '⚠️ Elfogytak a Patreon Gift kódok! Azonnal fel kell tölteni.'
-          : '⚠️ Csak 1 Patreon Gift kód maradt! Hamarosan fel kell tölteni.';
-        for (const admin of admins) {
-          await pool.query(
-            `INSERT INTO notifications (user_id, type, message, link)
-             VALUES ($1, 'gift_low', $2, '/admin.html')`,
-            [admin.id, msg]
-          );
-        }
-      }
-    } catch (notifErr) {
-      console.warn('[gift] értesítés hiba:', notifErr.message);
-    }
-
-    res.json({
-      success: true,
-      gift: {
-        id: gift.id,
-        gift_code: gift.gift_code,
-        patreon_link: gift.patreon_link,
-        duration_months: gift.duration_months,
-        cost_points: costPoints
-      },
-      message: `Sikeres vásárlás! ${costPoints} pont levonva.`
+  if (!spend.ok) {
+    return res.status(400).json({
+      error: spend.reason === "insufficient"
+        ? `Nincs elég pontod! Szükséges: ${costPoints}, Jelenlegi: ${spend.balance}`
+        : "Jelenleg nincs elérhető gift kód. Kérlek próbáld később!",
     });
-
-  } catch (err) {
-    await client.query('ROLLBACK');
-    console.error("Gift purchase error:", err);
-    res.status(500).json({ error: err.message });
-  } finally {
-    client.release();
   }
+  const gift = spend.result;
+
+  // Ellenőrzés: ha ≤1 elérhető gift maradt → értesítés az összes adminnak
+  try {
+    const { rows: remRows } = await pool.query(
+      `SELECT COUNT(*) AS cnt FROM patreon_gifts WHERE status = 'available'`
+    );
+    const remaining = parseInt(remRows[0].cnt);
+    if (remaining <= 1) {
+      const msg = remaining === 0
+        ? '⚠️ Elfogytak a Patreon Gift kódok! Azonnal fel kell tölteni.'
+        : '⚠️ Csak 1 Patreon Gift kód maradt! Hamarosan fel kell tölteni.';
+      await pool.query(
+        `INSERT INTO notifications (user_id, type, message, link)
+         SELECT id, 'gift_low', $1, '/admin.html' FROM users WHERE role = 'admin'`,
+        [msg]
+      );
+    }
+  } catch (notifErr) {
+    console.warn('[gift] értesítés hiba:', notifErr.message);
+  }
+
+  res.json({
+    success: true,
+    gift: {
+      id: gift.id,
+      gift_code: gift.gift_code,
+      patreon_link: gift.patreon_link,
+      duration_months: gift.duration_months,
+      cost_points: costPoints
+    },
+    message: `Sikeres vásárlás! ${costPoints} pont levonva.`
+  });
 });
 
 /* ── GET /api/points/leaderboard – top javítók ────────────── */

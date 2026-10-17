@@ -18,6 +18,7 @@ import { localPathToR2Key, listFiles } from "../r2.js";
 import { callGemini } from "../lib/gemini-client.js";
 import { BUGFIX_STAGING_DIR, findChapter, isSafeName, resolveInside } from "../lib/safe-path.js";
 import { denyReason, getChapterFlags } from "../lib/chapter-access.js";
+import { getBalance, spendPoints, refundPoints } from "../lib/points-ledger.js";
 
 const router = express.Router();
 
@@ -62,20 +63,8 @@ function writeProject(userId, data) {
 }
 
 /* ── DB HELPERS ──────────────────────────────────────────── */
-async function getPoints(userId) {
-  const r = await pool.query(
-    "SELECT COALESCE(SUM(points) FILTER (WHERE spent = false), 0)::int AS points FROM user_points WHERE user_id = $1",
-    [userId]
-  );
-  return r.rows[0]?.points ?? 0;
-}
-
-async function deductPoint(userId) {
-  return pool.query(
-    "INSERT INTO user_points (user_id, fix_id, points, approved_by, earned_at, spent) VALUES ($1, NULL, -1, NULL, NOW(), false)",
-    [userId]
-  );
-}
+// Egyenleg és levonás: lib/points-ledger.js (zárolt, tranzakciós)
+const getPoints = getBalance;
 
 // Ugyanaz a zárolás/korhatár-döntés, mint az olvasóban: importálni csak
 // olyan fejezetet lehet, amit a user amúgy is olvashat (korábban bármely
@@ -566,22 +555,23 @@ router.post("/translate/:id", requireAuth, async (req, res) => {
   const img = project.images.find(i => i.id === req.params.id);
   if (!img) return res.status(404).json({ error: "Kép nem található" });
 
-  const points = await getPoints(userId);
-  if (points < 1) return res.status(402).json({ error: "Nincs elég pont" });
+  const origPath = sourcePath(userId, img);
+  if (!fs.existsSync(origPath)) return res.status(404).json({ error: "Eredeti kép hiányzik" });
+
+  // A pontot a hívás ELŐTT foglaljuk le (zárolt tranzakcióban), és hiba
+  // esetén visszaadjuk — így párhuzamos kérésekkel sem költhető el kétszer
+  const spend = await spendPoints(userId, 1);
+  if (!spend.ok) return res.status(402).json({ error: "Nincs elég pont" });
 
   img.translating = true;
   writeProject(userId, project);
 
   try {
-    const origPath = sourcePath(userId, img);
-    if (!fs.existsSync(origPath)) return res.status(404).json({ error: "Eredeti kép hiányzik" });
-
     const pngBuf = await translateViaTorii(fs.readFileSync(origPath), img.filename);
     const jpgBuf = await sharp(pngBuf).jpeg({ quality: 92 }).toBuffer();
     fs.writeFileSync(path.join(translatedDir(userId), img.filename), jpgBuf);
 
-    await deductPoint(userId);
-    const newPoints = points - 1;
+    const newPoints = spend.balance;
 
     img.translated = true;
     img.translating = false;
@@ -590,6 +580,7 @@ router.post("/translate/:id", requireAuth, async (req, res) => {
 
     res.json({ ok: true, filename: img.filename, pointsRemaining: newPoints });
   } catch (err) {
+    await refundPoints(spend.entryId).catch(e => console.error("[PADLICROME] pont-visszaadás hiba:", e.message));
     img.translating = false;
     writeProject(userId, project);
     console.error("[PADLICROME] translate:", err.message);
@@ -808,16 +799,16 @@ router.post("/translate", requireAuth, upload.single("image"), async (req, res) 
     return res.status(400).json({ error: "Hiányzó kép" });
   }
 
-  const points = await getPoints(userId);
-  if (points < 1) return res.status(402).json({ error: "Nincs elég pont" });
+  const spend = await spendPoints(userId, 1);
+  if (!spend.ok) return res.status(402).json({ error: "Nincs elég pont" });
 
   try {
     const imageData = await translateViaTorii(imageBuffer, "image.jpg");
-    await deductPoint(userId);
     res.setHeader("Content-Type", "image/png");
-    res.setHeader("X-Points-Remaining", points - 1);
+    res.setHeader("X-Points-Remaining", spend.balance);
     res.send(imageData);
   } catch (err) {
+    await refundPoints(spend.entryId).catch(e => console.error("[PADLICROME] pont-visszaadás hiba:", e.message));
     console.error("[PADLICROME] translate (addon):", err.message);
     res.status(500).json({ error: "Szerver hiba" });
   }
