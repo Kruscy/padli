@@ -296,22 +296,30 @@ router.post("/sync", async (req, res) => {
    POST /api/patreon/webhook  — valós idejű értesítések
 =============================== */
 router.post("/webhook", express.raw({ type: "application/json" }), async (req, res) => {
+  // Titok nélkül nem fogadunk el webhookot: korábban ilyenkor bárki
+  // aláírás nélkül indíthatott teljes Patreon-szinkront (API-kvóta)
   const secret = process.env.PATREON_WEBHOOK_SECRET;
-  if (secret) {
-    const sig = req.headers["x-patreon-signature"];
-    const expected = crypto.createHmac("md5", secret).update(req.body).digest("hex");
-    if (sig !== expected) {
-      // Naplózzuk: 2026-10-07 után napokig nem jött feldolgozott webhook, és
-      // az eldobott (hibás aláírású) kérésekből semmi nem látszott.
-      const event = req.headers["x-patreon-event"] || null;
-      console.warn(`Patreon webhook ELUTASÍTVA (hibás aláírás) [${event}] aláírás: ${sig ? "van" : "nincs"}`);
-      logSecurityEvent({
-        req, type: "patreon_webhook_bad_signature", severity: "warn",
-        details: { event, hasSignature: !!sig, bodyBytes: req.body?.length ?? null },
-        dedupeKey: "patreon-webhook",
-      });
-      return res.status(401).end();
-    }
+  if (!secret) {
+    console.warn("Patreon webhook ELUTASÍTVA: nincs beállítva PATREON_WEBHOOK_SECRET");
+    return res.status(503).end();
+  }
+  if (!Buffer.isBuffer(req.body)) return res.status(400).end();
+  const sig = String(req.headers["x-patreon-signature"] || "");
+  const expected = crypto.createHmac("md5", secret).update(req.body).digest("hex");
+  // Időállandó összehasonlítás (a !== az eltérés helyét időben elárulja)
+  const sigBuf = Buffer.from(sig), expBuf = Buffer.from(expected);
+  const valid = sigBuf.length === expBuf.length && crypto.timingSafeEqual(sigBuf, expBuf);
+  if (!valid) {
+    // Naplózzuk: 2026-10-07 után napokig nem jött feldolgozott webhook, és
+    // az eldobott (hibás aláírású) kérésekből semmi nem látszott.
+    const event = req.headers["x-patreon-event"] || null;
+    console.warn(`Patreon webhook ELUTASÍTVA (hibás aláírás) [${event}] aláírás: ${sig ? "van" : "nincs"}`);
+    logSecurityEvent({
+      req, type: "patreon_webhook_bad_signature", severity: "warn",
+      details: { event, hasSignature: !!sig, bodyBytes: req.body?.length ?? null },
+      dedupeKey: "patreon-webhook",
+    });
+    return res.status(401).end();
   }
 
   // A Patreon a "Send test" gombbal (és néha éles eseményeknél is) a régi,

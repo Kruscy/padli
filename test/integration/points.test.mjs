@@ -1,6 +1,7 @@
 // Pontok és fizetés: párhuzamos költés, gift-vásárlás, Stripe-webhook idempotencia.
 import { test, describe, before, after } from "node:test";
 import assert from "node:assert/strict";
+import crypto from "crypto";
 import Stripe from "stripe";
 import { hasDb, startApp, client } from "../helpers/server.mjs";
 import { createFixtures, PASSWORD } from "../helpers/fixtures.mjs";
@@ -70,5 +71,26 @@ describe("pontok és fizetés", { skip: !hasDb && "nincs teszt-adatbázis (PG* k
       method: "POST", headers: { "content-type": "application/json", "stripe-signature": "t=1,v1=hamis" }, body: payload,
     });
     assert.equal(bad.status, 400, "hamis aláírás elutasítva");
+  });
+
+  test("Patreon-webhook: csak érvényes aláírással, titok nélkül sehogy", async () => {
+    const body = JSON.stringify({ data: {} });
+    const send = (sig) => fetch(`${app.baseUrl}/api/patreon/webhook`, {
+      method: "POST", body,
+      headers: { "content-type": "application/json", "x-patreon-event": "teszt:nem-releváns", ...(sig ? { "x-patreon-signature": sig } : {}) },
+    });
+    const prev = process.env.PATREON_WEBHOOK_SECRET;
+    try {
+      process.env.PATREON_WEBHOOK_SECRET = "teszt-patreon-titok";
+      const good = crypto.createHmac("md5", "teszt-patreon-titok").update(body).digest("hex");
+      assert.equal((await send(good)).status, 200);
+      assert.equal((await send("0".repeat(32))).status, 401);
+      assert.equal((await send("é")).status, 401, "több bájtos aláírás sem dob hibát");
+      assert.equal((await send(null)).status, 401);
+      delete process.env.PATREON_WEBHOOK_SECRET;
+      assert.equal((await send(good)).status, 503, "titok nélkül nem fogad el semmit");
+    } finally {
+      if (prev === undefined) delete process.env.PATREON_WEBHOOK_SECRET; else process.env.PATREON_WEBHOOK_SECRET = prev;
+    }
   });
 });
