@@ -16,6 +16,8 @@ services:
       - ./public/blog:/app/public/blog
       # Logok
       - ./logs:/app/logs
+      # PadliCrome-bővítmény munkaprojektjei (feltöltött / fordított képek)
+      - ./padlicrome:/mnt/manga2/padlicrome
       # Manga képek — a MANGA_ROOT env változóban beállított útvonal
       # Fontos: a konténeren belül ugyanaz az útvonal legyen mint a hoszton
       - ${MANGA_ROOT:-/mnt/manga}:${MANGA_ROOT:-/mnt/manga}:ro
@@ -33,8 +35,10 @@ services:
     volumes:
       # Adatbázis adatok perzisztálása
       - postgres_data:/var/lib/postgresql/data
-      # Séma automatikus betöltése első indításkor
+      # Séma és migrációk automatikus betöltése első indításkor
       - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./docker/initdb/02-migrations.sh:/docker-entrypoint-initdb.d/02-migrations.sh:ro
+      - ./server/scripts/migrations:/migrations:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${PGUSER:-padli} -d ${PGDATABASE:-padli}"]
       interval: 5s

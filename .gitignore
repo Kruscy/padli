@@ -8,6 +8,7 @@ node_modules/
 libraries.jsos
 logs/
 uploads/
+/padlicrome/
 # SSH kulcsok és titkos fájlok
 medvedisznoember1990
 medvedisznoember1990.pub

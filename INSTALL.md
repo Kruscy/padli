@@ -13,13 +13,16 @@ nano .env
 
 # Az app konténer nem rootként, hanem a "node" (uid 1000) felhasználóként fut:
 # a bind mountolt mappák legyenek az övéi, különben a feltöltés/naplózás nem tud írni
-mkdir -p uploads logs public/blog
-sudo chown -R 1000:1000 uploads logs public/blog
+mkdir -p uploads logs public/blog padlicrome
+sudo chown -R 1000:1000 uploads logs public/blog padlicrome
 
 docker compose up -d
 ```
 
-Az első indításkor a `db` service automatikusan betölti a `schema.sql` sémát.
+Az első indításkor a `db` service automatikusan betölti a `schema.sql` sémát,
+majd lefuttatja a `server/scripts/migrations/*.sql` migrációkat. Meglévő
+adatbázisnál az új migrációkat kézzel kell futtatni, pl.:
+`docker compose exec -T db psql -U padli -d padli < server/scripts/migrations/<fájl>.sql`
 
 Az app konténernek van healthchecke (`GET /api/health` — a szerver és az
 adatbázis elérhetőségét jelzi); állapota: `docker compose ps`.
