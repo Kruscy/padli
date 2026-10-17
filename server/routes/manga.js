@@ -13,6 +13,9 @@ const router = express.Router();
 
 // /image: fejezetenkénti útvonal- és jogosultsági adatok (lásd lent)
 const imageChapterCache = createTtlCache({ ttlMs: 60 * 1000, maxEntries: 2000 });
+// Kezdőlapi / lista-végpontok: minden oldalbetöltésnél a teljes mangatáblán
+// aggregáltak; rövid ideig (a változás max. ennyi késéssel látszik) cache-eljük
+const listCache = createTtlCache({ ttlMs: 60 * 1000, maxEntries: 20 });
 /* ================= HELPERS ================= */
 
 function extractPageNumber(filename) {
@@ -42,7 +45,7 @@ router.get("/manga", requireLogin, async (req, res) => {
     // elrejtve a felületen.
     const adultMode = await resolveAdultMode(pool, req);
 
-    const { rows } = await pool.query(`
+    const rows = await listCache.wrap(`manga|${adultMode}`, async () => (await pool.query(`
       SELECT m.title, m.slug, m.cover_url,
         COUNT(DISTINCT c.id)::int AS chapter_count
       FROM manga m
@@ -50,7 +53,7 @@ router.get("/manga", requireLogin, async (req, res) => {
       WHERE ${ADULT_GENRE_EXISTS_SQL} = $1
       GROUP BY m.id
       ORDER BY m.title
-    `, [adultMode]);
+    `, [adultMode])).rows);
     res.json(rows);
   } catch (e) {
     console.error(e);
@@ -59,7 +62,7 @@ router.get("/manga", requireLogin, async (req, res) => {
 });
 router.get("/manga-list", requireLogin, async (_req, res) => {
   try {
-    const { rows } = await pool.query(`
+    const rows = await listCache.wrap("manga-list", async () => (await pool.query(`
       SELECT
         m.slug,
     m.anilist_id,
@@ -74,7 +77,7 @@ router.get("/manga-list", requireLogin, async (_req, res) => {
       LEFT JOIN manga_tag mt ON mt.manga_id = m.id
       LEFT JOIN tag t ON t.id = mt.tag_id
       GROUP BY m.id
-    `);
+    `)).rows);
 
     // slug → { genres, tags } map
     const result = {};
@@ -469,6 +472,13 @@ ORDER BY
 
 router.get("/featured", requireLogin, async (req, res) => {
   const adultMode = await resolveAdultMode(pool, req);
+  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+
+  // A napi kiválasztás egy napon belül ugyanaz → nem kell minden
+  // kezdőlap-betöltésnél az összes leírást lekérni és újrakeverni
+  const cached = listCache.get(`featured|${today}|${adultMode}`);
+  if (cached) return res.json(cached);
+
   const { rows } = await pool.query(`
     SELECT title, slug, cover_url, description
     FROM manga m
@@ -476,8 +486,6 @@ router.get("/featured", requireLogin, async (req, res) => {
       AND description IS NOT NULL
       AND ${ADULT_GENRE_EXISTS_SQL} = $1
   `, [adultMode]);
-
-  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
 
   // egyszerű seedelt random
   function seededRandom(seed) {
@@ -495,7 +503,9 @@ router.get("/featured", requireLogin, async (req, res) => {
 
   const shuffled = [...rows].sort(() => rand() - 0.5);
 
-  res.json(shuffled.slice(0, 5));
+  const featured = shuffled.slice(0, 5);
+  listCache.set(`featured|${today}|${adultMode}`, featured);
+  res.json(featured);
 });
 
 export default router;

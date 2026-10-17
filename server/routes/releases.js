@@ -2,10 +2,11 @@ import express from "express";
 import { pool } from "../db.js";
 import { requireLogin } from "../middleware/auth.js";
 import { resolveAdultMode, ADULT_GENRE_EXISTS_SQL } from "../lib/age.js";
-import {
-  getNewReleasesCache,
-  setNewReleasesCache
-} from "../cache/new-releases.js";
+import { createTtlCache } from "../lib/ttl-cache.js";
+
+// Minden kezdőlap-betöltésnél lefutott; 2 percig cache-eljük (az új
+// fejezetek ennyi késéssel jelennek meg a listában)
+const releasesCache = createTtlCache({ ttlMs: 2 * 60 * 1000, maxEntries: 4 });
 
 const router = express.Router();
 
@@ -13,7 +14,7 @@ const router = express.Router();
 
 router.get("/new-releases", requireLogin, async (req, res) => {
   const adultMode = await resolveAdultMode(pool, req);
-  const { rows } = await pool.query(`
+  const rows = await releasesCache.wrap(String(adultMode), async () => (await pool.query(`
     SELECT
       m.title,
       m.slug,
@@ -27,7 +28,7 @@ router.get("/new-releases", requireLogin, async (req, res) => {
     GROUP BY m.id
     ORDER BY latest_scan DESC
     LIMIT 50
-  `, [adultMode]);
+  `, [adultMode])).rows);
 
   res.json(rows);
 });
