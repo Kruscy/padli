@@ -74,49 +74,51 @@ router.post("/manga/:slug", async (req, res) => {
     );
     if (!mangaRes.rows.length) return res.status(404).json({ error: "Not found" });
     const mangaId = mangaRes.rows[0].id;
-await pool.query(
-  `UPDATE manga SET
-    cover_url = COALESCE($1, cover_url),
-    description = COALESCE($2, description),
-    title = COALESCE($3, title),
-    uploaders = $4::text[],
-    anilist_id = CASE WHEN $5::int IS NOT NULL THEN $5::int ELSE anilist_id END,
-    status = CASE WHEN $6::boolean THEN $7::text ELSE status END
-   WHERE id = $8`,
-  [cover_url || null, description || null, title || null,
-   uploaders || [], anilist_id || null,
-   statusValue !== undefined, statusValue ?? null, mangaId]
-);
-    if (genres) {
-      await pool.query(`DELETE FROM manga_genre WHERE manga_id = $1`, [mangaId]);
-      for (const g of genres) {
-        const gRes = await pool.query(
-          `INSERT INTO genre (name) VALUES ($1)
-           ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
-           RETURNING id`, [g]
-        );
-        await pool.query(
-          `INSERT INTO manga_genre (manga_id, genre_id) VALUES ($1, $2)
-           ON CONFLICT DO NOTHING`,
-          [mangaId, gRes.rows[0].id]
-        );
-      }
-    }
 
-    if (tags) {
-      await pool.query(`DELETE FROM manga_tag WHERE manga_id = $1`, [mangaId]);
-      for (const t of tags) {
-        const tRes = await pool.query(
-          `INSERT INTO tag (name) VALUES ($1)
-           ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
-           RETURNING id`, [t]
+    // Egy tranzakcióban: korábban egy félbeszakadt kérés után a műfajok/címkék
+    // törölve maradhattak; és műfajonként/címkénként 2 külön lekérdezés helyett
+    // csoportosan írunk.
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        `UPDATE manga SET
+          cover_url = COALESCE($1, cover_url),
+          description = COALESCE($2, description),
+          title = COALESCE($3, title),
+          uploaders = $4::text[],
+          anilist_id = CASE WHEN $5::int IS NOT NULL THEN $5::int ELSE anilist_id END,
+          status = CASE WHEN $6::boolean THEN $7::text ELSE status END
+         WHERE id = $8`,
+        [cover_url || null, description || null, title || null,
+         uploaders || [], anilist_id || null,
+         statusValue !== undefined, statusValue ?? null, mangaId]
+      );
+
+      for (const [list, table, link, extraCol] of [
+        [genres, "genre", "manga_genre", ""],
+        [tags, "tag", "manga_tag", ", rank"],
+      ]) {
+        if (!list) continue;
+        const names = [...new Set(list.map(String).filter(Boolean))];
+        await client.query(`DELETE FROM ${link} WHERE manga_id = $1`, [mangaId]);
+        if (!names.length) continue;
+        await client.query(
+          `INSERT INTO ${table} (name) SELECT unnest($1::text[]) ON CONFLICT (name) DO NOTHING`, [names]
         );
-        await pool.query(
-          `INSERT INTO manga_tag (manga_id, tag_id, rank) VALUES ($1, $2, 0)
+        await client.query(
+          `INSERT INTO ${link} (manga_id, ${table}_id${extraCol})
+           SELECT $1, id${extraCol ? ", 0" : ""} FROM ${table} WHERE name = ANY($2::text[])
            ON CONFLICT DO NOTHING`,
-          [mangaId, tRes.rows[0].id]
+          [mangaId, names]
         );
       }
+      await client.query("COMMIT");
+    } catch (txErr) {
+      await client.query("ROLLBACK").catch(() => {});
+      throw txErr;
+    } finally {
+      client.release();
     }
 
     res.json({ ok: true });
