@@ -29,6 +29,10 @@ export const sessionMiddleware = session({
     pool,
     tableName: "session",
     pruneSessionInterval: 60 * 60,
+    // A "touch" minden kérésnél (képenként is) egy UPDATE volt: csak a DB-beli
+    // lejáratot tolta ki, a süti lejárata viszont (rolling nélkül) a
+    // belépéskor rögzül — a felhasználónak semmit nem adott.
+    disableTouch: true,
   }),
   name: "padlizsan.sid",
   secret: process.env.SESSION_SECRET || "dev-secret-change-me",

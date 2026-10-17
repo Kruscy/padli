@@ -18,6 +18,9 @@ export async function billingAddressGate(req, res, next) {
   // semmi köze a feltöltéshez, felesleges DB-lekérdezést adott hozzá
   // minden egyes fájlhoz (pl. 300 képes köteg = 300 felesleges query).
   if (req.path.startsWith("/uploader/")) return next();
+  // Ugyanígy a képek: egy fejezet 60+ képkérés, a gate pedig fejezet-szinten
+  // (a /pages kérésnél) úgyis megállítja a felhasználót
+  if (req.method === "GET" && req.path.startsWith("/image/")) return next();
 
   try {
     const { rows } = await pool.query(
