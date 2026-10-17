@@ -33,6 +33,11 @@ export async function subscribeToTier(tierId) {
 }
 
 window._paywallSubscribe  = subscribeToTier;
+// Előfizetés-gombok (inline onclick helyett — CSP: script-src-attr)
+document.addEventListener("click", e => {
+  const btn = e.target.closest(".paywall-tier-btn[data-tier]");
+  if (btn) subscribeToTier(btn.dataset.tier);
+});
 window._buildPaywallHTML  = buildPaywallHTML;
 
 export function buildPaywallHTML({ patreonConnected, returnUrl = "" }) {
@@ -44,8 +49,7 @@ export function buildPaywallHTML({ patreonConnected, returnUrl = "" }) {
       <div class="paywall-tier-price">${t.price.toLocaleString("hu-HU")} Ft<span class="paywall-tier-mo">/hó</span></div>
       <div class="paywall-tier-desc">${t.desc}</div>
       <button class="paywall-tier-btn" data-tier="${t.id}"
-        style="background:${t.color}"
-        onclick="window._paywallSubscribe('${t.id}')">
+        style="background:${t.color}">
         Előfizetés
       </button>
     </div>

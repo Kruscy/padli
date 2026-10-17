@@ -3,6 +3,8 @@
   const token  = params.get("token");
   const status = params.get("status");
   const box    = document.getElementById("box");
+  // Az "Új link kérése" gomb (inline onclick helyett — CSP: script-src-attr)
+  box.addEventListener("click", e => { if (e.target.closest("#resendBtn")) window.resend(); });
 
   async function render(icon, title, body) {
     box.innerHTML = `<div class="verify-icon">${icon}</div><h2>${title}</h2>${body}`;
@@ -40,7 +42,7 @@
     return `
       <div id="resendSection">
         <input type="email" id="resendEmail" placeholder="email@example.com">
-        <button onclick="resend()">📨 Új link kérése</button>
+        <button id="resendBtn">📨 Új link kérése</button>
         <div id="resendMsg"></div>
       </div>`;
   }

@@ -46,10 +46,10 @@ function createBugModal() {
 
       <!-- TAB VÁLASZTÓ -->
       <div style="display:flex; padding:12px 20px 0; gap:8px; flex-shrink:0;">
-        <button id="bugTabImage" class="bug-tab-btn bug-tab-active" onclick="switchBugTab('image')">
+        <button id="bugTabImage" class="bug-tab-btn bug-tab-active">
           📄 Képhiba
         </button>
-        <button id="bugTabChapter" class="bug-tab-btn" onclick="switchBugTab('chapter')">
+        <button id="bugTabChapter" class="bug-tab-btn">
           📕 Részszintű hiba
         </button>
       </div>
@@ -319,6 +319,9 @@ function createBugModal() {
   document.head.appendChild(style);
 
   document.body.appendChild(modal);
+  // Tab-gombok (inline onclick helyett — CSP: script-src-attr)
+  document.getElementById("bugTabImage")?.addEventListener("click", () => switchBugTab("image"));
+  document.getElementById("bugTabChapter")?.addEventListener("click", () => switchBugTab("chapter"));
   initBugModalEvents(modal);
 }
 

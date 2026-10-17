@@ -336,3 +336,6 @@ function waitForAuth() {
 window.reloadMangaGrid = loadMangas;
 
 document.addEventListener("DOMContentLoaded", waitForAuth);
+
+// Inline onclick helyett (CSP: script-src-attr)
+document.getElementById("sortChaptersBtn")?.addEventListener("click", cycleSortChapters);

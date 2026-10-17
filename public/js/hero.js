@@ -1,5 +1,10 @@
 (async function () {
   const heroContent = document.getElementById("heroContent");
+  // A kiírás-gombok kattintása (inline onclick helyett — CSP: script-src-attr)
+  heroContent?.addEventListener("click", e => {
+    const btn = e.target.closest("[data-announcement]");
+    if (btn) window.openAnnouncement(Number(btn.dataset.announcement));
+  });
   const heroInner = heroContent.querySelector(".hero-inner");
   const prevBtn = document.getElementById("heroPrev");
   const nextBtn = document.getElementById("heroNext");
@@ -92,7 +97,7 @@
           <div class="hero-card-tag">Kiírás</div>
           <h2>${escHtml(item.title)}</h2>
           <div class="hero-card-text">${formatBody(item.body || "")}</div>
-          <button class="hero-btn" onclick="openAnnouncement(${item.id})">
+          <button class="hero-btn" data-announcement="${Number(item.id)}">
             Részletek →
           </button>
         </div>
