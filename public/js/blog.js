@@ -142,7 +142,7 @@ function makeCard(post) {
   a.href = `/blog-post.html?slug=${encodeURIComponent(post.slug)}`;
   a.innerHTML = `
     ${post.cover_url
-      ? `<img src="${post.cover_url}" alt="${esc(post.title)}" class="blog-card-thumb" loading="lazy">`
+      ? `<img src="${esc(post.cover_url)}" alt="${esc(post.title)}" class="blog-card-thumb" loading="lazy">`
       : `<div class="blog-card-thumb-placeholder">${catIcon}</div>`
     }
     <div class="blog-card-body">

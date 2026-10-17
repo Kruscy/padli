@@ -1,4 +1,10 @@
 let isAdmin = false;
+
+// A címek, borítók és felhasználónevek külső API-ból / felhasználótól
+// jönnek → HTML-be csak escape-elve kerülhetnek
+function esc(str) {
+  return String(str ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
 let anilistToSlug = {};
 let malToSlug = {};
 let mangadexToSlug = {};
@@ -94,7 +100,7 @@ function renderWishlist(items, containerId) {
     if (item.claimed_by && item.claimed_by.length > 0) {
       badges += `
         <div class="claimed-badge" style="background:#10b981; color:white;">
-          🔧 Dolgoznak rajta: ${item.claimed_by.map(u => u.username).join(", ")}
+          🔧 Dolgoznak rajta: ${esc(item.claimed_by.map(u => u.username).join(", "))}
         </div>
       `;
     }
@@ -102,21 +108,21 @@ function renderWishlist(items, containerId) {
     if (item.planned_by && item.planned_by.length > 0) {
       badges += `
         <div class="claimed-badge" style="background:#8b5cf6; color:white; margin-top:5px;">
-          📅 Tervben van: ${item.planned_by.map(u => u.username).join(", ")}
+          📅 Tervben van: ${esc(item.planned_by.map(u => u.username).join(", "))}
         </div>
       `;
     }
 
     div.innerHTML = `
-      <img src="${item.cover_url}" onclick="showImage('${item.cover_url}')">
+      <img src="${esc(item.cover_url)}" data-action="image">
 
       <div class="wish-info">
-        <h3>${item.title}</h3>
+        <h3>${esc(item.title)}</h3>
         
         ${badges}
 
         <div class="wish-stats">
-          <span class="chapters">${item.episodes || "?"} ch</span>
+          <span class="chapters">${esc(item.episodes || "?")} ch</span>
           🍆 ${Number(item.likes_count) || 0}
         </div>
 
@@ -124,32 +130,39 @@ function renderWishlist(items, containerId) {
       </div>
 
       <div class="wish-actions">
-        <button onclick="toggleLike(${item.id})"
+        <button data-action="toggleLike"
           class="${item.liked_by_me ? "liked" : ""}">
           🍆
         </button>
 
         ${isAdmin ? `
           <button 
-            onclick="claim(${item.id})"
+            data-action="claim"
             class="${item.claimed_by_me ? 'active-claim' : ''}"
             style="background:${item.claimed_by_me ? '#10b981' : '#2f3651'}">
             ${item.claimed_by_me ? '✓ Dolgozom rajta' : '🔧 Claim'}
           </button>
           
           <button 
-            onclick="plan(${item.id})"
+            data-action="plan"
             class="${item.planned_by_me ? 'active-plan' : ''}"
             style="background:${item.planned_by_me ? '#8b5cf6' : '#2f3651'}">
             ${item.planned_by_me ? '✓ Tervezve' : '📅 Tervben'}
           </button>
           
-          <button onclick="removeWish(${item.id})" style="background:#ef4444">
+          <button data-action="removeWish" style="background:#ef4444">
             🗑
           </button>
         ` : ""}
       </div>
     `;
+
+    // Inline onclick helyett eseményfigyelők (CSP: script-src-attr)
+    const actions = { toggleLike, claim, plan, removeWish };
+    div.querySelectorAll("[data-action]").forEach(el => {
+      const act = el.dataset.action;
+      el.addEventListener("click", () => act === "image" ? showImage(item.cover_url) : actions[act](item.id));
+    });
 
     list.appendChild(div);
   });
@@ -204,10 +217,10 @@ async function search(q) {
     const badge = SOURCE_BADGE[m.source];
 
     div.innerHTML = `
-      <img src="${m.coverImage?.medium}">
+      <img src="${esc(m.coverImage?.medium)}">
       <div>
-        <div>${m.title.english || m.title.romaji}${badge ? ` <small style="opacity:.6">(${badge})</small>` : ''}</div>
-        <small>${m.chapters || "?"} fejezet</small>
+        <div>${esc(m.title.english || m.title.romaji)}${badge ? ` <small style="opacity:.6">(${badge})</small>` : ''}</div>
+        <small>${esc(m.chapters || "?")} fejezet</small>
       </div>
     `;
 
@@ -297,7 +310,7 @@ function showImage(src) {
   `;
 
   overlay.innerHTML = `
-    <img src="${src}" style="max-height:90%; border-radius:12px;">
+    <img src="${esc(src)}" style="max-height:90%; border-radius:12px;">
   `;
 
   overlay.onclick = () => overlay.remove();

@@ -43,10 +43,13 @@ export function initSearch() {
       const div = document.createElement("div");
       div.className = "search-item";
 
-      div.innerHTML = `
-        <img src="${m.cover_url || "/assets/no-cover.png"}" alt="">
-        <span>${m.title}</span>
-      `;
+      // A cím/borító a DB-ből (AniList/admin) jön → szövegként, nem HTML-ként
+      const img = document.createElement("img");
+      img.src = m.cover_url || "/assets/no-cover.png";
+      img.alt = "";
+      const span = document.createElement("span");
+      span.textContent = m.title;
+      div.append(img, span);
 
       div.addEventListener("click", () => {
         window.location.href = `/chapters.html?slug=${encodeURIComponent(m.slug)}`;

@@ -179,7 +179,7 @@ function openSyncModal() {
     const keepAnilist = m.anilistProgress > m.padliProgress;
     return `
       <div class="sync-row" data-index="${i}">
-        <img src="${m.cover_url || "/assets/no-cover.png"}" alt="">
+        <img src="${escapeHtml(m.cover_url || "/assets/no-cover.png")}" alt="">
         <div style="flex:1; min-width:0;">
           <div class="sync-title">${escapeHtml(m.title)}</div>
           <div class="sync-values">

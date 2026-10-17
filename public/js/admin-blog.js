@@ -44,7 +44,7 @@
       item.className = "blog-list-item" + (editingSlug === p.slug ? " active" : "");
       item.innerHTML = `
         ${p.cover_url
-          ? `<img src="${p.cover_url}" class="blog-list-thumb" loading="lazy">`
+          ? `<img src="${esc(p.cover_url)}" class="blog-list-thumb" loading="lazy">`
           : `<div class="blog-list-thumb-placeholder">📝</div>`}
         <div class="blog-list-info">
           <h4>${esc(p.title)}</h4>

@@ -139,7 +139,7 @@
       <a href="/chapters.html?slug=${encodeURIComponent(item.slug)}" class="stats-item">
         <div class="stats-rank">${i + 1}</div>
         ${item.cover_url
-          ? `<img src="${item.cover_url}" class="stats-cover" loading="lazy" alt="">`
+          ? `<img src="${escHtml(item.cover_url)}" class="stats-cover" loading="lazy" alt="">`
           : `<div class="stats-cover-ph">📚</div>`}
         <div class="stats-info">
           <div class="stats-manga-title">${escHtml(item.title)}</div>
