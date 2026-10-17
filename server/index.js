@@ -1,11 +1,9 @@
 import express from "express";
 import { errorHandler } from "./lib/async-errors.js";
-import { pool } from "./db.js";
 import path from "path";
 import { Readable } from "stream";
 import { fileURLToPath } from "url";
-import session from "express-session";
-import connectPgSimple from "connect-pg-simple";
+import { sessionMiddleware } from "./session.js";
 import helmet from "helmet";
 import { rateLimit, ipKeyGenerator } from "express-rate-limit";
 import routes from "./routes.js";
@@ -20,8 +18,6 @@ import "./discord-bot.js";
 import cron from "node-cron";
 import { generateBlogPost } from "./scripts/blog-auto-generator.js";
 import { generateSitemap } from "./sitemap-generator.js";
-
-const PgSession = connectPgSimple(session);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -128,28 +124,8 @@ app.use("/api/patreon/webhook", express.raw({ type: "application/json" }));
 /* ===== BODY PARSER ===== */
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: false }));
-/* ===== SESSION (AUTH) ===== */
-app.use(
-  session({
-    store: new PgSession({
-      // Közös pool az alkalmazással (külön conString-gel egy második,
-      // hibakezelő nélküli pool jött létre)
-      pool,
-      tableName: "session",
-      pruneSessionInterval: 60 * 60,
-    }),
-    name: "padlizsan.sid",
-    secret: process.env.SESSION_SECRET || "dev-secret-change-me",
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      httpOnly: true,
-      secure: isProd,
-      sameSite: "lax",
-      maxAge: 30 * 24 * 60 * 60 * 1000,
-    },
-  })
-);
+/* ===== SESSION (AUTH) — lásd server/session.js ===== */
+app.use(sessionMiddleware);
 
 /* ===== BUILD VERSION (cache busting) ===== */
 import { readFileSync, existsSync } from "fs";
