@@ -16,9 +16,12 @@ id_ed25519.pub
 *.key
 id_rsa
 id_ed25519
-# Cache
-cache/
+# Cache — csak a gyökérben lévő cache/ mappa és a generált JSON-ok;
+# a server/cache/*.js modulok a kód részei (korábban a "cache/" minta
+# kizárta a new-manga.js-t, és a CI-image nem indult el nélküle)
+/cache/
 server/cache/*.json
+server/cache/*.tmp
 
 # Szerkesztő-mentésfájlok (pl. ..env.swp — titkos adatot tartalmazhat)
 *.swp
