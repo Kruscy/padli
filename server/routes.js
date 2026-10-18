@@ -4,7 +4,7 @@ import path from "path";
 import { pool } from "./db.js";
 import { requireLogin } from "./middleware/auth.js";
 import adminRoutes from "./routes/admin.js";
-import { SCAN_OWNER_USER_ID } from "./lib/scan-runner.js";
+import { getSite, isOwner } from "./lib/site-config.js";
 import { getClientIp } from "./lib/client-ip.js";
 import { logSecurityEvent } from "./lib/security-log.js";
 import { validatePassword, comparePasswordSafe, hashToken, destroyUserSessions,
@@ -74,7 +74,7 @@ function aiLimiter(name, max) {
 function verificationEmailHtml(username, link) {
   return `
   <div style="font-family:sans-serif;max-width:520px;margin:0 auto;background:#1a1a2e;color:#e0e0e0;border-radius:12px;padding:32px 28px">
-    <img src="https://padlizsanfansub.hu/assets/logo.png" style="height:48px;margin-bottom:20px" alt="PadlizsanFanSub">
+    <img src="${getSite().url}/assets/logo.png" style="height:48px;margin-bottom:20px" alt="PadlizsanFanSub">
     <h2 style="color:#a78bfa;margin:0 0 12px">Erősítsd meg az email címed!</h2>
     <p style="color:#bbb;line-height:1.7">Szia <strong style="color:#fff">${username || "Felhasználó"}</strong>! Köszönjük a regisztrációt a PadlizsanFanSub oldalon.</p>
     <p style="color:#bbb;line-height:1.7">Kattints az alábbi gombra az email cím megerősítéséhez:</p>
@@ -213,7 +213,7 @@ router.post("/auth/register", async (req, res) => {
     logSecurityEvent({ req, type: "register", userId: ins.rows[0]?.id, username,
                        details: { emailDomain: String(email).split("@")[1]?.toLowerCase() || null } });
 
-    const verifyLink = `${process.env.BASE_URL || "https://padlizsanfansub.hu"}/verify-email.html?token=${rawToken}`;
+    const verifyLink = `${getSite().url}/verify-email.html?token=${rawToken}`;
     await sendMail({
       to: email,
       subject: "✉️ Erősítsd meg az email címed – PadlizsanFanSub",
@@ -257,7 +257,7 @@ router.post("/auth/forgot-password", async (req, res) => {
     }
 
     const resetLink =
-      `https://padlizsanfansub.hu/reset-password.html?token=${token}`;
+      `${getSite().url}/reset-password.html?token=${token}`;
 
     // Nem várjuk meg és nem adjuk vissza a levélküldés eredményét: létező
     // fióknál korábban SMTP-hiba esetén 500 jött (nem létezőnél 200), és a
@@ -446,7 +446,7 @@ router.post("/auth/resend-verification", async (req, res) => {
       [hashedToken, rows[0].id]
     );
 
-    const verifyLink = `${process.env.BASE_URL || "https://padlizsanfansub.hu"}/verify-email.html?token=${rawToken}`;
+    const verifyLink = `${getSite().url}/verify-email.html?token=${rawToken}`;
     await sendMail({
       to: email,
       subject: "✉️ Email megerősítése – PadlizsanFanSub",
@@ -474,11 +474,11 @@ router.get("/auth/me", async (req, res) => {
       email: userRes.rows[0]?.email || null,
       email_verified: userRes.rows[0]?.email_verified ?? true,
       can_upload: userRes.rows[0]?.can_upload || false,
-      can_scan: req.session.user.id === SCAN_OWNER_USER_ID,
-      can_security: req.session.user.id === SCAN_OWNER_USER_ID,
+      can_scan: isOwner(req.session.user.id),
+      can_security: isOwner(req.session.user.id),
     });
   } catch {
-    res.json({ ...req.session.user, can_scan: req.session.user.id === SCAN_OWNER_USER_ID, can_security: req.session.user.id === SCAN_OWNER_USER_ID });
+    res.json({ ...req.session.user, can_scan: isOwner(req.session.user.id), can_security: isOwner(req.session.user.id) });
   }
 });
 

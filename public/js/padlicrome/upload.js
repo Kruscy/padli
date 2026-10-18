@@ -189,7 +189,7 @@ function showTooManyModal(urls, available) {
 
   // Exe letöltés
   document.getElementById("pcTooManyExe")?.addEventListener("click", () => {
-    window.open("https://padlizsanfansub.hu/downloads/Padli-Keposszefu.exe", "_blank");
+    window.open("/downloads/Padli-Keposszefu.exe", "_blank");
     modal.style.display = "none";
   }, { once: true });
 

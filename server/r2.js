@@ -1,6 +1,8 @@
 import { S3Client, HeadObjectCommand, ListObjectsV2Command, DeleteObjectsCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
+import path from "path";
+import { UPLOADER_BASE_DIR } from "./lib/paths.js";
 
 export const r2 = new S3Client({
   region: "auto",
@@ -31,11 +33,14 @@ export async function objectExists(key) {
 // /mnt/manga/Kavita/{user}/{manga}/{chapter}/{file} → manga/kavita/{user}/{manga}/{chapter}/{file}
 // /opt/padli/uploads/{file}                        → uploads/{file}
 export function localPathToR2Key(absolutePath) {
-  if (absolutePath.startsWith("/mnt/manga/Kavita/")) {
-    return "manga/kavita/" + absolutePath.slice("/mnt/manga/Kavita/".length);
+  const uploaderBase = UPLOADER_BASE_DIR + "/";
+  if (absolutePath.startsWith(uploaderBase)) {
+    return "manga/kavita/" + absolutePath.slice(uploaderBase.length);
   }
-  if (absolutePath.startsWith("/opt/padli/uploads/")) {
-    return "uploads/" + absolutePath.slice("/opt/padli/uploads/".length);
+  // A feltöltések mappája: az eredeti telepítésen /opt/padli/uploads,
+  // máshol (pl. Docker: /app/uploads) a munkakönyvtár uploads/ mappája
+  for (const uploads of ["/opt/padli/uploads/", path.resolve("uploads") + "/"]) {
+    if (absolutePath.startsWith(uploads)) return "uploads/" + absolutePath.slice(uploads.length);
   }
   throw new Error(`Ismeretlen útvonal: ${absolutePath}`);
 }

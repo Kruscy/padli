@@ -10,6 +10,8 @@ async function checkBirthDate() {
 }
 
 function showBirthDatePopup() {
+  const SITE = (() => { try { return JSON.parse(document.querySelector('meta[name="site-config"]')?.content || "{}"); } catch { return {}; } })();
+  const siteNameHtml = String(SITE.name || "PadlizsanFanSub").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const overlay = document.createElement("div");
   overlay.id = "birthDateOverlay";
   overlay.style.cssText = `
@@ -36,7 +38,7 @@ function showBirthDatePopup() {
       color: #fff;
     ">
       <div style="font-size: 2.5rem; margin-bottom: 1rem;">🍆</div>
-      <h2 style="margin: 0 0 0.5rem; font-size: 1.3rem;">Üdvözlünk a PadlizsanFanSub-on!</h2>
+      <h2 style="margin: 0 0 0.5rem; font-size: 1.3rem;">Üdvözlünk a ${siteNameHtml}-on!</h2>
       <p style="color: #aaa; font-size: 0.9rem; margin-bottom: 1.5rem;">
         Kérjük add meg a születési dátumodat a folytatáshoz.
       </p>

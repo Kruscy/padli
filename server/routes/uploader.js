@@ -10,6 +10,7 @@ import { findExistingSeries } from "../lib/manga-duplicates.js";
 import { logSecurityEvent } from "../lib/security-log.js";
 import { isImageBuffer } from "../lib/safe-path.js";
 import { serverError } from "../lib/async-errors.js";
+import { UPLOADER_BASE_DIR } from "../lib/paths.js";
 
 const r2 = new S3Client({
   region: "auto",
@@ -71,7 +72,7 @@ function drainR2Queue() {
 setInterval(drainR2Queue, 10_000);
 
 const router = express.Router();
-const BASE_DIR = "/mnt/manga/Kavita";
+const BASE_DIR = UPLOADER_BASE_DIR;
 
 const upload = multer({
   storage: multer.memoryStorage(),

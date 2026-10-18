@@ -767,3 +767,10 @@ CREATE TABLE IF NOT EXISTS public.uploader_user_map (
     user_id       INTEGER NOT NULL REFERENCES public.users(id) ON DELETE CASCADE
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uploader_user_map_name_idx ON public.uploader_user_map (lower(uploader_name));
+
+-- Oldal-beállítások (white-label, telepítő varázsló) — server/lib/site-config.js
+CREATE TABLE IF NOT EXISTS public.site_settings (
+    key        TEXT PRIMARY KEY,
+    value      TEXT,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

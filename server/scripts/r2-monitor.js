@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Napi R2 monitor: összehasonlítja a mai és tegnapi objektumlistát,
-// ha törlés észlelhető → notification a 5-ös usernek (Ascyra)
+// ha törlés észlelhető → notification az oldal tulajdonosának (OWNER_USER_ID / site_settings)
 
 import { S3Client, ListObjectsV2Command } from "@aws-sdk/client-s3";
 import pg from "pg";
@@ -11,7 +11,6 @@ import "dotenv/config";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SNAPSHOT_DIR = "/opt/padli/logs/r2-snapshots";
-const NOTIFY_USER_ID = 5;
 
 const r2 = new S3Client({
   region: "auto",
@@ -64,10 +63,13 @@ function yesterdayStr() {
 }
 
 async function sendNotification(message, link = null) {
+  // A tulajdonos: OWNER_USER_ID, különben a telepítő/admin által mentett beállítás
   await pool.query(
     `INSERT INTO notifications (user_id, type, message, link)
-     VALUES ($1, 'r2_deletion', $2, $3)`,
-    [NOTIFY_USER_ID, message, link]
+     SELECT owner, 'r2_deletion', $2, $3 FROM (
+       SELECT COALESCE($1::int, (SELECT value::int FROM site_settings WHERE key = 'ownerUserId')) AS owner
+     ) o WHERE owner IS NOT NULL`,
+    [process.env.OWNER_USER_ID || null, message, link]
   );
   console.log("Notification elküldve:", message);
 }

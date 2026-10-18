@@ -47,7 +47,7 @@ function renderPodium(top3) {
     const div = document.createElement('div');
     div.className = `podium-place ${places[i]}`;
 
-    const avatarSrc = user.avatar || 'https://padlizsanfansub.hu/assets/logo.png';
+    const avatarSrc = user.avatar || '/assets/logo.png';
     const avatarEl = `<img class="podium-avatar" src="${esc(avatarSrc)}" alt="${esc(user.username)}">`;
 
     div.innerHTML = `
@@ -76,7 +76,7 @@ function renderList(users, startRank) {
     const item = document.createElement('div');
     item.className = 'leaderboard-item';
 
-    const avatarSrc = user.avatar || 'https://padlizsanfansub.hu/assets/logo.png';
+    const avatarSrc = user.avatar || '/assets/logo.png';
     const avatarEl = `<img class="leaderboard-avatar" src="${esc(avatarSrc)}" alt="${esc(user.username)}">`;
 
     const lastFixDate = user.last_fix_date

@@ -5,11 +5,12 @@ import { pool } from "../db.js";
 import { sendMail } from "../mail.js";
 import { logSecurityEvent } from "../lib/security-log.js";
 import { validatePassword, destroyUserSessions } from "../lib/auth-security.js";
+import { getSite } from "../lib/site-config.js";
 
 function verificationEmailHtml(username, link) {
   return `
   <div style="font-family:sans-serif;max-width:520px;margin:0 auto;background:#1a1a2e;color:#e0e0e0;border-radius:12px;padding:32px 28px">
-    <img src="${process.env.SITE_URL || ""}/assets/logo.png" style="height:48px;margin-bottom:20px" alt="${process.env.SITE_NAME || "PadlizsanFanSub"}">
+    <img src="${getSite().url}/assets/logo.png" style="height:48px;margin-bottom:20px" alt="PadlizsanFanSub">
     <h2 style="color:#a78bfa;margin:0 0 12px">Erősítsd meg az email címed!</h2>
     <p style="color:#bbb;line-height:1.7">Szia <strong style="color:#fff">${username || "Felhasználó"}</strong>!</p>
     <p style="color:#bbb;line-height:1.7">Kattints az alábbi gombra az email cím megerősítéséhez:</p>
@@ -18,7 +19,7 @@ function verificationEmailHtml(username, link) {
     </a>
     <p style="color:#888;font-size:0.82rem;margin-top:20px">A link 24 óráig érvényes.</p>
     <hr style="border-color:#2a2a3a;margin:20px 0">
-    <p style="color:#555;font-size:0.78rem">${process.env.SITE_NAME || "PadlizsanFanSub"} · ${(process.env.SITE_URL || "").replace(/^https?:\/\//, "")}</p>
+    <p style="color:#555;font-size:0.78rem">PadlizsanFanSub · padlizsanfansub.hu</p>
   </div>`;
 }
 
@@ -116,7 +117,7 @@ router.post("/", async (req, res) => {
     );
 
     const username = cur[0].username || "Felhasználó";
-    const verifyLink = `${process.env.BASE_URL || process.env.SITE_URL || "http://localhost:3000"}/verify-email.html?token=${rawToken}`;
+    const verifyLink = `${getSite().url}/verify-email.html?token=${rawToken}`;
 
     sendMail({
       to: newEmail,

@@ -41,6 +41,8 @@ document.addEventListener("click", e => {
 window._buildPaywallHTML  = buildPaywallHTML;
 
 export function buildPaywallHTML({ patreonConnected, returnUrl = "" }) {
+  const SITE = (() => { try { return JSON.parse(document.querySelector('meta[name="site-config"]')?.content || "{}"); } catch { return {}; } })();
+  const patreonUrlAttr = String(SITE.patreonUrl || "/shop.html").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const encodedReturn = encodeURIComponent(returnUrl || window.location.href);
 
   const tierCards = TIER_LIST.map(t => `
@@ -56,7 +58,7 @@ export function buildPaywallHTML({ patreonConnected, returnUrl = "" }) {
   `).join("");
 
   const patreonSecondary = patreonConnected
-    ? `<a href="https://patreon.com/Padlizsanfansub" target="_blank" class="paywall-patreon-link">💜 Előfizetés a Patreonon</a>`
+    ? `<a href="${patreonUrlAttr}" target="_blank" rel="noopener" class="paywall-patreon-link">💜 Előfizetés a Patreonon</a>`
     : `<a href="/api/patreon/connect" class="paywall-patreon-link">💜 Patreon összekapcsolása</a>`;
 
   return `

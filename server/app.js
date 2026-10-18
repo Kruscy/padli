@@ -154,6 +154,10 @@ app.use(sessionMiddleware);
 /* ===== BUILD VERSION (cache busting) ===== */
 import { readFileSync, statSync } from "fs";
 import { resolveInside } from "./lib/safe-path.js";
+import { brand, loadSiteSettings, publicSite } from "./lib/site-config.js";
+
+// Az adatbázisban mentett oldal-beállítások (név, cím, tulajdonos…)
+loadSiteSettings();
 const BUILD_VER = Date.now().toString(36);
 const PUBLIC_DIR = path.join(__dirname, "../public");
 
@@ -166,28 +170,48 @@ function injectVersion(html) {
 /* ===== STATIC FRONTEND ===== */
 app.use('/downloads', express.static(path.join(PUBLIC_DIR, 'downloads')));
 
-// Minden .html kérést verzióval szolgálunk ki. A verziózott HTML-t
-// memóriában tartjuk (a fájl módosítási ideje alapján frissül), nem
-// olvassuk és alakítjuk át minden oldalbetöltésnél.
-const htmlCache = new Map(); // fájl → { mtimeMs, html }
+// Minden .html kérést verzióval és a beállított oldalnévvel / címmel
+// szolgálunk ki (lásd site-config.js brand()). Az átalakított HTML-t
+// memóriában tartjuk (a fájl módosítási ideje és a beállítások alapján
+// frissül), nem alakítjuk át minden oldalbetöltésnél.
+const htmlCache = new Map(); // fájl → { key, html }
+function renderHtml(filePath) {
+  const { mtimeMs } = statSync(filePath);
+  const site = publicSite();
+  const key = `${mtimeMs}|${JSON.stringify(site)}`;
+  let hit = htmlCache.get(filePath);
+  if (!hit || hit.key !== key) {
+    const meta = `<meta name="site-config" content="${JSON.stringify(site).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;")}">`;
+    const html = brand(injectVersion(readFileSync(filePath, "utf8"))).replace(/<head([^>]*)>/i, m => `${m}\n  ${meta}`);
+    hit = { key, html };
+    htmlCache.set(filePath, hit);
+  }
+  return hit.html;
+}
+function sendHtml(res, filePath, status = 200) {
+  res.status(status);
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.send(renderHtml(filePath));
+}
+
 app.use((req, res, next) => {
-  if (!req.path.endsWith(".html")) return next();
+  // Mappa-kérésnél (pl. "/", "/blog/") az index.html — különben az
+  // express.static adná ki átalakítás nélkül
+  const reqPath = req.path.endsWith("/") ? req.path + "index.html" : req.path;
+  if (!reqPath.endsWith(".html")) return next();
   let rel;
-  try { rel = decodeURIComponent(req.path); } catch { return next(); }
+  try { rel = decodeURIComponent(reqPath); } catch { return next(); }
   const filePath = resolveInside(PUBLIC_DIR, "." + rel);
   if (!filePath) return next();
-  try {
-    const { mtimeMs } = statSync(filePath);
-    let hit = htmlCache.get(filePath);
-    if (!hit || hit.mtimeMs !== mtimeMs) {
-      hit = { mtimeMs, html: injectVersion(readFileSync(filePath, "utf8")) };
-      htmlCache.set(filePath, hit);
-    }
-    res.setHeader("Cache-Control", "no-cache");
-    res.setHeader("Content-Type", "text/html; charset=utf-8");
-    res.send(hit.html);
-  } catch { next(); }
+  try { sendHtml(res, filePath); } catch { next(); }
 });
+
+// Saját logó / favicon (white-label): a BRANDING_DIR-ben (alapértelmezés:
+// ./branding) lévő fájlok felülírják a public/assets azonos nevű fájljait,
+// pl. branding/logo.png → /assets/logo.png
+const BRANDING_DIR = path.resolve(process.env.BRANDING_DIR || path.join(__dirname, "../branding"));
+app.use("/assets", express.static(BRANDING_DIR, { fallthrough: true }));
 
 // Verziózott CSS/JS: a tartalom egy verzión belül nem változik, a
 // böngésző és a Cloudflare egy évig tárolhatja (eddig max-age=0 → minden
@@ -243,18 +267,16 @@ app.get("/blog", (req, res) => {
   res.redirect(301, "/blog/");
 });
 app.get("/blog/", (req, res) => {
-  res.sendFile(path.join(__dirname, "../public/blog/index.html"));
+  sendHtml(res, path.join(PUBLIC_DIR, "blog/index.html"));
 });
 app.get("/blog/:slug", (req, res, next) => {
   // Csak egyszerű slug ("../" és egyéb útvonalrész nem kerülhet a fájlnévbe)
   if (!/^[a-z0-9][a-z0-9-]*$/i.test(req.params.slug)) return next();
-  const file = path.join(__dirname, "../public/blog", req.params.slug + ".html");
-  res.sendFile(file, err => {
-    if (err) res.status(404).sendFile(path.join(__dirname, "../public/index.html"));
-  });
+  try { sendHtml(res, path.join(PUBLIC_DIR, "blog", req.params.slug + ".html")); }
+  catch { sendHtml(res, path.join(PUBLIC_DIR, "index.html"), 404); }
 });
 app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "../public/index.html"));
+  sendHtml(res, path.join(PUBLIC_DIR, "index.html"));
 });
 
 /* ===== HIBAKEZELŐ (mindig a route-ok után) ===== */

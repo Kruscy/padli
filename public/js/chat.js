@@ -287,7 +287,7 @@ function addMessage(data) {
 
   div.innerHTML = `
     <div class="chat-msg-header">
-      <img src="${escapeHtml(data.avatar || 'https://padlizsanfansub.hu/assets/logo.png')}" class="chat-avatar">
+      <img src="${escapeHtml(data.avatar || '/assets/logo.png')}" class="chat-avatar">
       <span class="chat-name ${isDiscord ? 'chat-discord' : ''}">${isDiscord ? '🎮 ' : ''}${escapeHtml(displayName)}</span>
       <span class="chat-time">${formatTime(data.timestamp)}</span>
     </div>

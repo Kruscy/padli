@@ -29,14 +29,18 @@ const CAT_LABELS = { ajanlo:"Ajánló", hir:"Hírek", forditas:"Fordítás", koz
 
 /* ── RENDER ──────────────────────────────────────────────── */
 
+// Az oldal neve / címe (a szerver a <meta name="site-config">-ba írja)
+const SITE = (() => { try { return JSON.parse(document.querySelector('meta[name="site-config"]')?.content || "{}"); } catch { return {}; } })();
+
 function renderPost(post) {
   const catLabel = CAT_LABELS[post.category] || post.category || "";
   const dateStr  = formatDate(post.created_at);
-  const pageUrl  = `https://padlizsanfansub.hu/blog-post.html?slug=${encodeURIComponent(post.slug)}`;
+  const siteName = SITE.name || "PadlizsanFanSub";
+  const pageUrl  = `${location.origin}/blog-post.html?slug=${encodeURIComponent(post.slug)}`;
   const desc     = post.excerpt || stripHtml(post.content || "").slice(0, 160);
 
   // Meta tagek
-  document.getElementById("pageTitle").textContent  = `${post.title} – PadlizsanFanSub Blog`;
+  document.getElementById("pageTitle").textContent  = `${post.title} – ${siteName} Blog`;
   document.getElementById("metaDesc").content        = desc;
   document.getElementById("canonicalLink").href      = pageUrl;
   document.getElementById("ogTitle").content         = post.title;
@@ -58,12 +62,12 @@ function renderPost(post) {
     "url": pageUrl,
     "datePublished": post.created_at,
     "dateModified": post.updated_at || post.created_at,
-    "author": { "@type": "Person", "name": post.author || "PadlizsanFanSub" },
+    "author": { "@type": "Person", "name": post.author || siteName },
     "publisher": {
       "@type": "Organization",
-      "name": "PadlizsanFanSub",
-      "url": "https://padlizsanfansub.hu",
-      "logo": { "@type": "ImageObject", "url": "https://padlizsanfansub.hu/assets/favico.png" }
+      "name": siteName,
+      "url": location.origin,
+      "logo": { "@type": "ImageObject", "url": `${location.origin}/assets/favico.png` }
     },
     "inLanguage": "hu",
     "mainEntityOfPage": { "@type": "WebPage", "@id": pageUrl }

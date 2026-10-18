@@ -10,6 +10,8 @@ import https from "https";
 import http from "http";
 import { AttachmentBuilder } from "discord.js";
 import dotenv from "dotenv";
+import { loadSiteSettings } from "./lib/site-config.js";
+import { DEFAULT_LIBRARY, UPLOADER_BASE_DIR } from "./lib/paths.js";
 dotenv.config();
 
 /* ================= LOCK ================= */
@@ -147,19 +149,26 @@ async function setUnlockTimes() {
 
 /* ================= LOAD LIBRARIES ================= */
 
-const LIB_FILE = path.join(process.cwd(), "libraries.json");
+const LIB_FILE = path.resolve(process.env.LIBRARIES_FILE || path.join(process.cwd(), "libraries.json"));
 
-if (!fs.existsSync(LIB_FILE)) {
-  console.error("❌ libraries.json not found");
-  process.exit(1);
+// libraries.json nélkül (vagy ha egyik benne lévő mappa sem létezik — pl.
+// egy új telepítésen az eredeti oldal listájával) egyetlen könyvtár:
+// MANGA_ROOT / LIBRARY_DIR (lásd lib/paths.js)
+let libraries = fs.existsSync(LIB_FILE)
+  ? JSON.parse(fs.readFileSync(LIB_FILE, "utf8")).filter(l => l.enabled && fs.existsSync(l.path))
+  : [];
+if (!libraries.length) {
+  if (!fs.existsSync(DEFAULT_LIBRARY.path)) {
+    console.error(`❌ Nincs olvasható könyvtár: se ${LIB_FILE}, se ${DEFAULT_LIBRARY.path}`);
+    process.exit(1);
+  }
+  console.log(`ℹ️  Alapértelmezett könyvtár: ${DEFAULT_LIBRARY.name} → ${DEFAULT_LIBRARY.path}`);
+  libraries = [DEFAULT_LIBRARY];
 }
-
-const libraries = JSON.parse(fs.readFileSync(LIB_FILE, "utf8"))
-  .filter(l => l.enabled && fs.existsSync(l.path));
 
 /* ================= SCAN ================= */
 
-const KAVITA_BASE = "/mnt/manga/Kavita";
+const KAVITA_BASE = UPLOADER_BASE_DIR;
 
 async function buildUploaderRoots() {
   const { rows } = await pool.query(
@@ -433,7 +442,8 @@ scan()
       }
     }
     console.log(`📢 Sending ${newChaptersResult.length} new manga to Discord...`);
-    const siteUrl = process.env.SITE_URL || "https://padlizsanfansub.hu";
+    // A scan külön folyamatban fut: a mentett oldal-beállítást itt olvassuk be
+    const siteUrl = (await loadSiteSettings()).url;
     const discordBot = new Client({ intents: [GatewayIntentBits.Guilds] });
     try {
       await discordBot.login(process.env.DISCORD_BOT_TOKEN);

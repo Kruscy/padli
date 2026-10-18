@@ -4,6 +4,7 @@ import { pool } from "../db.js";
 import { r2, BUCKET, localPathToR2Key } from "../r2.js";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { isSafeName, resolveInside, stagedFixPath } from "./safe-path.js";
+import { getSite } from "./site-config.js";
 
 /* ── Egy bug_fixes sor tényleges alkalmazása ───────────────────
    Kiszervezve, hogy egyaránt hívható legyen:
@@ -158,7 +159,7 @@ export async function applyBugFix(fixId, adminUserId) {
   try {
     const CF_ZONE   = process.env.CF_ZONE_ID;
     const CF_TOKEN  = process.env.CF_API_TOKEN;
-    const CF_DOMAIN = process.env.CF_DOMAIN || "https://padlizsanfansub.hu";
+    const CF_DOMAIN = process.env.CF_DOMAIN || getSite().url;
     const R2_PUBLIC = process.env.R2_PUBLIC_URL;
     if (CF_ZONE && CF_TOKEN) {
       const urls = [`${CF_DOMAIN}/api/image/${fix.provider}/${fix.manga_slug}/${fix.chapter}/${encodeURIComponent(originalFilename)}`];

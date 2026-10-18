@@ -3,10 +3,10 @@ import path from "path";
 import { spawn } from "child_process";
 import { clearNewReleasesCache } from "../cache/new-releases.js";
 
-// Kézi scan-t (header "Scan library" gomb, POST /api/admin/scan) csak ő
-// indíthat. A feltöltő oldal a sikeres feltöltés után a saját végpontján
-// (POST /api/uploader/scan) keresztül indít scant, ott nincs ilyen megkötés.
-export const SCAN_OWNER_USER_ID = 5; // Ascyra
+// Kézi scan-t (header "Scan library" gomb, POST /api/admin/scan) csak az
+// oldal tulajdonosa indíthat (site-config: ownerUserId). A feltöltő oldal a
+// sikeres feltöltés után a saját végpontján (POST /api/uploader/scan)
+// keresztül indít scant, ott nincs ilyen megkötés.
 
 const SCAN_LOCK = "/tmp/padlizsanfansub.scan.lock";
 

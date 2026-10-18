@@ -19,8 +19,11 @@ services:
       # PadliCrome-bővítmény munkaprojektjei (feltöltött / fordított képek)
       - ./padlicrome:/mnt/manga2/padlicrome
       # Manga képek — a MANGA_ROOT env változóban beállított útvonal
-      # Fontos: a konténeren belül ugyanaz az útvonal legyen mint a hoszton
-      - ${MANGA_ROOT:-/mnt/manga}:${MANGA_ROOT:-/mnt/manga}:ro
+      # Fontos: a konténeren belül ugyanaz az útvonal legyen mint a hoszton.
+      # Írható: a feltöltő felület (UPLOADER_BASE_DIR) ide menti a fájlokat.
+      - ${MANGA_ROOT:-/mnt/manga}:${MANGA_ROOT:-/mnt/manga}
+      # Saját logó / favicon (lásd BRANDING_DIR)
+      - ./branding:/app/branding:ro
     depends_on:
       db:
         condition: service_healthy

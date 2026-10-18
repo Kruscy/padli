@@ -7,6 +7,7 @@ import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { requireLogin } from "../middleware/auth.js";
 import { validateHungarianAddress, validateRealName } from "../lib/address-validate.js";
 import { isAdultVerified } from "../lib/age.js";
+import { getOwnerUserId } from "../lib/site-config.js";
 
 const router = express.Router();
 
@@ -92,7 +93,7 @@ router.get("/me", async (req, res) => {
     res.json({
       id: userId,
       username: user.username,
-      avatar: user.avatar || "https://padlizsanfansub.hu/assets/logo.png",
+      avatar: user.avatar || "/assets/logo.png",
       tier: user.tier || null,
       role: req.session.user.role || "user",
       email: user.email,
@@ -196,13 +197,14 @@ router.post("/billing-address", requireLogin, async (req, res) => {
     console.error("[billing-address] köszönő értesítés hiba:", err);
   }
 
-  // Értesítés Ascyra-nak (user_id=5), ha most adta meg a címét egy Stripe-fizető
+  // Értesítés a tulajdonosnak, ha most adta meg a címét egy Stripe-fizető
   try {
+    const ownerId = getOwnerUserId();
     const { rows: stripeCheck } = await pool.query(
       `SELECT 1 FROM patreon_status WHERE user_id = $1 AND payment_source = 'stripe' LIMIT 1`,
       [req.session.user.id]
     );
-    if (stripeCheck.length) {
+    if (ownerId && stripeCheck.length) {
       const { rows: remainingRows } = await pool.query(`
         SELECT COUNT(DISTINCT u.id) AS cnt
         FROM users u
@@ -212,8 +214,8 @@ router.post("/billing-address", requireLogin, async (req, res) => {
       const remaining = parseInt(remainingRows[0]?.cnt || 0);
       await pool.query(`
         INSERT INTO notifications (user_id, type, message, link)
-        VALUES (5, 'billing_address', $1, '/admin.html')
-      `, [`📮 ${req.session.user.username} megadta a számlázási nevét/címét. Még ${remaining} Stripe-fizetőnél hiányzik.`]);
+        VALUES ($1, 'billing_address', $2, '/admin.html')
+      `, [ownerId, `📮 ${req.session.user.username} megadta a számlázási nevét/címét. Még ${remaining} Stripe-fizetőnél hiányzik.`]);
     }
   } catch (err) {
     console.error("[billing-address] értesítés hiba:", err);

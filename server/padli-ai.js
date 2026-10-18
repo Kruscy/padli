@@ -5,13 +5,13 @@ import fs from "fs";
 import path from "path";
 import config from "./padli-config.js";
 import { callGemini } from "./lib/gemini-client.js";
+import { getSite } from "./lib/site-config.js";
 
 const ANILIST_URL   = "https://graphql.anilist.co";
 const JIKAN_URL     = "https://api.jikan.moe/v4";
 const MANGADEX_URL  = "https://api.mangadex.org";
 const KITSU_URL     = "https://kitsu.io/api/edge";
 const SHIKIMORI_URL = "https://shikimori.one/api";
-const SITE_URL      = process.env.SITE_URL || "https://padlizsanfansub.hu";
 export const REPLY_DELAY_MS = config.replyDelay.questionMs;
 const BOT_NAMES = config.bot.triggerNames;
 const LOG = "\uD83C\uDF46"; // 🍆
@@ -211,7 +211,7 @@ function applyLLMSafety(reply) {
   // hozzá utólag, valós adatból, nem az LLM találja ki, úgyhogy megőrizzük
   // a linkeket és sortöréseket akkor is, ha emiatt hosszabb a válasz a
   // szokásos limitnél.
-  if (reply.includes(SITE_URL)) return reply;
+  if (reply.includes(getSite().url)) return reply;
   const s = config.llmSafety;
   let r = reply;
   if (s.stripSelfName)  r = r.replace(/^Padli[!,]?\s*/i, "").trim();
@@ -1094,7 +1094,7 @@ async function generateReply(question, conversationHistory, userKey) {
       const score = local.average_score ? " (" + (local.average_score / 10).toFixed(1) + "/10)" : "";
       // Ha megvan nálunk, adjunk hozzá közvetlen linket is – ne kelljen
       // utána külön megkeresnie a user-nek.
-      const link = local.slug ? "[" + local.title + "](" + SITE_URL + "/chapters.html?slug=" + local.slug + ")" : null;
+      const link = local.slug ? "[" + local.title + "](" + getSite().url + "/chapters.html?slug=" + local.slug + ")" : null;
       const tpl = getRandomItem(config.fixedReplies.found);
       const fallback = (fillTemplate(tpl, { title: local.title, chaps: chaps + score }) ||
         "Igen, a \"" + local.title + "\" megvan nalunk – " + chaps + score + "! 📖") + (link ? "\n" + link : "");
@@ -1135,7 +1135,7 @@ async function generateReply(question, conversationHistory, userKey) {
         // Ajánláshoz is adjunk közvetlen linket minden címhez – ne kelljen
         // utána külön megkeresni. A Gemini a rendszerprompt miatt maga nem
         // ír linket, ezért ezt mindig utólag, szerver oldalon fűzzük hozzá.
-        const linksBlock = toShow.filter(r => r.slug).map(r => "[" + r.title + "](" + SITE_URL + "/chapters.html?slug=" + r.slug + ")").join("\n");
+        const linksBlock = toShow.filter(r => r.slug).map(r => "[" + r.title + "](" + getSite().url + "/chapters.html?slug=" + r.slug + ")").join("\n");
         const fallback = "Nálunk elérhető " + genres[0] + " manhwa/manga: " + list + " 📖" + (linksBlock ? "\n" + linksBlock : "");
         const reply = await naturalize(
           "Keresett műfaj: " + genres[0] + "\nElérhető címek: " + list,
@@ -1164,7 +1164,7 @@ async function generateReply(question, conversationHistory, userKey) {
       );
       if (rows.length > 0) {
         const list = rows.map(r => "\"" + r.title + "\"" + (r.average_score ? " (" + (r.average_score / 10).toFixed(1) + "/10)" : "")).join(", ");
-        const linksBlock = rows.filter(r => r.slug).map(r => "[" + r.title + "](" + SITE_URL + "/chapters.html?slug=" + r.slug + ")").join("\n");
+        const linksBlock = rows.filter(r => r.slug).map(r => "[" + r.title + "](" + getSite().url + "/chapters.html?slug=" + r.slug + ")").join("\n");
         const fallback = "Nálunk a legjobban értékelt sorozatok: " + list + " 📖" + (linksBlock ? "\n" + linksBlock : "");
         const reply = await naturalize(
           "Legjobban értékelt címek nálunk: " + list,
@@ -1295,7 +1295,7 @@ async function generateReply(question, conversationHistory, userKey) {
   // Ha nálunk megvan (PadliDB találat), adjunk közvetlen linket is –
   // ne kelljen utána külön megkeresnie a user-nek.
   if (localResult?.slug && reply) {
-    const link = "[" + localResult.title + "](" + SITE_URL + "/chapters.html?slug=" + localResult.slug + ")";
+    const link = "[" + localResult.title + "](" + getSite().url + "/chapters.html?slug=" + localResult.slug + ")";
     return reply.includes(link) ? reply : reply + "\n" + link;
   }
   return reply;

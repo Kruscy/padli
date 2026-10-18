@@ -2,11 +2,11 @@ import { pool } from "./db.js";
 import { writeFile } from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
+import { getSite } from "./lib/site-config.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, "../public");
 
-const SITE_URL = (process.env.SITE_URL || "https://padlizsanfansub.hu").replace(/\/$/, "");
 
 const STATIC_PAGES = [
   { url: "/",            priority: "1.0", changefreq: "daily"  },
@@ -34,7 +34,7 @@ export async function generateSitemap() {
 
   const staticEntries = STATIC_PAGES.map(p => `
   <url>
-    <loc>${SITE_URL}${p.url}</loc>
+    <loc>${getSite().url}${p.url}</loc>
     <lastmod>${today}</lastmod>
     <changefreq>${p.changefreq}</changefreq>
     <priority>${p.priority}</priority>
@@ -42,7 +42,7 @@ export async function generateSitemap() {
 
   const blogEntries = rows.map(p => `
   <url>
-    <loc>${SITE_URL}/blog/${p.slug}.html</loc>
+    <loc>${getSite().url}/blog/${p.slug}.html</loc>
     <lastmod>${toW3CDate(p.updated_at || p.created_at)}</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>

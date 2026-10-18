@@ -8,6 +8,7 @@ import { pool } from "../db.js";
 import { requireLogin } from "../middleware/auth.js";
 import { createInvoice } from "../billingo.js";
 import { serverError } from "../lib/async-errors.js";
+import { brand, getOwnerUserId, getSite } from "../lib/site-config.js";
 
 const router = express.Router();
 
@@ -20,7 +21,6 @@ function getCurrentPeriodEnd(sub) {
   return sub?.current_period_end ?? sub?.items?.data?.[0]?.current_period_end ?? null;
 }
 const WEBHOOK_SECRET  = process.env.STRIPE_WEBHOOK_SECRET;
-const SITE_URL        = process.env.SITE_URL || "https://padlizsanfansub.hu";
 
 const PAYMENTS_SUSPENDED = false;
 const SUSPENDED_MESSAGE  = "A fizetések átmenetileg szünetelnek. Kérjük, próbáld később.";
@@ -162,8 +162,8 @@ router.post("/checkout", requireLogin, async (req, res) => {
         quantity: 1,
       }],
       mode: "payment",
-      success_url: `${SITE_URL}/shop.html?success=1&package=${pkg.id}`,
-      cancel_url:  `${SITE_URL}/shop.html?cancelled=1`,
+      success_url: `${getSite().url}/shop.html?success=1&package=${pkg.id}`,
+      cancel_url:  `${getSite().url}/shop.html?cancelled=1`,
       metadata: {
         type:      "points",
         userId:    String(userId),
@@ -235,8 +235,8 @@ router.post("/subscribe", requireLogin, async (req, res) => {
       payment_method_types: ["card"],
       line_items: [{ price: priceId, quantity: 1 }],
       mode:        "subscription",
-      success_url: `${SITE_URL}/settings.html?sub=success&tier=${encodeURIComponent(tier.tier)}`,
-      cancel_url:  `${SITE_URL}/settings.html?sub=cancelled`,
+      success_url: `${getSite().url}/settings.html?sub=success&tier=${encodeURIComponent(tier.tier)}`,
+      cancel_url:  `${getSite().url}/settings.html?sub=cancelled`,
       metadata: {
         type:     "subscription",
         userId:   String(userId),
@@ -382,7 +382,7 @@ router.post("/webhook", async (req, res) => {
             email:   user.email,
             name:    user.billing_name || user.username,
             address: user.billing_address || null,
-            items: [{ name: `PadlizsanFanSub ${tierMeta} támogatás (megújulás)`, price: amountHuf }],
+            items: [{ name: brand(`PadlizsanFanSub ${tierMeta} támogatás (megújulás)`, { html: false }), price: amountHuf }],
           }).catch(() => {});
         }
         break;
@@ -508,7 +508,7 @@ async function handleSubscriptionActivated(session, meta, userId) {
       email:   userRows[0].email,
       name:    userRows[0].billing_name || userRows[0].username,
       address: userRows[0].billing_address || null,
-      items: [{ name: `PadlizsanFanSub ${tierName} támogatás — 1 hónap`, price: tier.price }],
+      items: [{ name: brand(`PadlizsanFanSub ${tierName} támogatás — 1 hónap`, { html: false }), price: tier.price }],
     }).catch(() => {});
   }
 
@@ -529,11 +529,11 @@ async function handleSubscriptionActivated(session, meta, userId) {
       WHERE payment_source = 'stripe' AND active = true
     `);
     const total = parseInt(totalRows[0]?.cnt || 0);
-    if (total === 40) {
+    if (total === 40 && getOwnerUserId()) {
       await pool.query(`
         INSERT INTO notifications (user_id, type, message, link)
-        VALUES (5, 'milestone', '🎉 Elértük a 40 Stripe előfizetőt ebben a hónapban!', '/admin.html')
-      `);
+        VALUES ($1, 'milestone', '🎉 Elértük a 40 Stripe előfizetőt ebben a hónapban!', '/admin.html')
+      `, [getOwnerUserId()]);
       console.log("[SHOP] 🎉 Milestone értesítés elküldve: 40 Stripe előfizető");
     }
   } catch (err) {

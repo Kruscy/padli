@@ -7,7 +7,8 @@ import { refreshMetadataForManga } from "../refresh-metadata.js";
 import { getStatus as getGeminiStatus, validateGeminiKey, invalidateKeyCache } from "../lib/gemini-client.js";
 import { mangaImageToR2Key, deleteObjectsByPrefix, listFiles } from "../r2.js";
 import { purgeChapterImages } from "../lib/cf-purge.js";
-import { requestScan, SCAN_OWNER_USER_ID } from "../lib/scan-runner.js";
+import { requestScan } from "../lib/scan-runner.js";
+import { isOwner } from "../lib/site-config.js";
 import { logAdminAction } from "../lib/admin-log.js";
 import fs from "fs";
 import path from "path";
@@ -27,8 +28,8 @@ router.use((req, res, next) => {
 // A sor/lock kezelése a server/lib/scan-runner.js-ben van, közösen a
 // feltöltő oldal automatikus scanjével.
 router.post("/scan", (req, res) => {
-  // Kézi scant csak Ascyra indíthat (a header gombja is csak neki látszik)
-  if (req.session.user.id !== SCAN_OWNER_USER_ID) {
+  // Kézi scant csak a tulajdonos indíthat (a header gombja is csak neki látszik)
+  if (!isOwner(req.session.user.id)) {
     return res.status(403).json({ error: "Forbidden" });
   }
   try {
@@ -470,7 +471,7 @@ router.get("/images", (req, res) => {
 /* ═══════════════════════════════════════════════════════════
    KÖNYVTÁRAK – uploader root kezelés
    ═══════════════════════════════════════════════════════════ */
-const KAVITA_BASE = "/mnt/manga/Kavita";
+const KAVITA_BASE = UPLOADER_BASE_DIR;
 
 router.get("/uploader-roots", async (req, res) => {
   try {
@@ -695,6 +696,8 @@ router.delete("/patreon-gifts/:id", async (req, res) => {
 /* ── POST /admin/send-verification-emails ────────────────── */
 // Tömeges verifikációs email küldés a meglévő, nem verifikált felhasználóknak
 import { randomBytes, createHash } from "crypto";
+import { getSite } from "../lib/site-config.js";
+import { UPLOADER_BASE_DIR } from "../lib/paths.js";
 
 router.post("/send-verification-emails", async (req, res) => {
   try {
@@ -708,7 +711,7 @@ router.post("/send-verification-emails", async (req, res) => {
 
     if (!users.length) return res.json({ ok: true, sent: 0, message: "Nincs verifikálandó felhasználó." });
 
-    const BASE_URL = process.env.BASE_URL || "https://padlizsanfansub.hu";
+    const BASE_URL = getSite().url;
     const deadline = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000); // 14 nap
 
     let sent = 0, failed = 0;

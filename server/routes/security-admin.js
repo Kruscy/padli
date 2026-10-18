@@ -2,14 +2,14 @@ import express from "express";
 import net from "net";
 import { pool } from "../db.js";
 import { refreshBlocks, logSecurityEvent } from "../lib/security-log.js";
-import { SCAN_OWNER_USER_ID } from "../lib/scan-runner.js";
+import { isOwner } from "../lib/site-config.js";
 
 /* ── Biztonsági napló API (/api/admin/security/*) ──
-   Csak Ascyra (ugyanaz a tulajdonosi fiók, mint a kézi scannél). ── */
+   Csak az oldal tulajdonosa (ugyanaz a fiók, mint a kézi scannél). ── */
 const router = express.Router();
 
 router.use((req, res, next) => {
-  if (!req.session.user || req.session.user.role !== "admin" || req.session.user.id !== SCAN_OWNER_USER_ID) {
+  if (!req.session.user || req.session.user.role !== "admin" || !isOwner(req.session.user.id)) {
     return res.status(403).json({ error: "Forbidden" });
   }
   next();
