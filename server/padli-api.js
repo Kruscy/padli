@@ -4,7 +4,7 @@
 // Patreon integráció · Aktiválás · Validálás · Verzió ellenőrzés
 
 import dotenv from 'dotenv';
-dotenv.config({ path: '/opt/padli/.env' });
+dotenv.config({ path: new URL('../.env', import.meta.url).pathname });
 
 import express from 'express';
 import cors from 'cors';

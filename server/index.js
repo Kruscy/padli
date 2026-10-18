@@ -30,6 +30,7 @@ await announceSetupIfNeeded();
 /* ===== BLOG AUTO-GENERÁTOR CRON (H/Sze/P 10:00) ===== */
 // Heti 3 poszt: hétfő, szerda, péntek reggel 10-kor
 cron.schedule("0 10 * * 1,3,5", async () => {
+  if (process.env.BLOG_AUTOGEN === "false") return;
   console.log("[BlogCron] Automatikus blog poszt generálás indítása...");
   try {
     const post = await generateBlogPost();

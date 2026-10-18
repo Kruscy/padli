@@ -1,6 +1,8 @@
 import dotenv from 'dotenv';
 import fetch from 'node-fetch';
 import { pool } from './db.js';
+import path from 'path';
+import { APP_ROOT } from './lib/paths.js';
 // Env betöltés csak CLI-módban kell (lásd fájl vége) — ha a szerver importálja
 // (pl. webhook-trigger), a db.js már betöltötte a saját (élő/dev) .env-jét,
 // nem szabad itt egy hardcode-olt élő .env-vel felülírni/kevert env-et okozni.
@@ -214,7 +216,7 @@ await pool.query(`
 // Ha más modul importálja (pl. a webhook-trigger a routes/patreon.js-ből),
 // ne fusson le automatikusan és ne állítsa le a teljes szerver processzt.
 if (process.argv[1] && process.argv[1].endsWith("patreon-sync.js")) {
-  dotenv.config({ path: '/opt/padli/.env' });
+  dotenv.config({ path: path.join(APP_ROOT, '.env') });
   syncPatreon()
     .then(() => process.exit(0))
     .catch((err) => {

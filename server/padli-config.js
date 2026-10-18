@@ -1,3 +1,4 @@
+import { LOGS_DIR } from "./lib/paths.js";
 /* ============================================================
    PADLI AI – Konfigurációs fájl v2
    ============================================================ */
@@ -12,7 +13,7 @@ const config = {
   },
 
   log: {
-    dir:       "/opt/padli/logs",
+    dir:       LOGS_DIR,
     maxSizeMb: 10,
     maxDays:   30,
   },

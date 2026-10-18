@@ -9,7 +9,8 @@ import { searchMangaList as searchMangaDexList } from "../lib/mangadex.js";
 const router = express.Router();
 import fs from "fs";
 import path from "path";
-const LOG_DIR = "/opt/padli/logs";
+import { LOGS_DIR } from "../lib/paths.js";
+const LOG_DIR = LOGS_DIR;
 // ===== LOG DIR BIZTOS LÉTREHOZÁS =====
 if (!fs.existsSync(LOG_DIR)) {
   try {

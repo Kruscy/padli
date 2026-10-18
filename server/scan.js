@@ -11,7 +11,7 @@ import http from "http";
 import { AttachmentBuilder } from "discord.js";
 import dotenv from "dotenv";
 import { loadSiteSettings } from "./lib/site-config.js";
-import { DEFAULT_LIBRARY, UPLOADER_BASE_DIR } from "./lib/paths.js";
+import { APP_ROOT, DEFAULT_LIBRARY, LOGS_DIR, UPLOADER_BASE_DIR } from "./lib/paths.js";
 dotenv.config();
 
 /* ================= LOCK ================= */
@@ -593,12 +593,12 @@ scan()
   })
   .then(() => {
     // Scan után auto-upload: Kavitában lévő új fájlok feltöltése R2-be
-    const logPath = `/opt/padli/logs/r2-migrate-scan-${Date.now()}.log`;
+    const logPath = path.join(LOGS_DIR, `r2-migrate-scan-${Date.now()}.log`);
     const r2Upload = spawn(
       "node",
       ["./server/scripts/migrate-to-r2.js", "kavita"],
       {
-        cwd: "/opt/padli",
+        cwd: APP_ROOT,
         detached: true,
         stdio: ["ignore",
           fs.openSync(logPath, "a"),
