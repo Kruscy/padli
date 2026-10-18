@@ -16,6 +16,18 @@ export function validatePassword(pw) {
   return null;
 }
 
+// Felhasználónév: 3–32 karakter, HTML-/URL-jelölő és vezérlőkarakter
+// nélkül, szóközzel nem kezdődhet/végződhet (sok helyen megjelenítjük)
+export function validateUsername(username) {
+  if (typeof username !== "string") return "Érvénytelen adatok";
+  if (username.length < 3) return "A felhasználónév túl rövid";
+  if (username.length > 32) return "A felhasználónév legfeljebb 32 karakter lehet";
+  if (/[<>"'`&\\/]|\p{C}/u.test(username) || username !== username.trim()) {
+    return "A felhasználónév nem tartalmazhat < > \" ' ` & / \\ karaktert, és nem kezdődhet/végződhet szóközzel";
+  }
+  return null;
+}
+
 // Időzítés-kiegyenlítés: nem létező felhasználónál is lefut egy bcrypt
 // összehasonlítás, így a válaszidőből nem derül ki, létezik-e a fiók.
 const DUMMY_HASH = bcrypt.hashSync("padli-dummy-password-for-timing", 12);

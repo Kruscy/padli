@@ -4,6 +4,7 @@
 import app from "./app.js";
 import { pool } from "./db.js";
 import { runMigrations } from "./lib/migrate.js";
+import { announceSetupIfNeeded } from "./routes/setup.js";
 import { getSite, loadSiteSettings } from "./lib/site-config.js";
 import "./discord-bot.js";
 import cron from "node-cron";
@@ -24,6 +25,7 @@ if (process.env.AUTO_MIGRATE !== "false") {
   }
 }
 await loadSiteSettings();
+await announceSetupIfNeeded();
 
 /* ===== BLOG AUTO-GENERÁTOR CRON (H/Sze/P 10:00) ===== */
 // Heti 3 poszt: hétfő, szerda, péntek reggel 10-kor

@@ -136,6 +136,8 @@ const resendLimiter = rateLimit({
   },
 });
 app.use("/api/auth/resend-verification", resendLimiter);
+// A telepítő varázsló kódját se lehessen próbálgatni
+app.use("/api/setup", (req, res, next) => req.method === "POST" ? authLimiter(req, res, next) : next());
 
 /* ===== WEBHOOK ENDPOINTOK - raw body kell, ezért json() ELÉ ===== */
 app.use("/api/shop/webhook", express.raw({ type: "application/json" }));
@@ -155,6 +157,7 @@ app.use(sessionMiddleware);
 import { readFileSync, statSync } from "fs";
 import { resolveInside } from "./lib/safe-path.js";
 import { brand, loadSiteSettings, publicSite } from "./lib/site-config.js";
+import { setupRedirect } from "./routes/setup.js";
 
 // Az adatbázisban mentett oldal-beállítások (név, cím, tulajdonos…)
 loadSiteSettings();
@@ -194,6 +197,9 @@ function sendHtml(res, filePath, status = 200) {
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   res.send(renderHtml(filePath));
 }
+
+// Első indításkor (még nincs admin) minden oldal a telepítő varázslóra
+app.use(setupRedirect);
 
 app.use((req, res, next) => {
   // Mappa-kérésnél (pl. "/", "/blog/") az index.html — különben az

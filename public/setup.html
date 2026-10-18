@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex">
+  <title>Telepítés</title>
+  <link rel="stylesheet" href="/css/auth.css">
+  <link rel="stylesheet" href="/css/setup.css">
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favico.png">
+</head>
+<body>
+  <div class="auth-page setup-page">
+    <form class="auth-card setup-card" id="setupForm" novalidate>
+      <h1>Üdv az új oldaladon!</h1>
+      <p class="setup-intro">Pár adat, és kész. Ezek később az admin felületen
+        (<em>Oldal beállításai</em>) módosíthatók.</p>
+
+      <fieldset>
+        <legend>Telepítőkód</legend>
+        <label for="token">A szerver naplójában találod
+          (Docker: <code>docker compose logs app</code>)</label>
+        <input id="token" autocomplete="off" required>
+      </fieldset>
+
+      <fieldset>
+        <legend>Az oldal</legend>
+        <label for="siteName">Név</label>
+        <input id="siteName" maxlength="60" placeholder="pl. Saját Fansub" required>
+        <label for="siteUrl">Cím (ahol a látogatók elérik)</label>
+        <input id="siteUrl" type="url" placeholder="https://pelda.hu" required>
+        <label for="patreonUrl">Patreon-oldal (nem kötelező)</label>
+        <input id="patreonUrl" type="url" placeholder="https://patreon.com/...">
+      </fieldset>
+
+      <fieldset>
+        <legend>Az első admin (tulajdonos) fiók</legend>
+        <label for="username">Felhasználónév</label>
+        <input id="username" maxlength="32" autocomplete="username" required>
+        <label for="email">E-mail</label>
+        <input id="email" type="email" autocomplete="email" required>
+        <label for="password">Jelszó</label>
+        <input id="password" type="password" autocomplete="new-password" required>
+        <label for="password2">Jelszó még egyszer</label>
+        <input id="password2" type="password" autocomplete="new-password" required>
+        <label for="birthDate">Születési dátum</label>
+        <input id="birthDate" type="date" required>
+      </fieldset>
+
+      <div class="error" id="setupError" role="alert"></div>
+      <button type="submit" id="setupSubmit">Telepítés befejezése</button>
+    </form>
+  </div>
+  <script type="module" src="/js/setup.js"></script>
+</body>
+</html>

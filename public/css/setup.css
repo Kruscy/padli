@@ -1,0 +1,8 @@
+.setup-page { background: #0c0c12; padding: 24px 12px; box-sizing: border-box; }
+.setup-card { max-width: 480px; }
+.setup-intro { margin: -12px 0 20px; font-size: 0.9rem; }
+.setup-card fieldset { border: 1px solid rgba(255,255,255,.08); border-radius: 10px; margin: 0 0 16px; padding: 12px 14px 4px; }
+.setup-card legend { color: #c4b5fd; font-weight: 600; padding: 0 6px; }
+.setup-card label { display: block; color: #aaa; font-size: 0.85rem; margin: 2px 0 4px; }
+.setup-card code { color: #ddd; }
+.setup-card .error { min-height: 1.2em; margin: 0 0 10px; }

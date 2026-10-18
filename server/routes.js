@@ -7,7 +7,7 @@ import adminRoutes from "./routes/admin.js";
 import { getSite, isOwner } from "./lib/site-config.js";
 import { getClientIp } from "./lib/client-ip.js";
 import { logSecurityEvent } from "./lib/security-log.js";
-import { validatePassword, comparePasswordSafe, hashToken, destroyUserSessions,
+import { validatePassword, validateUsername, comparePasswordSafe, hashToken, destroyUserSessions,
          findUserByLogin, resolveStoredEmail, loginLockRemaining,
          registerLoginFailure, clearLoginFailures } from "./lib/auth-security.js";
 import { randomBytes, createHash } from "crypto";
@@ -24,6 +24,7 @@ import { resolveAdultMode, ADULT_GENRE_EXISTS_SQL } from "./lib/age.js";
 import mangaRoutes from "./routes/manga.js";
 import releasesRoutes from "./routes/releases.js";
 import pollRoutes from "./routes/polls.js";
+import setupRoutes from "./routes/setup.js";
 import statsRoutes from "./routes/stats.js";
 import announcementRoutes from "./routes/announcements.js";
 import mangaAdminRoutes from "./routes/manga-admin.js";
@@ -168,17 +169,9 @@ router.post("/auth/register", async (req, res) => {
       return res.status(400).json({ error: "Érvénytelen adatok" });
     }
 
-    if (username.length < 3) {
-      return res.status(400).json({ error: "A felhasználónév túl rövid" });
-    }
-    if (username.length > 32) {
-      return res.status(400).json({ error: "A felhasználónév legfeljebb 32 karakter lehet" });
-    }
-    // HTML-/URL-jelölő és vezérlőkarakter nélkül (a nevet sok helyen
-    // megjelenítjük; korábban pl. "<b>…</b>" is regisztrálható volt)
-    if (/[<>"'`&\\/]|\p{C}/u.test(username) || username !== username.trim()) {
-      return res.status(400).json({ error: "A felhasználónév nem tartalmazhat < > \" ' ` & / \\ karaktert, és nem kezdődhet/végződhet szóközzel" });
-    }
+    // (korábban pl. "<b>…</b>" is regisztrálható volt)
+    const nameError = validateUsername(username);
+    if (nameError) return res.status(400).json({ error: nameError });
 
     const pwError = validatePassword(password);
     if (pwError) return res.status(400).json({ error: pwError });
@@ -632,6 +625,7 @@ router.use("/patreon", patreonRoutes);
 router.use("/discord", discordLinkRoutes);
 router.use("/admin/security", securityAdminRoutes);
 router.use("/polls", pollRoutes);
+router.use("/setup", setupRoutes);
 router.use("/stats", statsRoutes);
 router.use("/announcements", announcementRoutes);
 router.use("/admin", mangaAdminRoutes);
