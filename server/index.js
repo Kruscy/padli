@@ -2,12 +2,28 @@
    Az alkalmazás maga: server/app.js. Itt csak a futtatás: HTTP-szerver,
    Discord-bot + chat WebSocket, ütemezett feladatok. */
 import app from "./app.js";
+import { pool } from "./db.js";
+import { runMigrations } from "./lib/migrate.js";
+import { getSite, loadSiteSettings } from "./lib/site-config.js";
 import "./discord-bot.js";
 import cron from "node-cron";
 import { generateBlogPost } from "./scripts/blog-auto-generator.js";
 import { generateSitemap } from "./sitemap-generator.js";
 
 const PORT = process.env.PORT || 3000;
+
+/* ===== ADATBÁZIS-SÉMA ÉS MIGRÁCIÓK ===== */
+// Frissítés után a szükséges adatbázis-változások maguktól lefutnak
+// (üres adatbázisnál a teljes séma is). Kikapcsolás: AUTO_MIGRATE=false.
+if (process.env.AUTO_MIGRATE !== "false") {
+  try {
+    await runMigrations(pool);
+  } catch (err) {
+    console.error("❌ Az adatbázis frissítése nem sikerült, a szerver nem indul el:", err.message);
+    process.exit(1);
+  }
+}
+await loadSiteSettings();
 
 /* ===== BLOG AUTO-GENERÁTOR CRON (H/Sze/P 10:00) ===== */
 // Heti 3 poszt: hétfő, szerda, péntek reggel 10-kor
@@ -26,6 +42,6 @@ cron.schedule("0 10 * * 1,3,5", async () => {
 
 /* ===== START SERVER ===== */
 app.listen(PORT, "0.0.0.0", async () => {
-  console.log(`🍆 PadlizsanFanSub running on port ${PORT}`);
+  console.log(`🍆 ${getSite().name} running on port ${PORT}`);
   try { await generateSitemap(); } catch (e) { console.error("[Sitemap] Indulási hiba:", e.message); }
 });

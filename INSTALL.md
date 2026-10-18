@@ -19,10 +19,10 @@ sudo chown -R 1000:1000 uploads logs public/blog padlicrome
 docker compose up -d
 ```
 
-Az első indításkor a `db` service automatikusan betölti a `schema.sql` sémát,
-majd lefuttatja a `server/scripts/migrations/*.sql` migrációkat. Meglévő
-adatbázisnál az új migrációkat kézzel kell futtatni, pl.:
-`docker compose exec -T db psql -U padli -d padli < server/scripts/migrations/<fájl>.sql`
+Az app induláskor magától létrehozza az adatbázis-sémát (üres adatbázisnál)
+és lefuttatja a még nem alkalmazott migrációkat (`server/scripts/migrations`)
+— frissítés után is. Kikapcsolás: `AUTO_MIGRATE=false`, kézi futtatás:
+`npm run migrate` (Dockerben: `docker compose exec app npm run migrate`).
 
 Az app konténernek van healthchecke (`GET /api/health` — a szerver és az
 adatbázis elérhetőségét jelzi); állapota: `docker compose ps`.
@@ -80,10 +80,10 @@ npm install
 # PostgreSQL-ben hozz létre egy felhasználót és adatbázist:
 psql -U postgres -c "CREATE USER padli WITH PASSWORD 'valtozz_meg';"
 psql -U postgres -c "CREATE DATABASE padli OWNER padli;"
-
-# Töltsd be a sémát:
-psql -U padli -d padli -f schema.sql
 ```
+
+A sémát nem kell kézzel betölteni: a szerver első indításkor létrehozza
+(és frissítés után a migrációkat is lefuttatja). Kézzel: `npm run migrate`.
 
 ---
 

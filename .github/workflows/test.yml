@@ -51,13 +51,9 @@ jobs:
       - name: Sérülékeny függőségek (magas/kritikus)
         run: npm audit --omit=dev --audit-level=high
 
+      # Ugyanaz a futtató, amit a szerver induláskor használ
       - name: Adatbázis-séma és migrációk
-        run: |
-          psql -v ON_ERROR_STOP=1 -q -f schema.sql
-          for f in server/scripts/migrations/*.sql; do
-            echo "→ $f"
-            psql -v ON_ERROR_STOP=1 -q -f "$f"
-          done
+        run: npm run migrate
 
       - name: Tesztek
         run: npm test
