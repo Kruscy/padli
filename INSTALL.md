@@ -1,47 +1,51 @@
 # Telepítési útmutató
 
-## Docker (legegyszerűbb)
+## Gyors telepítés Dockerrel (ajánlott)
 
-Ha Docker és Docker Compose telepítve van:
+Kell hozzá egy Linux-szerver Dockerrel (https://docs.docker.com/engine/install/).
 
 ```bash
 git clone https://github.com/Kruscy/padli.git
 cd padli
-cp .env.example .env
-# Szerkeszd a .env fájlt (legalább PGPASSWORD, SITE_URL, SESSION_SECRET, MAIL_* kötelező)
-nano .env
-
-# Az app konténer nem rootként, hanem a "node" (uid 1000) felhasználóként fut:
-# a bind mountolt mappák legyenek az övéi, különben a feltöltés/naplózás nem tud írni
-mkdir -p uploads logs public/blog padlicrome
-sudo chown -R 1000:1000 uploads logs public/blog padlicrome
-
-docker compose up -d
+./install.sh
 ```
 
-Az app induláskor magától létrehozza az adatbázis-sémát (üres adatbázisnál)
-és lefuttatja a még nem alkalmazott migrációkat (`server/scripts/migrations`)
-— frissítés után is. Kikapcsolás: `AUTO_MIGRATE=false`, kézi futtatás:
-`npm run migrate` (Dockerben: `docker compose exec app npm run migrate`).
+A szkript:
+1. megkérdezi az oldal címét (pl. `https://pelda.hu`) és a manga-mappák helyét,
+2. létrehozza a `.env` fájlt véletlenszerű jelszavakkal és titkos kulcsokkal,
+3. előkészíti a mappákat, és elindítja az oldalt és az adatbázist,
+4. kiírja a **telepítőkódot**.
 
-Az app konténernek van healthchecke (`GET /api/health` — a szerver és az
-adatbázis elérhetőségét jelzi); állapota: `docker compose ps`.
-Éles módban (`NODE_ENV=production` a `.env`-ben) a szerver `SESSION_SECRET`
-nélkül nem indul el.
+Ezután nyisd meg a böngészőben a `/setup.html` oldalt (az oldal magától oda
+irányít): add meg a telepítőkódot, az oldal nevét és az első admin
+(tulajdonosi) fiókot. Kész — a többi a `⚙️ Oldal beállításai` fülön és a
+`.env`-ben állítható (levélküldés `MAIL_*`, képtárolás `R2_*`, Stripe,
+Patreon, Discord stb. — mind opcionális).
 
-Az oldal elérhető: `http://localhost:3000`
+**Saját logó:** tedd a `logo.png` és `favico.png` fájlokat a `branding/`
+mappába (lásd `branding/README.md`).
 
-Első admin beállítása:
+**Frissítés:** `./update.sh` — részletek: [UPDATING.md](UPDATING.md).
+
+### Tudnivalók
+
+- A telepítőkód később is megnézhető: `docker compose logs app | grep Telepítőkód`.
+  Saját kódot a `SETUP_TOKEN` változóval adhatsz meg.
+- Az app induláskor magától létrehozza az adatbázis-sémát és lefuttatja a még
+  nem alkalmazott migrációkat — frissítés után is. Kikapcsolás:
+  `AUTO_MIGRATE=false`; kézi futtatás: `docker compose exec app npm run migrate`.
+- Az app konténer a `node` (uid 1000) felhasználóként fut: a bind mountolt
+  mappák (uploads, logs, public/blog, padlicrome, a feltöltők mappája) legyenek
+  az övéi — az `install.sh` ezt beállítja.
+- Éles módban (`NODE_ENV=production`, HTTPS-címnél az `install.sh` beállítja)
+  a sütik csak HTTPS-en mennek: az oldal elé kell egy HTTPS-t adó fordított
+  proxy (Cloudflare, nginx, Caddy — lásd lent).
+- Állapot: `docker compose ps` (healthcheck: `GET /api/health`).
+
 ```bash
-docker compose exec db psql -U padli -d padli \
-  -c "UPDATE users SET role='admin' WHERE email='sajat@email.com';"
-```
-
-Leállítás / újraindítás:
-```bash
-docker compose down      # leállítás (adatok megmaradnak)
+docker compose down      # leállítás (az adatok megmaradnak)
 docker compose restart   # újraindítás
-docker compose logs -f   # logok követése
+docker compose logs -f   # naplók követése
 ```
 
 ---
@@ -153,12 +157,9 @@ Alapértelmezett port: `3000` (módosítható a `PORT` env változóval).
 
 ## 6. Első admin felhasználó létrehozása
 
-1. Regisztrálj az oldalon
-2. A PostgreSQL-ben állítsd be az admin szerepkört:
-
-```sql
-UPDATE users SET role = 'admin' WHERE email = 'sajat@email.com';
-```
+Az első indításkor az oldal a telepítő varázslóra (`/setup.html`) irányít:
+a szerver naplójában megjelenő telepítőkóddal itt hozhatod létre az első
+admin (tulajdonosi) fiókot és adhatod meg az oldal nevét.
 
 ---
 

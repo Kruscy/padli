@@ -59,19 +59,14 @@ Docker Hub: [`krusk/padlizsanfansub`](https://hub.docker.com/r/krusk/padlizsanfa
 ```bash
 git clone https://github.com/Kruscy/padli.git
 cd padli
-cp .env.example .env
-# Töltsd ki legalább: PGPASSWORD, SITE_URL, SESSION_SECRET, MAIL_*
-nano .env
-
-docker compose up -d
+./install.sh
 ```
 
-Az adatbázis séma automatikusan betöltődik az első indításkor. Az első admin beállítása:
-
-```bash
-docker compose exec db psql -U padli -d padli \
-  -c "UPDATE users SET role='admin' WHERE email='sajat@email.com';"
-```
+A szkript véletlenszerű jelszavakkal létrehozza a `.env`-et és elindítja az
+oldalt; utána a böngészőben a `/setup.html` varázsló kéri a telepítőkódot (a
+szkript kiírja), az oldal nevét és az első admin fiókot. A név, a cím, a
+Patreon-link és a logó beállítható. Frissítés: `./update.sh` — lásd
+[UPDATING.md](UPDATING.md). Részletek: [INSTALL.md](INSTALL.md).
 
 ### Kézi telepítés
 

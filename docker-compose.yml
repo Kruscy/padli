@@ -1,7 +1,11 @@
 services:
 
   app:
-    image: krusk/padlizsanfansub:latest
+    # IMAGE_TAG: "stable" = a legutóbbi kiadás (ajánlott), "latest" = a
+    # fejlesztői ág legfrissebb állapota, vagy konkrét verzió (pl. 1.2.0)
+    image: krusk/padlizsanfansub:${IMAGE_TAG:-latest}
+    # Saját buildhez: docker compose up -d --build
+    build: .
     ports:
       - "${PORT:-3000}:3000"
     env_file:

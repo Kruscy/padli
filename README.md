@@ -62,19 +62,14 @@ Docker Hub: [`krusk/padlizsanfansub`](https://hub.docker.com/r/krusk/padlizsanfa
 ```bash
 git clone https://github.com/Kruscy/padli.git
 cd padli
-cp .env.example .env
-# Fill in at minimum: PGPASSWORD, SITE_URL, SESSION_SECRET, MAIL_*
-nano .env
-
-docker compose up -d
+./install.sh
 ```
 
-The database schema is loaded automatically on first start. Set the first admin:
-
-```bash
-docker compose exec db psql -U padli -d padli \
-  -c "UPDATE users SET role='admin' WHERE email='your@email.com';"
-```
+The script creates `.env` with random secrets and starts the site; then open
+`/setup.html` in the browser, enter the setup code printed by the installer,
+the site name and the first admin account. Name, URL, Patreon link and logo
+are configurable (white-label). Updating: `./update.sh` — see
+[UPDATING.md](UPDATING.md).
 
 ### Manual install
 
