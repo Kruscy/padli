@@ -19,6 +19,7 @@ const defaults = {
   R2_BUCKET_NAME: "test", R2_PUBLIC_URL: "http://127.0.0.1:9",
   SITE_URL: "http://localhost", BASE_URL: "http://localhost",
   PADLICROME_DIR: path.join(os.tmpdir(), "padli-test-padlicrome"),
+  UPDATE_CHECK: "false", // ne hívja a GitHubot
 };
 for (const [k, v] of Object.entries(defaults)) if (process.env[k] === undefined) process.env[k] = v;
 

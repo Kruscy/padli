@@ -1421,3 +1421,11 @@
   .padli-alias-arrow-static { display: none; }
 }
 
+
+/* ── Oldal beállításai ─────────────────────────────────── */
+.site-form label { color: #94a3b8; font-size: .85rem; margin-top: 6px; }
+.site-status { margin-left: 12px; font-size: .85rem; color: #94a3b8; }
+.site-hint { color: #64748b; font-size: .85rem; max-width: 640px; }
+.site-version { margin-bottom: 16px; padding: 12px 16px; border-radius: 10px; background: #1e293b; color: #cbd5e1; max-width: 640px; }
+.site-version.update { background: #3b2f0b; color: #fde68a; }
+.site-version a { color: #a78bfa; }

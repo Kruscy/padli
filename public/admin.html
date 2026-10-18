@@ -26,12 +26,31 @@
   <button class="tab-btn" data-tab="tab-blog">✍️ Blog</button>
   <button class="tab-btn" data-tab="tab-padli">🤖 Padli AI</button>
   <button class="tab-btn" data-tab="tab-api-usage">🔑 API kulcsok</button>
-  <button class="tab-btn" data-tab="tab-remote-usage">🖥️ 192.168.0.90</button>
+  <button class="tab-btn" data-tab="tab-remote-usage">🖥️ OCR / inpaint szerver</button>
   <button class="tab-btn" data-tab="tab-subtitle-requests">🎬 Felirat-kérések</button>
   <button class="tab-btn" data-tab="tab-anime-catalog">📼 Anime katalógus</button>
   <button class="tab-btn" data-tab="tab-libraries">📁 Könyvtárak</button>
   <button class="tab-btn" data-tab="tab-gifts">🎁 Patreon Gift</button>
   <button class="tab-btn" data-tab="tab-patreon-invoice">🧾 Patreon</button>
+  <button class="tab-btn" data-tab="tab-site">⚙️ Oldal beállításai</button>
+</div>
+
+<div id="tab-site" class="tab-panel">
+  <div id="siteVersion" class="site-version"></div>
+  <form class="ann-form site-form" id="siteForm">
+    <label for="siteName">Az oldal neve</label>
+    <input id="siteName" maxlength="60" required>
+    <label for="siteUrl">Cím (ahol a látogatók elérik)</label>
+    <input id="siteUrl" type="url" required>
+    <label for="sitePatreon">Patreon-oldal (üresen: nincs)</label>
+    <input id="sitePatreon" type="url">
+    <label for="siteDescription">Rövid leírás</label>
+    <textarea id="siteDescription" maxlength="300"></textarea>
+    <button type="submit" id="siteSave">Mentés</button>
+    <span id="siteStatus" class="site-status"></span>
+  </form>
+  <p class="site-hint">Logó és favicon: tedd a fájlokat (<code>logo.png</code>, <code>favico.png</code>)
+    a szerver <code>branding/</code> mappájába. Csak az oldal tulajdonosa módosíthat.</p>
 </div>
 
 <div id="tab-users" class="tab-panel active">
@@ -535,6 +554,7 @@
 <script src="/js/admin-blog.js?v=20260427"></script>
 <script src="/js/admin-padli.js?v=20260427"></script>
 <script src="/js/admin-patreon-invoice.js?v=20260629"></script>
+<script type="module" src="/js/admin-site.js"></script>
 
 </body>
 </html>
