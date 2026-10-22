@@ -8,6 +8,7 @@ import { localPathToR2Key } from "../r2.js";
 import { requestScan, getScanStatus } from "../lib/scan-runner.js";
 import { findExistingSeries } from "../lib/manga-duplicates.js";
 import { logSecurityEvent } from "../lib/security-log.js";
+import { compressPageImage } from "../lib/image-compress.js";
 
 const r2 = new S3Client({
   region: "auto",
@@ -347,11 +348,14 @@ router.post("/upload", requireUploader, upload.single("file"), async (req, res) 
   try {
     const wasOverwrite = fs.existsSync(fullPath);
 
+    // JPEG-tömörítés (a fájlnév marad); hiba esetén az eredeti buffer jön vissza
+    const { buffer } = await compressPageImage(req.file.buffer, fullPath);
+
     fs.mkdirSync(path.dirname(fullPath), { recursive: true });
-    fs.writeFileSync(fullPath, req.file.buffer);
+    fs.writeFileSync(fullPath, buffer);
 
     // R2 sync: sorba rendezve, max 2 egyidejű feltöltés
-    syncToR2IfMigrated(fullPath, req.file.buffer);
+    syncToR2IfMigrated(fullPath, buffer);
 
     if (wasOverwrite) {
       const parts = relativePath.replace(/\\/g, "/").split("/").filter(Boolean);
