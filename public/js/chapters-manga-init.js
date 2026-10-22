@@ -12,6 +12,52 @@ function autoLinkUrls(html) {
   });
 }
 
+const ALT_TITLES_SHOWN = 4;
+
+// Alternatív címek a cím alatt, kisebb betűvel. Ismétlés nélkül (kis-/nagybetű,
+// írásjel nem számít), a fő cím kihagyásával; sok név esetén lenyitható.
+function renderAltTitles(title, altTitles) {
+  const el = document.getElementById("mangaAltTitles");
+  if (!el) return;
+  const norm = s => String(s).normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+  const seen = new Set([norm(title)]);
+  const names = [];
+  for (const n of altTitles || []) {
+    const k = norm(n);
+    if (!k || seen.has(k)) continue;
+    seen.add(k);
+    names.push(String(n).trim());
+  }
+  if (!names.length) return;
+  // Elöl a latin betűs (angol/romaji), utána a koreai/japán/kínai eredeti, a többi a végén
+  const rank = n =>
+    /^[\p{Script=Latin}\p{N}\p{P}\p{S}\s]+$/u.test(n) ? 0 :
+    /[\p{Script=Hangul}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}]/u.test(n) ? 1 : 2;
+  names.sort((x, y) => rank(x) - rank(y));
+
+  const text = document.createElement("span");
+  const show = all => {
+    text.textContent = (all ? names : names.slice(0, ALT_TITLES_SHOWN)).join(" · ");
+  };
+  show(false);
+  el.replaceChildren(text);
+
+  if (names.length > ALT_TITLES_SHOWN) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "alt-titles-more";
+    btn.textContent = `+${names.length - ALT_TITLES_SHOWN} további`;
+    btn.addEventListener("click", () => {
+      const open = btn.dataset.open !== "1";
+      btn.dataset.open = open ? "1" : "0";
+      show(open);
+      btn.textContent = open ? "kevesebb" : `+${names.length - ALT_TITLES_SHOWN} további`;
+    });
+    el.appendChild(btn);
+  }
+  el.hidden = false;
+}
+
 (async () => {
   const slug = new URLSearchParams(location.search).get("slug");
   if (!slug) return;
@@ -20,6 +66,7 @@ function autoLinkUrls(html) {
   currentManga = await mRes.json();
 
   document.getElementById("mangaTitle").textContent = currentManga.title;
+  renderAltTitles(currentManga.title, currentManga.alt_titles);
   document.getElementById("coverImg").src = currentManga.cover_url || "/assets/no-cover.png";
   document.getElementById("description").innerHTML = DOMPurify.sanitize(
     autoLinkUrls(currentManga.description || ""),

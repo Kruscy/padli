@@ -1,22 +1,27 @@
 /**
- * Manga-metaadat lekérés AniList elsődleges forrással, Jikan (MyAnimeList)
- * majd MangaDex fallback-kel, ha a korábbi forrás(ok) hibázik/hibáznak
+ * Manga-metaadat lekérés AniList elsődleges forrással, Jikan (MyAnimeList),
+ * MangaDex, majd MangaUpdates fallback-kel, ha a korábbi forrás(ok) hibázik/hibáznak
  * vagy rate-limitel(nek).
  *
  * A visszaadott `media` objektum alakja megegyezik az AniList GraphQL Media
  * típusával, hogy a hívóoldali mentési logika forrás-függetlenül működjön.
+ * MangaUpdates forrásnál a `media.altTitles` a mű összes ismert nevét is tartalmazza.
  *
  * Fontos: `fetchMangaMetadata` csak akkor ad vissza `null`-t (= végleg nincs
- * találat sehol), ha MINDHÁROM forrás sikeresen válaszolt és egyik sem
+ * találat sehol), ha MIND A NÉGY forrás sikeresen válaszolt és egyik sem
  * talált semmit. Ha bármelyik oldal csak hibázott/időtúllépett (nem tudni
  * biztosan, hogy lett volna-e találat), és nincs mindhárom oldalról
  * megerősített "nincs találat", `TransientMetadataError`-t dob — ilyenkor a
  * hívó NEM jelölheti a mangát véglegesen sikertelennek, mert legközelebb
  * még sikerülhet.
+ *
+ * Az AniList "nincs találat" esetén HTTP 404-et ad (data.Media = null) —
+ * ez megerősített "nincs találat", NEM átmeneti hiba.
  */
 import fetch from "node-fetch";
 import { searchMangaByTitle, getMangaById as getJikanMangaById } from "./jikan.js";
 import { searchMangaByTitle as searchMangaDex, getMangaById as getMangaDexById } from "./mangadex.js";
+import { searchSeriesByTitle as searchMangaUpdates } from "./mangaupdates.js";
 
 const ANILIST_URL = "https://graphql.anilist.co";
 const ANILIST_MAX_RETRIES = 3;
@@ -64,6 +69,7 @@ async function aniListFetchWithRetry(body) {
         await sleep(5000);
         continue;
       }
+      if (res.status === 404) return { data: { Media: null } };
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
       return await res.json();
@@ -91,7 +97,7 @@ export class TransientMetadataError extends Error {}
  * @param {number|null} [opts.anilistId] - ha ismert, ID alapján kérjük az AniList-et
  * @param {number|null} [opts.malId] - ha ismert (korábbi Jikan találatból), ID alapján kérjük a Jikan-t
  * @param {string|null} [opts.mangadexId] - ha ismert (korábbi MangaDex találatból), ID alapján kérjük a MangaDex-et
- * @returns {Promise<{source: "anilist"|"jikan"|"mangadex", media: object}|null>}
+ * @returns {Promise<{source: "anilist"|"jikan"|"mangadex"|"mangaupdates", media: object}|null>}
  */
 export async function fetchMangaMetadata({ searchTitle, anilistId = null, malId = null, mangadexId = null }) {
   let confirmedNoMatchCount = 0;
@@ -125,9 +131,19 @@ export async function fetchMangaMetadata({ searchTitle, anilistId = null, malId 
   }
   if (mangadexMedia) return { source: "mangadex", media: mangadexMedia };
 
-  if (confirmedNoMatchCount === 3) {
-    return null; // mindhárom forrás biztosan nem talált semmit
+  console.log("↪️ MangaDex is nem adott találatot/hibázott — MangaUpdates próbálkozás...");
+  let muMedia = null;
+  try {
+    muMedia = await searchMangaUpdates(searchTitle);
+    if (!muMedia) confirmedNoMatchCount++;
+  } catch {
+    // átmeneti hiba a MangaUpdates oldalán is
+  }
+  if (muMedia) return { source: "mangaupdates", media: muMedia };
+
+  if (confirmedNoMatchCount === 4) {
+    return null; // mind a négy forrás biztosan nem talált semmit
   }
 
-  throw new TransientMetadataError("AniList, Jikan és MangaDex is átmenetileg elérhetetlen / hibázott");
+  throw new TransientMetadataError("AniList, Jikan, MangaDex és MangaUpdates is átmenetileg elérhetetlen / hibázott");
 }

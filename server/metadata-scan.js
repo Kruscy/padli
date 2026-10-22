@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import { autoClaimWishlistForManga } from "./lib/wishlist-auto-claim.js";
 import { translateToHungarian } from "./lib/translate.js";
 import { fetchMangaMetadata, TransientMetadataError } from "./lib/metadata-source.js";
+import { mergeAltTitles } from "./lib/manga-duplicates.js";
 dotenv.config();
 
 /* ================= CONFIG ================= */
@@ -186,6 +187,11 @@ async function scanMetadata() {
           manga.id
         ]
       );
+
+      /* ===== SAVE ALT TITLES (MangaUpdates) ===== */
+      if (media.altTitles?.length) {
+        await mergeAltTitles(manga.id, media.altTitles);
+      }
 
       /* ===== SAVE GENRES ===== */
       for (const genreName of media.genres || []) {

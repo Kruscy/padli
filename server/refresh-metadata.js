@@ -3,6 +3,7 @@ import dotenv from "dotenv";
 import { autoClaimWishlistForManga } from "./lib/wishlist-auto-claim.js";
 import { translateToHungarian } from "./lib/translate.js";
 import { fetchMangaMetadata } from "./lib/metadata-source.js";
+import { mergeAltTitles } from "./lib/manga-duplicates.js";
 dotenv.config();
 
 /* ================= FŐ FÜGGVÉNY ================= */
@@ -30,7 +31,7 @@ export async function refreshMetadataForManga(mangaId, anilistId = null) {
     .replace(/[-_]/g, " ")
     .trim();
 
-  /* ── 1. Metaadat lekérés — AniList elsődleges, Jikan majd MangaDex fallback ── */
+  /* ── 1. Metaadat lekérés — AniList elsődleges, Jikan, MangaDex majd MangaUpdates fallback ── */
   const result = await fetchMangaMetadata({
     searchTitle,
     anilistId: anilistId || mangaRow.anilist_id,
@@ -41,11 +42,11 @@ export async function refreshMetadataForManga(mangaId, anilistId = null) {
   await pool.query(`UPDATE manga SET anilist_last_try = now() WHERE id = $1`, [mangaId]);
 
   if (!result) {
-    // Mindhárom forrás biztosan nem talált semmit — ez a "no match" eset
+    // Mind a négy forrás biztosan nem talált semmit — ez a "no match" eset
     // marad TransientMetadataError esetén NEM jelöljük failed-nek, az a
     // hívóhoz (admin.js) propagál hibaként, hogy tudjon róla.
     await pool.query(`UPDATE manga SET anilist_failed = TRUE WHERE id = $1`, [mangaId]);
-    throw new Error("Nincs találat sem AniList-en, sem MyAnimeList-en, sem MangaDex-en");
+    throw new Error("Nincs találat sem AniList-en, sem MyAnimeList-en, sem MangaDex-en, sem MangaUpdates-en");
   }
 
   const { source, media } = result;
@@ -93,6 +94,10 @@ export async function refreshMetadataForManga(mangaId, anilistId = null) {
       mangaId
     ]
   );
+
+  if (media.altTitles?.length) {
+    await mergeAltTitles(mangaId, media.altTitles);
+  }
 
   /* ── 4. Genres: töröl és újraír ── */
   await pool.query(`DELETE FROM manga_genre WHERE manga_id = $1`, [mangaId]);

@@ -46,7 +46,7 @@ router.get("/manga", requireLogin, async (req, res) => {
     const adultMode = await resolveAdultMode(pool, req);
 
     const rows = await listCache.wrap(`manga|${adultMode}`, async () => (await pool.query(`
-      SELECT m.title, m.slug, m.cover_url,
+      SELECT m.title, m.slug, m.cover_url, COALESCE(m.alt_titles, '{}') AS alt_titles,
         COUNT(DISTINCT c.id)::int AS chapter_count
       FROM manga m
       LEFT JOIN chapter c ON c.manga_id = m.id
@@ -110,7 +110,7 @@ router.get("/manga/:slug", requireLogin, async (req, res) => {
     `SELECT
       m.title, m.slug, m.cover_url, m.description,
       m.status, m.average_score, m.total_chapters,
-      m.uploaders, m.anilist_id,
+      m.uploaders, m.anilist_id, COALESCE(m.alt_titles, '{}') AS alt_titles,
       COALESCE(ARRAY_AGG(DISTINCT g.name) FILTER (WHERE g.name IS NOT NULL), '{}') AS genres,
       COALESCE(ARRAY_AGG(DISTINCT t.name) FILTER (WHERE t.name IS NOT NULL), '{}') AS tags,
       COUNT(DISTINCT c.id) AS chapter_count
