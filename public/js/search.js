@@ -20,11 +20,14 @@ function indexManga(list) {
 }
 
 // Találat a fő címre, különben az első egyező alternatív névre.
-// Elöl a cím elején egyezők, aztán a címben bárhol, végül az alt. nevek.
+// Elöl a cím elején vagy egy alt. névvel pontosan egyezők (pl. "ORV"),
+// aztán a címben bárhol, végül az alt. nevekben bárhol.
 function findMatches(q, limit) {
   const hits = [];
   for (const m of allManga) {
+    const exactAlt = m._alts.find(([, k]) => k === q);
     if (m._title.startsWith(q)) hits.push({ m, rank: 0 });
+    else if (exactAlt) hits.push({ m, rank: 0, alt: exactAlt[0] });
     else if (m._title.includes(q)) hits.push({ m, rank: 1 });
     else {
       const alt = m._alts.find(([, k]) => k.includes(q));

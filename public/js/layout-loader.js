@@ -1,4 +1,6 @@
-import { initSearch } from "./search.js";
+// Kézi verzió: a bare import nem kap BUILD_VER-t, a CF 6 órás böngésző-cache-t ad
+// → a search.js minden módosításakor léptetni kell
+import { initSearch } from "./search.js?v=20261022";
 
 /* ================= PARTIAL LOADER ================= */
 
