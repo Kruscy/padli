@@ -1,12 +1,12 @@
 import express from "express";
 import { errorHandler } from "./lib/async-errors.js";
 import path from "path";
-import { Readable } from "stream";
 import { fileURLToPath } from "url";
 import { sessionMiddleware } from "./session.js";
 import helmet from "helmet";
 import { rateLimit, ipKeyGenerator } from "express-rate-limit";
 import routes from "./routes.js";
+import { pipeFetchBody } from "./r2.js";
 import { securityMonitor } from "./middleware/security-monitor.js";
 import { getClientIp, isInternalIp } from "./lib/client-ip.js";
 import { logSecurityEvent } from "./lib/security-log.js";
@@ -228,7 +228,7 @@ app.get("/uploads/*", async (req, res) => {
     if (!r2Res.ok) return res.status(404).end();
     res.setHeader("Content-Type", r2Res.headers.get("content-type") || "application/octet-stream");
     res.setHeader("Cache-Control", "public, max-age=86400");
-    Readable.fromWeb(r2Res.body).pipe(res);
+    pipeFetchBody(r2Res.body, res, key);
   } catch {
     res.status(404).end();
   }
