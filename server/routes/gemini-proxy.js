@@ -87,6 +87,11 @@ router.post("/v1/chat/completions", async (req, res) => {
       console.warn(`[gemini-proxy] ${startedAt} QUOTA_EXCEEDED ip=${info.ip} model=${info.model} messages=${info.messageCount} hasImage=${info.hasImage} active=${activeCount} queued=${waitQueue.length}`);
       return res.status(429).json({ error: "quota_exceeded", message: err.message });
     }
+    if (err.isOverloaded) {
+      // A Gemini modell (és a tartalék is) túlterhelt — átmeneti, a kliens később újrapróbálhatja
+      console.warn(`[gemini-proxy] ${startedAt} OVERLOADED ip=${info.ip} model=${info.model} messages=${info.messageCount} hasImage=${info.hasImage} active=${activeCount} queued=${waitQueue.length}`);
+      return res.status(503).json({ error: "overloaded", message: err.message });
+    }
     console.error(`[gemini-proxy] ${startedAt} UPSTREAM_ERROR ip=${info.ip} model=${info.model} messages=${info.messageCount} hasImage=${info.hasImage} hiba: ${err.message}`);
     res.status(502).json({ error: "upstream_error", message: err.message });
   } finally {

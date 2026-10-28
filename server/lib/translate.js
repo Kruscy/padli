@@ -24,10 +24,13 @@ async function translateWithDeepL(text) {
       "Authorization": `DeepL-Auth-Key ${DEEPL_API_KEY}`,
       "Content-Type": "application/json"
     },
-    body: JSON.stringify({ text: [text], target_lang: "HU" })
+    // Az AniList-leírások HTML-t (<br>, <i>) tartalmazhatnak — ezt a DeepL
+    // tag_handlinggel érintetlenül hagyja, nem fordítja bele
+    body: JSON.stringify({ text: [text], target_lang: "HU", ...(/<[a-z\/]/i.test(text) ? { tag_handling: "html" } : {}) }),
+    signal: AbortSignal.timeout(15000),
   });
   // A DeepL free kvóta kimerülésekor 456-ot ad vissza, de minden nem-OK
-  // választ hibaként kezelünk, hogy a Gemini fallback biztosan beugorjon.
+  // választ hibaként kezelünk.
   if (!res.ok) {
     await logDeeplUsage(false, res.status, null);
     if (res.status === 456) {
@@ -58,12 +61,13 @@ async function translateWithGemini(text) {
   return translated;
 }
 
-/* ── Magyar fordítás Geminivel ─────────────
-   A DeepL-t szándékosan nem használjuk itt (a havi ingyenes kvótája
-   máshova van fenntartva), mindig Geminit hívunk (ami maga is 3 kulcs
-   között rotál). ── */
-export async function translateToHungarian(text) {
-  if (!text) return text;
+/* ── Magyar fordítás: Gemini elsőként, DeepL tartalékként ─────────────
+   Elsőként Geminit hívunk (kulcs-rotációval, túlterhelésnél tartalék
+   modellel). Ha az sem válaszol, a DeepL free fordít (2026-10-21: a
+   Gemini-túlterhelés miatt a leírások különben angolul maradtak, a DeepL
+   havi kerete pedig kihasználatlan volt). ── */
+export async function tryTranslateToHungarian(text) {
+  if (!text) return null;
 
   try {
     return await translateWithGemini(text);
@@ -71,5 +75,22 @@ export async function translateToHungarian(text) {
     console.error("Gemini fordítási hiba: " + err.message);
   }
 
-  return text;
+  if (DEEPL_API_KEY) {
+    try {
+      return await translateWithDeepL(text);
+    } catch (err) {
+      console.error("DeepL fordítási hiba: " + err.message);
+    }
+  }
+
+  return null;
+}
+
+// Sikertelen fordításnál az eredeti szöveget adja vissza (a szerkesztő
+// fordító gombja ebből ismeri fel a hibát). Leírás mentéséhez a
+// tryTranslateToHungarian kell: ott a null jelzi, hogy ne az angol
+// szöveg kerüljön a magyar leírás helyére.
+export async function translateToHungarian(text) {
+  if (!text) return text;
+  return (await tryTranslateToHungarian(text)) ?? text;
 }
