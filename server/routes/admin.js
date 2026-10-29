@@ -790,7 +790,7 @@ router.get("/api-usage", async (req, res) => {
       try {
         const usageRes = await fetch("https://api-free.deepl.com/v2/usage", {
           headers: { "Authorization": `DeepL-Auth-Key ${process.env.DEEPL_API_KEY}` },
-          timeout: 8000,
+          signal: AbortSignal.timeout(8000),
         });
         if (usageRes.ok) deeplUsage = await usageRes.json();
       } catch (err) {

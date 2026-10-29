@@ -8,6 +8,7 @@ import jwt      from "jsonwebtoken";
 import multer   from "multer";
 import FormData from "form-data";
 import fetch    from "node-fetch";
+import rateLimit from "express-rate-limit";
 import sharp    from "sharp";
 import fs       from "fs";
 import path     from "path";
@@ -30,7 +31,7 @@ const JWT_SECRET     = process.env.MANGA_JWT_SECRET;
 if (!JWT_SECRET) console.warn("⚠️  MANGA_JWT_SECRET nincs beállítva — a PadliCrome-bővítmény belépése nem fog működni.");
 const TORII_API_KEY  = process.env.TORII_API_KEY;
 const TORII_API_URL  = "https://api.toriitranslate.com/api/v2/upload";
-const PROJECT_ROOT   = "/mnt/manga2/padlicrome";
+const PROJECT_ROOT   = process.env.PADLICROME_DIR || "/mnt/manga2/padlicrome";
 const MAX_IMAGES     = 30;
 const MAX_FILE_SIZE  = 5 * 1024 * 1024;       // 5MB
 const MAX_IMG_HEIGHT = 65000;                  // px - a JPEG formátum kemény határa 65535px, ez alatt biztonsági ráhagyással; Torii API-val élesben tesztelve idáig működik
@@ -170,7 +171,7 @@ async function downloadImage(url, refererOverride, { trusted = false } = {}) {
       "User-Agent": USER_AGENT,
       "Accept": "image/webp,image/apng,image/*,*/*;q=0.8",
     },
-    timeout: 20000,
+    signal: AbortSignal.timeout(20000), // a node-fetch v3 a "timeout" opciót figyelmen kívül hagyja
   });
   if (!resp.ok) throw new Error(`HTTP ${resp.status} - ${url}`);
   const buf = await resp.buffer();
@@ -196,7 +197,7 @@ async function translateViaTorii(imageBuffer, filename) {
     method: "POST",
     headers: { "Authorization": `Bearer ${TORII_API_KEY}`, ...form.getHeaders() },
     body: form,
-    timeout: 180000,
+    signal: AbortSignal.timeout(180000),
   });
 
   if (resp.headers.get("success") !== "true") {
@@ -233,7 +234,7 @@ async function scrapeMangaDex(chapterUrl) {
   const apiUrl = `https://api.mangadex.org/at-home/server/${chapterId}`;
   const resp = await safeFetch(apiUrl, {
     headers: { "User-Agent": USER_AGENT },
-    timeout: 10000,
+    signal: AbortSignal.timeout(10000),
   });
   if (!resp.ok) throw new Error(`MangaDex API hiba: ${resp.status}`);
   const data = await resp.json();
@@ -255,7 +256,7 @@ async function scrapeGenericWordPress(chapterUrl) {
       "Accept-Language": "en-US,en;q=0.5",
       "Referer": new URL(chapterUrl).origin + "/",
     },
-    timeout: 15000,
+    signal: AbortSignal.timeout(15000),
   });
 
   if (!resp.ok) throw new Error(`Az oldal nem elérhető: HTTP ${resp.status}`);
@@ -449,15 +450,6 @@ router.post("/project/start", requireAuth, async (req, res) => {
   const { url } = req.body || {};
   if (!url) return res.status(400).json({ error: "Hiányzó URL" });
 
-  // Meglévő projekt törlése
-  const existingProject = readProject(userId);
-  if (existingProject) {
-    const dir = userDir(userId);
-    if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true });
-  }
-
-  ensureUserDirs(userId);
-
   // Scrape
   let imageUrls;
   try {
@@ -465,6 +457,15 @@ router.post("/project/start", requireAuth, async (req, res) => {
   } catch (err) {
     return res.status(422).json({ error: err.message });
   }
+
+  // A meglévő projekt csak sikeres scrape UTÁN törlődik (korábban előtte:
+  // hibás URL-nél a felhasználó elvesztette a folyamatban lévő munkáját)
+  if (readProject(userId)) {
+    const dir = userDir(userId);
+    if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true });
+  }
+
+  ensureUserDirs(userId);
 
   const referer = new URL(url).origin + "/";
   const project = {
@@ -625,8 +626,23 @@ router.post("/translate/:id", requireAuth, async (req, res) => {
    Nem helyettesíti a fenti /translate/:id-t (ami a manga-image-translator
    szolgáltatást hívja és renderelt, kép-visszaírt eredményt ad) — ez csak
    szöveg-kinyerést + fordítást ad vissza JSON-ban, minőség-összehasonlításhoz.
-   Nincs pontlevonás, mert kísérleti/teszt funkció. ── */
-router.post("/translate-gemini/:id", requireAuth, async (req, res) => {
+   Nincs pontlevonás, mert kísérleti/teszt funkció — ezért felhasználónként
+   óránként korlátozott (korábban korlátlanul hívható volt, a fizetős
+   Gemini-kvóta terhére). ── */
+const geminiTestLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 40,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `pc-gemini:${req.authUser.id}`,
+  handler: (req, res, _next, options) => {
+    logSecurityEvent({ req, type: "ai_rate_limited", severity: "warn", userId: req.authUser.id,
+                       username: req.authUser.username, details: { endpoint: "padlicrome-translate-gemini" } });
+    res.status(options.statusCode).json({ error: "Túl sok teszt-fordítás, próbáld újra később." });
+  },
+});
+
+router.post("/translate-gemini/:id", requireAuth, geminiTestLimiter, async (req, res) => {
   const userId = req.authUser.id;
   const project = readProject(userId);
   if (!project) return res.status(404).json({ error: "Nincs projekt" });
@@ -680,7 +696,7 @@ Ha nincs szöveg a képen, üres tömböt ([]) adj vissza.`;
     res.json({ ok: true, segments });
   } catch (err) {
     console.error("[PADLICROME] translate-gemini:", err);
-    res.status(500).json({ error: "Szerver hiba: " + err.message });
+    res.status(500).json({ error: "Szerver hiba" });
   }
 });
 

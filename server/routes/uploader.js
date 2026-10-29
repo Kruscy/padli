@@ -8,6 +8,7 @@ import { localPathToR2Key } from "../r2.js";
 import { requestScan, getScanStatus } from "../lib/scan-runner.js";
 import { findExistingSeries } from "../lib/manga-duplicates.js";
 import { logSecurityEvent } from "../lib/security-log.js";
+import { isImageBuffer } from "../lib/safe-path.js";
 import { compressPageImage } from "../lib/image-compress.js";
 
 const r2 = new S3Client({
@@ -341,6 +342,12 @@ router.post("/upload", requireUploader, upload.single("file"), async (req, res) 
 
   const fullPath = safeUserPath(uploaderRoot, relativePath);
   if (!fullPath) return res.status(400).json({ error: "Érvénytelen útvonal" });
+
+  // Csak kép tölthető fel: a fejezetmappák tartalmát az /api/image saját
+  // originről szolgálja ki, egy feltöltött .html/.svg ott szkriptként futna
+  if (!IMAGE_EXTS.has(path.extname(fullPath).toLowerCase()) || !(await isImageBuffer(req.file.buffer))) {
+    return res.status(415).json({ error: "Csak képfájl tölthető fel (jpg, png, webp, gif, avif)" });
+  }
 
   const blocked = await checkNewSeriesFolder(req, relativePath, { isFolder: false });
   if (blocked) return res.status(409).json(blocked);

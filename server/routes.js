@@ -236,7 +236,10 @@ router.post("/auth/forgot-password", async (req, res) => {
     const resetLink =
       `https://padlizsanfansub.hu/reset-password.html?token=${token}`;
 
-    await sendMail({
+    // Nem várjuk meg és nem adjuk vissza a levélküldés eredményét: létező
+    // fióknál korábban SMTP-hiba esetén 500 jött (nem létezőnél 200), és a
+    // küldés ideje is elárulta, hogy a cím regisztrált-e
+    sendMail({
       to: email,
       subject: "🔐 Jelszó visszaállítás - PadlizsanFanSub",
       html: `
@@ -248,7 +251,7 @@ router.post("/auth/forgot-password", async (req, res) => {
         </p>
         <p>Ez a link 30 percig érvényes.</p>
       `
-    });
+    }).catch(e => console.error("[mail] reset send error:", e.message));
 
     res.json({ ok: true });
   } catch (err) {

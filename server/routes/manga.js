@@ -339,8 +339,13 @@ router.get("/pages/:slug/:chapter", requireLogin, async (req, res) => {
 
 /* ================= IMAGE ================= */
 
+// Csak képfájl szolgálható ki: a fejezetmappában lévő más fájl (pl. .html)
+// saját originről kiszolgálva szkriptként futhatna
+const SERVABLE_IMAGE_EXTS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"]);
+
 router.get("/image/:library/:slug/:chapter/:file", requireLogin, async (req, res) => {
   const { library, slug, chapter, file } = req.params;
+  if (!SERVABLE_IMAGE_EXTS.has(path.extname(file).toLowerCase())) return res.status(404).end();
 
   // A library.name szűrés a legtöbb esetben már egyértelművé teszi a
   // sort, de duplikált slug esetén (ha véletlenül ugyanabban a

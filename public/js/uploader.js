@@ -98,7 +98,11 @@ async function collectEntry(entry, basePath) {
   }
 }
 
+// A szerver csak képet fogad el (pl. Thumbs.db, ComicInfo.xml kimarad)
+const UPLOAD_IMAGE_RE = /\.(jpe?g|png|webp|gif|avif)$/i;
+
 function addToQueue(file, relativePath) {
+  if (!UPLOAD_IMAGE_RE.test(file.name)) return;
   // Ne adjuk hozzá kétszer ugyanazt
   const key = relativePath;
   if (uploadQueue.find(i => i.relativePath === key && i.status !== "error")) return;
