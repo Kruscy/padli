@@ -1,6 +1,7 @@
 /* ============================================================
    reader.js - PadlizsanFanSub olvasó
    ============================================================ */
+import * as RC from "./reader-core.js";
 
 history.scrollRestoration = "manual";
 
@@ -12,17 +13,76 @@ let startPage  = parseInt(params.get("page") || "0", 10);
 const pagesEl  = document.getElementById("pages");
 const isMobile = window.innerWidth <= 768;
 
-/* ── OLVASÁSI MÓD ────────────────────────────────────────── */
-// Preferencia mentés: userenként, platformonként
-const PREF_KEY = `reader_mode_${isMobile ? "mobile" : "desktop"}`;
+/* ── BEÁLLÍTÁSOK (mód, irány, méretezés…) ───────────────────
+   Eszközönként (telefon / gép) külön, a fiókhoz mentve; a böngészőben is
+   megtartjuk, hogy betöltéskor azonnal érvényes legyen. A logika:
+   reader-core.js. */
+const DEVICE = RC.deviceKind(window.innerWidth);
+const PREFS_KEY = `reader_prefs_${DEVICE}`;
+const LEGACY_MODE_KEY = `reader_mode_${DEVICE}`; // a korábbi, csak módot tároló kulcs
 
-const MODES = ["scroll", "book"];
-let readMode = localStorage.getItem(PREF_KEY) || (isMobile ? "scroll" : "scroll");
-let bookPageIndex = 0; // melyik oldalpárnál tartunk könyv módban
+function readLocalPrefs() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(PREFS_KEY) || "null");
+    if (saved) return RC.normalizePrefs(saved);
+    return RC.normalizePrefs({ mode: localStorage.getItem(LEGACY_MODE_KEY) || undefined });
+  } catch { return RC.normalizePrefs({}); }
+}
+
+let prefs = readLocalPrefs();
+let readMode = prefs.mode;
+let webtoonOverride = false; // ebben a fejezetben már eldőlt (felismerés vagy kézi váltás)
+let prefsSaveTimer = null;
+
+function savePrefs() {
+  try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch {}
+  clearTimeout(prefsSaveTimer);
+  prefsSaveTimer = setTimeout(() => {
+    fetch(`/api/reader-prefs/${DEVICE}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(prefs),
+    }).catch(() => {});
+  }, 500);
+}
+
+// A fiókhoz mentett beállítás (másik böngészőből / eszközről)
+async function loadServerPrefs() {
+  try {
+    const res = await fetch("/api/reader-prefs");
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data[DEVICE]) return;
+    prefs = RC.normalizePrefs(data[DEVICE]);
+    readMode = prefs.mode;
+    try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch {}
+  } catch {}
+}
+
+function applyLayout() {
+  const b = document.body.classList;
+  b.toggle("dir-rtl", prefs.direction === "rtl");
+  for (const s of RC.CHOICES.scaling) b.toggle(`scale-${s}`, prefs.scaling === s);
+  document.documentElement.style.setProperty("--reader-width", `${prefs.widthPct}vw`);
+}
+
+/* ── KÖNYV MÓD POZÍCIÓ ─────────────────────────────────────
+   index: az első látható oldal, half: széles kép felezésénél melyik fele
+   (0 / 1), egyébként null */
+let bookPos = { index: 0, half: null };
+const pageDims = {}; // index → { width, height } (a betöltött képekből)
+
+function bookCtx() {
+  return {
+    total: allFiles.length,
+    step: isMobile ? 1 : 2,
+    split: prefs.splitWide === "split",
+    isWide: (i) => !!pageDims[i] && RC.isWideImage(pageDims[i].width, pageDims[i].height),
+  };
+}
 
 function setMode(mode) {
   readMode = mode;
-  localStorage.setItem(PREF_KEY, mode);
   document.body.classList.toggle("mode-book", mode === "book");
   pagesEl.className = "mode-" + mode;
 
@@ -47,7 +107,7 @@ let chapterVersion = null; // ha be van állítva, minden kép ezt kapja ?v= par
 let chapters      = [];
 
 function getCurrentPage() {
-  if (readMode === "book") return bookPageIndex + 1;
+  if (readMode === "book") return bookPos.index + 1;
 
   // Wrap diveket használunk (nem img-et): a hidden képek rect.top=0, ami
   // félreviszi a számolást töltés közben — a wrap mindig layoutban van.
@@ -324,12 +384,26 @@ function buildBookPages() {
     const img = document.createElement("img");
     img.dataset.src = `/api/image/${currentLibrary}/${slug}/${chapter}/${encodeURIComponent(f)}?r2=1${chapterVersion ? `&v=${chapterVersion}` : (fixVersions[f] ? `&v=${fixVersions[f]}` : "")}`;
     img.alt = "";
+    img.addEventListener("load", () => {
+      const wasWide = bookCtx().isWide(i);
+      recordDims(i, img.naturalWidth, img.naturalHeight);
+      // a most kiderült széles kép felezése, ha épp ez látszik
+      if (!wasWide && i === bookPos.index && bookCtx().isWide(i) && bookCtx().split && isMobile) {
+        bookPos = { index: i, half: 0 };
+        renderBookView();
+      }
+    });
 
-    div.appendChild(img);
+    // A felezett kép egyik felét a keret vágja ki (lásd reader.css)
+    const clip = document.createElement("div");
+    clip.className = "page-clip";
+    clip.appendChild(img);
+    div.appendChild(clip);
     pagesEl.appendChild(div);
   });
 
-  bookPageIndex = startPage > 0 ? startPage - 1 : 0;
+  const start = startPage > 0 ? startPage - 1 : 0;
+  bookPos = { index: start, half: bookCtx().isWide(start) && prefs.splitWide === "split" && isMobile ? 0 : null };
   renderBookView();
 }
 
@@ -356,6 +430,7 @@ function loadImagesInOrder(order, imgEls, scrollTarget) {
 
     const tmpImg = new Image();
     tmpImg.onload = () => {
+      recordDims(idx, tmpImg.naturalWidth, tmpImg.naturalHeight);
       img.src = tmpImg.src;
       img.style.display = "block";
       ph.remove();
@@ -383,34 +458,37 @@ function loadImagesInOrder(order, imgEls, scrollTarget) {
 /* ── KÖNYV MÓD RENDER ────────────────────────────────────── */
 function renderBookView() {
   const pages = [...pagesEl.querySelectorAll(".book-page")];
-  const total = pages.length;
+  const first = bookPos.index;
 
-  pages.forEach(p => p.classList.remove("visible"));
+  pages.forEach(p => p.classList.remove("visible", "split", "split-left", "split-right"));
 
-  if (isMobile) {
-    // Mobil: 1 oldal
-    if (pages[bookPageIndex]) {
-      pages[bookPageIndex].classList.add("visible");
-      loadBookImage(pages[bookPageIndex]);
-    }
-  } else {
-    // Asztal: 2 oldal egymás mellett
-    const left  = bookPageIndex;
-    const right = bookPageIndex + 1;
-    if (pages[left])  { pages[left].classList.add("visible");  loadBookImage(pages[left]); }
-    if (pages[right]) { pages[right].classList.add("visible"); loadBookImage(pages[right]); }
+  // Mobilon 1 oldal, asztalon 2 egymás mellett (jobbról balra olvasásnál
+  // a sorrendet a CSS fordítja meg)
+  const shown = isMobile ? [first] : [first, first + 1];
+  for (const i of shown) {
+    if (!pages[i]) continue;
+    pages[i].classList.add("visible");
+    loadBookImage(pages[i]);
+  }
+
+  // Széles kép fele (csak egyoldalas nézetben)
+  const side = RC.halfSide(bookPos.half, prefs.direction);
+  if (side && pages[first]) {
+    const d = pageDims[first];
+    pages[first].style.setProperty("--half-ar", d ? String(d.width / 2 / d.height) : "0.7");
+    pages[first].classList.add("split", `split-${side}`);
   }
 
   // Előre betöltjük a következőket
   const preload = isMobile ? 2 : 4;
   for (let k = 1; k <= preload; k++) {
-    const next = bookPageIndex + (isMobile ? k : k * 2);
+    const next = first + (isMobile ? k : k * 2);
     if (pages[next]) loadBookImage(pages[next]);
     if (pages[next + 1]) loadBookImage(pages[next + 1]);
   }
 
   // Progress frissítés
-  saveProgress(bookPageIndex + 1);
+  saveProgress(first + 1);
 }
 
 function loadBookImage(pageDiv) {
@@ -419,32 +497,26 @@ function loadBookImage(pageDiv) {
   img.src = img.dataset.src;
 }
 
-function bookNext() {
-  const step = isMobile ? 1 : 2;
-  const total = allFiles.length;
-  if (bookPageIndex + step < total) {
-    pagesEl.classList.add("page-flip-enter");
-    setTimeout(() => pagesEl.classList.remove("page-flip-enter"), 300);
-    bookPageIndex += step;
-    renderBookView();
-  }
+function moveBook(to) {
+  if (!to) return;
+  pagesEl.classList.add("page-flip-enter");
+  setTimeout(() => pagesEl.classList.remove("page-flip-enter"), 300);
+  bookPos = to;
+  renderBookView();
 }
-
-function bookPrev() {
-  const step = isMobile ? 1 : 2;
-  if (bookPageIndex - step >= 0) {
-    pagesEl.classList.add("page-flip-enter");
-    setTimeout(() => pagesEl.classList.remove("page-flip-enter"), 300);
-    bookPageIndex -= step;
-    renderBookView();
-  }
+function bookNext() { moveBook(RC.nextPosition(bookPos, bookCtx())); }
+function bookPrev() { moveBook(RC.prevPosition(bookPos, bookCtx())); }
+function bookAction(action) {
+  if (action === "next") bookNext();
+  else if (action === "prev") bookPrev();
 }
+// A képernyő bal / jobb nyila — jobbról balra olvasásnál a bal visz előre
+window.bookArrow = (side) => bookAction(RC.arrowAction(side, prefs.direction));
 
 /* ── KÖNYV MÓD: BILLENTYŰ, SWIPE, KATTINTÁS ─────────────── */
 document.addEventListener("keydown", e => {
-  if (readMode !== "book") return;
-  if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") bookNext();
-  if (e.key === "ArrowLeft"  || e.key === "a" || e.key === "A") bookPrev();
+  if (readMode !== "book" || e.target.closest?.("input, select, textarea")) return;
+  bookAction(RC.keyAction(e.key, prefs.direction));
 });
 
 // Touch kezelő
@@ -471,10 +543,7 @@ pagesEl.addEventListener("touchmove", e => {
 pagesEl.addEventListener("touchend", e => {
   if (readMode !== "book") return;
   const dx = e.changedTouches[0].clientX - touchStartX;
-  if (isSwiping) {
-    if (dx < -40) bookNext();
-    if (dx >  40) bookPrev();
-  }
+  if (isSwiping) bookAction(RC.swipeAction(dx, prefs.direction));
 });
 
 // Scroll mód: túlhúzás fejezet váltás
@@ -636,6 +705,9 @@ document.addEventListener("keydown", e => {
 /* ── OLVASÁSI MÓD VÁLTÓ GOMB ─────────────────────────────── */
 function cycleMode() {
   const next = readMode === "scroll" ? "book" : "scroll";
+  webtoonOverride = true; // a kézi választás felülírja a webtoon-felismerést
+  prefs.mode = next;
+  savePrefs();
   setMode(next);
   // Ha módot váltunk, újra kell rendernünk
   if (allFiles.length) {
@@ -677,7 +749,7 @@ let lastClickTime = 0;
 let clickTimer    = null;
 
 document.addEventListener("click", e => {
-  if (e.target.closest("button") || e.target.closest("a")) return;
+  if (e.target.closest("button") || e.target.closest("a") || e.target.closest(".reader-settings")) return;
 
   const xRatio = e.clientX / window.innerWidth;
   const now    = Date.now();
@@ -685,8 +757,8 @@ document.addEventListener("click", e => {
   lastClickTime = now;
 
   if (readMode === "book" && isMobile) {
-    if (xRatio < 0.25) { bookPrev(); return; }
-    if (xRatio > 0.75) { bookNext(); return; }
+    const action = RC.tapAction(xRatio, prefs.direction);
+    if (action) { bookAction(action); return; }
   }
 
   // Középső zóna: szimpla/dupla detektálás
@@ -717,7 +789,9 @@ function bugReportClick() {
 /* ── INIT ────────────────────────────────────────────────── */
 (async () => {
   try {
-    await loadProgress();
+    applyLayout();
+    await Promise.all([loadProgress(), loadServerPrefs()]);
+    applyLayout();
     const ok = await loadPages();
     if (ok) await loadNav();
 
@@ -734,3 +808,113 @@ function bugReportClick() {
 document.getElementById("btnFullscreen")?.addEventListener("click", toggleFullscreen);
 document.querySelector(".btn-mode")?.addEventListener("click", cycleMode);
 document.getElementById("btnBugReport")?.addEventListener("click", bugReportClick);
+document.getElementById("btnSettings")?.addEventListener("click", toggleSettingsPanel);
+
+/* ── WEBTOON-FELISMERÉS ──────────────────────────────────────
+   Hosszú, keskeny képeknél könyv mód helyett görgetős mód — csak erre a
+   fejezetre, a mentett beállítás nem változik. */
+function recordDims(index, width, height) {
+  if (!width || !height) return;
+  pageDims[index] = { width, height };
+  if (readMode !== "book" || !prefs.autoWebtoon || webtoonOverride) return;
+  const firstDims = [0, 1, 2].map(i => pageDims[i]);
+  if (!RC.detectWebtoon(firstDims)) return;
+  webtoonOverride = true;
+  startPage = getCurrentPage();
+  setMode("scroll");
+  buildScrollPages();
+  showToast("Webtoon: görgetős módra váltottam (a ⚙️ beállításokban kikapcsolható).");
+}
+
+function showToast(text) {
+  const t = document.createElement("div");
+  t.className = "reader-toast";
+  t.textContent = text;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 4000);
+}
+
+/* ── BEÁLLÍTÁSOK PANEL ───────────────────────────────────── */
+const SETTINGS_FIELDS = [
+  { key: "direction", label: "Olvasási irány", options: [["ltr", "Balról jobbra"], ["rtl", "Jobbról balra (manga)"]] },
+  { key: "scaling", label: "Méretezés", options: [["auto", "Automatikus"], ["width", "Szélességre"], ["height", "Magasságra"], ["original", "Eredeti méret"]] },
+  { key: "splitWide", label: "Széles (kétoldalas) képek", hint: "könyv módban, egyoldalas nézetben", options: [["fit", "Egészben"], ["split", "Két félre bontva"]] },
+];
+
+function buildSettingsPanel() {
+  const panel = document.createElement("div");
+  panel.id = "readerSettings";
+  panel.className = "reader-settings";
+  panel.setAttribute("role", "dialog");
+  panel.setAttribute("aria-label", "Olvasó beállításai");
+
+  const title = document.createElement("h3");
+  title.textContent = `Olvasó beállításai (${DEVICE === "mobile" ? "telefon" : "számítógép"})`;
+  panel.appendChild(title);
+
+  for (const f of SETTINGS_FIELDS) {
+    const group = document.createElement("fieldset");
+    const legend = document.createElement("legend");
+    legend.textContent = f.label + (f.hint ? ` — ${f.hint}` : "");
+    group.appendChild(legend);
+    for (const [value, text] of f.options) {
+      const label = document.createElement("label");
+      const input = document.createElement("input");
+      input.type = "radio";
+      input.name = `rs-${f.key}`;
+      input.value = value;
+      input.checked = prefs[f.key] === value;
+      input.addEventListener("change", () => updatePref(f.key, value));
+      label.append(input, " ", text);
+      group.appendChild(label);
+    }
+    panel.appendChild(group);
+  }
+
+  const widthLabel = document.createElement("label");
+  widthLabel.className = "rs-width";
+  const range = document.createElement("input");
+  range.type = "range"; range.min = "40"; range.max = "100"; range.step = "5";
+  range.value = String(prefs.widthPct);
+  const widthText = document.createElement("span");
+  widthText.textContent = `${prefs.widthPct}%`;
+  range.addEventListener("input", () => { widthText.textContent = `${range.value}%`; updatePref("widthPct", Number(range.value)); });
+  widthLabel.append("Szélesség (görgetős mód, „Szélességre”): ", range, " ", widthText);
+  panel.appendChild(widthLabel);
+
+  const auto = document.createElement("label");
+  const autoInput = document.createElement("input");
+  autoInput.type = "checkbox";
+  autoInput.checked = prefs.autoWebtoon;
+  autoInput.addEventListener("change", () => updatePref("autoWebtoon", autoInput.checked));
+  auto.append(autoInput, " Webtoonnál automatikusan görgetős mód");
+  panel.appendChild(auto);
+
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "rs-close";
+  close.textContent = "Bezárás";
+  close.addEventListener("click", toggleSettingsPanel);
+  panel.appendChild(close);
+
+  document.body.appendChild(panel);
+  return panel;
+}
+
+function toggleSettingsPanel() {
+  const panel = document.getElementById("readerSettings") || buildSettingsPanel();
+  panel.classList.toggle("open");
+  if (panel.classList.contains("open")) showUI();
+}
+
+function updatePref(key, value) {
+  prefs = RC.normalizePrefs({ ...prefs, [key]: value });
+  savePrefs();
+  applyLayout();
+  if (readMode === "book" && (key === "splitWide" || key === "direction")) {
+    const ctx = bookCtx();
+    const split = ctx.split && isMobile && ctx.isWide(bookPos.index);
+    bookPos = { index: bookPos.index, half: split ? 0 : null };
+    renderBookView();
+  }
+}

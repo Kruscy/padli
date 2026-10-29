@@ -774,3 +774,12 @@ CREATE TABLE IF NOT EXISTS public.site_settings (
     value      TEXT,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Olvasó-beállítások felhasználónként és eszközönként — public/js/reader-core.js
+CREATE TABLE IF NOT EXISTS public.reader_prefs (
+    user_id    INTEGER NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    device     TEXT    NOT NULL,
+    prefs      JSONB   NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, device)
+);

@@ -10,7 +10,7 @@ router.get("/export", requireLogin, async (req, res) => {
   const userId = req.session.user.id;
 
   try {
-    const [profile, progress, reads, ratings, favorites, wishlist, wantToRead, orders, points] =
+    const [profile, progress, reads, ratings, favorites, wishlist, wantToRead, orders, points, readerPrefs] =
       await Promise.all([
         pool.query(
           `SELECT username, email, created_at, TO_CHAR(birth_date, 'YYYY-MM-DD') AS birth_date,
@@ -57,6 +57,7 @@ router.get("/export", requireLogin, async (req, res) => {
           `SELECT points, spent, earned_at FROM user_points WHERE user_id = $1 ORDER BY earned_at DESC LIMIT 200`,
           [userId]
         ),
+        pool.query(`SELECT device, prefs, updated_at FROM reader_prefs WHERE user_id = $1`, [userId]),
       ]);
 
     const data = {
@@ -69,6 +70,7 @@ router.get("/export", requireLogin, async (req, res) => {
       olvasni_kivan: wantToRead.rows,
       rendelesek: orders.rows,
       pontok_tortenete: points.rows,
+      olvaso_beallitasok: readerPrefs.rows,
       exportalva: new Date().toISOString(),
     };
 

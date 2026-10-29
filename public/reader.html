@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PadlizsanFanSub – Reader</title>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/favico.png">
-  <link rel="stylesheet" href="/css/reader.css?v=20260427">
+  <link rel="stylesheet" href="/css/reader.css">
   <link rel="stylesheet" href="/css/locked.css?v=20260918">
 </head>
 <body>
@@ -36,6 +36,9 @@
     <button class="btn-icon btn-mode" data-mode="scroll" title="Folyamatos görgetés">📜</button>
     <button class="btn-icon btn-mode" data-mode="book"   title="Könyv mód (bal/jobb oldal)" style="display:none">📖</button>
 
+    <!-- Olvasó beállításai -->
+    <button class="btn-icon" id="btnSettings" title="Olvasó beállításai" aria-label="Olvasó beállításai">⚙️</button>
+
     <!-- Hibabejelentő -->
     <button class="btn-icon" id="btnBugReport" title="Hibabejelentés">🐛</button>
   </div>
@@ -44,11 +47,11 @@
 </div>
 
 <!-- Könyv mód nyilak kattintáskezelő -->
-<script src="/js/reader-book-nav-init.js?v=20260619"></script>
+<script src="/js/reader-book-nav-init.js"></script>
 
 <script src="/js/bug-report-modal.js?v=20260720"></script>
 <script type="module" src="/js/paywall.js?v=20260918"></script>
-<script src="/js/reader.js?v=20261012"></script>
+<script type="module" src="/js/reader.js"></script>
 <script type="module" src="/js/layout-loader.js?v=20261004"></script>
 </body>
 </html>
