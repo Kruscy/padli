@@ -46,6 +46,28 @@ main.content {
   font-weight: 700;
 }
 
+/* Alternatív címek a cím alatt */
+.manga-alt-titles {
+  margin: -4px 0 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #94a3b8;
+  overflow-wrap: anywhere;
+}
+
+.alt-titles-more {
+  background: none;
+  border: none;
+  padding: 0 0 0 6px;
+  font: inherit;
+  color: #a5b4fc;
+  cursor: pointer;
+}
+
+.alt-titles-more:hover {
+  text-decoration: underline;
+}
+
 /* ===== ACTION BAR ===== */
 .action-bar {
   display: flex;
@@ -286,6 +308,10 @@ main.content {
 
   #mangaTitle {
     font-size: 20px;
+  }
+
+  .manga-alt-titles {
+    font-size: 12px;
   }
 
   .chapter-row {

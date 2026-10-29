@@ -1,8 +1,9 @@
 import { pool } from "./db.js";
 import dotenv from "dotenv";
 import { autoClaimWishlistForManga } from "./lib/wishlist-auto-claim.js";
-import { translateToHungarian } from "./lib/translate.js";
+import { tryTranslateToHungarian } from "./lib/translate.js";
 import { fetchMangaMetadata } from "./lib/metadata-source.js";
+import { mergeAltTitles } from "./lib/manga-duplicates.js";
 dotenv.config();
 
 /* ================= FŐ FÜGGVÉNY ================= */
@@ -30,7 +31,7 @@ export async function refreshMetadataForManga(mangaId, anilistId = null) {
     .replace(/[-_]/g, " ")
     .trim();
 
-  /* ── 1. Metaadat lekérés — AniList elsődleges, Jikan majd MangaDex fallback ── */
+  /* ── 1. Metaadat lekérés — AniList elsődleges, Jikan, MangaDex majd MangaUpdates fallback ── */
   const result = await fetchMangaMetadata({
     searchTitle,
     anilistId: anilistId || mangaRow.anilist_id,
@@ -41,21 +42,26 @@ export async function refreshMetadataForManga(mangaId, anilistId = null) {
   await pool.query(`UPDATE manga SET anilist_last_try = now() WHERE id = $1`, [mangaId]);
 
   if (!result) {
-    // Mindhárom forrás biztosan nem talált semmit — ez a "no match" eset
+    // Mind a négy forrás biztosan nem talált semmit — ez a "no match" eset
     // marad TransientMetadataError esetén NEM jelöljük failed-nek, az a
     // hívóhoz (admin.js) propagál hibaként, hogy tudjon róla.
     await pool.query(`UPDATE manga SET anilist_failed = TRUE WHERE id = $1`, [mangaId]);
-    throw new Error("Nincs találat sem AniList-en, sem MyAnimeList-en, sem MangaDex-en");
+    throw new Error("Nincs találat sem AniList-en, sem MyAnimeList-en, sem MangaDex-en, sem MangaUpdates-en");
   }
 
   const { source, media } = result;
   console.log(`📡 Forrás: ${source}`);
 
-  /* ── 2. Leírás fordítása ── */
+  /* ── 2. Leírás fordítása ──
+     Sikertelen fordításnál (Gemini és DeepL is hibázott) a meglévő leírás
+     marad — korábban az angol eredeti írta felül a magyart. */
   let description = null;
+  let keepOldDescription = false;
   if (media.description) {
     console.log("🌐 Translating description...");
-    description = await translateToHungarian(media.description);
+    description = await tryTranslateToHungarian(media.description);
+    keepOldDescription = !description;
+    if (keepOldDescription) console.log("⚠️ A fordítás nem sikerült — a meglévő leírás marad");
   }
 
   /* ── 3. Fő adatok mentése – FELÜLÍR, nem COALESCE ──
@@ -74,7 +80,7 @@ export async function refreshMetadataForManga(mangaId, anilistId = null) {
          mangadex_id    = COALESCE($3, mangadex_id),
          metadata_source = $4,
          cover_url      = $5,
-         description    = $6,
+         description    = CASE WHEN $11 THEN description ELSE $6 END,
          status         = $7,
          average_score  = $8,
          total_chapters = $9,
@@ -90,9 +96,14 @@ export async function refreshMetadataForManga(mangaId, anilistId = null) {
       media.status || null,
       media.averageScore || null,
       media.chapters || null,
-      mangaId
+      mangaId,
+      keepOldDescription
     ]
   );
+
+  if (media.altTitles?.length) {
+    await mergeAltTitles(mangaId, media.altTitles);
+  }
 
   /* ── 4. Genres: töröl és újraír ── */
   await pool.query(`DELETE FROM manga_genre WHERE manga_id = $1`, [mangaId]);

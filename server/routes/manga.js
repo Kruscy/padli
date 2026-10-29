@@ -1,10 +1,9 @@
 import express from "express";
 import fs from "fs";
 import path from "path";
-import { Readable } from "stream";
 import { pool } from "../db.js";
 import { requireLogin } from "../middleware/auth.js";
-import { getPresignedUrl, mangaImageToR2Key, objectExists, listFiles, localPathToR2Key } from "../r2.js";
+import { getPresignedUrl, mangaImageToR2Key, objectExists, listFiles, localPathToR2Key, pipeFetchBody } from "../r2.js";
 import { isAdultVerified, resolveAdultMode, ADULT_GENRE_EXISTS_SQL } from "../lib/age.js";
 import { denyReason, flagsFromRows, getChapterFlags } from "../lib/chapter-access.js";
 import { createTtlCache } from "../lib/ttl-cache.js";
@@ -46,7 +45,7 @@ router.get("/manga", requireLogin, async (req, res) => {
     const adultMode = await resolveAdultMode(pool, req);
 
     const rows = await listCache.wrap(`manga|${adultMode}`, async () => (await pool.query(`
-      SELECT m.title, m.slug, m.cover_url,
+      SELECT m.title, m.slug, m.cover_url, COALESCE(m.alt_titles, '{}') AS alt_titles,
         COUNT(DISTINCT c.id)::int AS chapter_count
       FROM manga m
       LEFT JOIN chapter c ON c.manga_id = m.id
@@ -110,7 +109,7 @@ router.get("/manga/:slug", requireLogin, async (req, res) => {
     `SELECT
       m.title, m.slug, m.cover_url, m.description,
       m.status, m.average_score, m.total_chapters,
-      m.uploaders, m.anilist_id,
+      m.uploaders, m.anilist_id, COALESCE(m.alt_titles, '{}') AS alt_titles,
       COALESCE(ARRAY_AGG(DISTINCT g.name) FILTER (WHERE g.name IS NOT NULL), '{}') AS genres,
       COALESCE(ARRAY_AGG(DISTINCT t.name) FILTER (WHERE t.name IS NOT NULL), '{}') AS tags,
       COUNT(DISTINCT c.id) AS chapter_count
@@ -411,7 +410,19 @@ router.get("/image/:library/:slug/:chapter/:file", requireLogin, async (req, res
 
   async function proxyR2(r2Key) {
     const url = `${R2_PUBLIC}/${r2Key}`;
-    const r2Res = await fetch(url, { signal: AbortSignal.timeout(20000) });
+    // 20 mp a fejlécig, utána 2 perc a letöltésre (egy 10 MB-os oldal lassú
+    // vonalon tovább tart 20 mp-nél); ha a látogató közben elnavigál, az
+    // R2-letöltést is leállítjuk.
+    const ctrl = new AbortController();
+    let timer = setTimeout(() => ctrl.abort(), 20000);
+    res.on("close", () => { clearTimeout(timer); ctrl.abort(); });
+    let r2Res;
+    try {
+      r2Res = await fetch(url, { signal: ctrl.signal });
+    } finally {
+      clearTimeout(timer);
+    }
+    timer = setTimeout(() => ctrl.abort(), 120000);
     if (!r2Res.ok) {
       // R2-ből nem jön → fallback lokális SSD-re (pl. új feltöltés még nem scannelt)
       serveLocal();
@@ -423,7 +434,7 @@ router.get("/image/:library/:slug/:chapter/:file", requireLogin, async (req, res
       if (v) res.setHeader(h, v);
     }
     res.setHeader("Cache-Control", cacheControl);
-    Readable.fromWeb(r2Res.body).pipe(res);
+    pipeFetchBody(r2Res.body, res, r2Key);
   }
 
   // R2-migrated manga: proxy R2-ről, fallback lokálisra ha nincs fent még

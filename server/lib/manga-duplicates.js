@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import fetch from "node-fetch";
 import { pool } from "../db.js";
+import { searchSeriesByTitle as searchMangaUpdates } from "./mangaupdates.js";
 
 /* ── Már fent lévő mű felismerése új mappa létrehozásakor ──────
    A scan a mappanév alapján köti össze a fejezeteket a művel, ezért
@@ -11,7 +12,9 @@ import { pool } from "../db.js";
    Egyezés, ha a mappanév (normalizálva) megegyezik egy meglévő mű
    címével, mappanevével vagy valamelyik AniList-nevével; illetve ha
    az AniList a mappanévre olyan művet ad vissza, aminek a nevei közt
-   szerepel a mappanév, és ez a mű (anilist_id) már fent van.
+   szerepel a mappanév, és ez a mű (anilist_id) már fent van; végül ha
+   a MangaUpdates a mappanévre pontosan egyező művet ad, és annak
+   valamelyik neve egy meglévő mű címe/mappaneve/alternatív neve.
    Csak olyan művet nézünk, aminek van legalább egy fejezete. ── */
 
 const ANILIST_URL = "https://graphql.anilist.co";
@@ -65,6 +68,23 @@ export async function fillAltTitles(anilistIds) {
     }
   }
   return saved;
+}
+
+// Más forrásból (pl. MangaUpdates) kapott nevek hozzáfűzése a meglévőkhöz
+// (ismétlés nélkül, a sorrend megmarad).
+export async function mergeAltTitles(mangaId, names) {
+  const clean = [...new Set((names || []).map(n => String(n || "").trim()).filter(Boolean))];
+  if (!clean.length) return;
+  await pool.query(
+    `UPDATE manga SET alt_titles = (
+       SELECT array_agg(n ORDER BY ord) FROM (
+         SELECT DISTINCT ON (n) n, ord
+         FROM unnest(COALESCE(alt_titles, '{}') || $2::text[]) WITH ORDINALITY AS t(n, ord)
+         ORDER BY n, ord
+       ) x)
+     WHERE id = $1`,
+    [mangaId, clean]
+  );
 }
 
 let fillPromise = null;
@@ -135,6 +155,24 @@ export async function findExistingSeries(folderName, uploaderBase) {
       console.warn("[duplikátum-ellenőrzés] AniList hiba:", err.message);
     }
   }
+
+  // A MangaUpdates nevei (ha ezen át egyezett), a saját mappa kereséséhez is
+  let muNames = [];
+  if (!hit) {
+    try {
+      const mu = await searchMangaUpdates(folderName);
+      if (mu) {
+        const names = new Set(mu.altTitles.map(normalizeTitle).filter(n => n.length >= 3));
+        hit = series.find(s => [s.title, s.folder, ...(s.alt_titles || [])].some(n => names.has(normalizeTitle(n))));
+        if (hit) {
+          matchedBy = "mangaupdates";
+          muNames = mu.altTitles;
+        }
+      }
+    } catch (err) {
+      console.warn("[duplikátum-ellenőrzés] MangaUpdates hiba:", err.message);
+    }
+  }
   if (!hit) return null;
 
   const base = path.resolve(uploaderBase);
@@ -144,7 +182,7 @@ export async function findExistingSeries(folderName, uploaderBase) {
   // A feltöltő saját, már meglévő mappája ehhez a műhöz (ha van)
   let ownFolder = null;
   if (own.length) {
-    const names = new Set([hit.title, hit.folder, ...(hit.alt_titles || [])].map(normalizeTitle));
+    const names = new Set([hit.title, hit.folder, ...(hit.alt_titles || []), ...muNames].map(normalizeTitle));
     try {
       ownFolder = fs.readdirSync(base, { withFileTypes: true })
         .filter(e => e.isDirectory())

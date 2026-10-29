@@ -5,6 +5,7 @@ import { r2, BUCKET, localPathToR2Key } from "../r2.js";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { isSafeName, resolveInside, stagedFixPath } from "./safe-path.js";
 import { getSite } from "./site-config.js";
+import { compressPageImage } from "./image-compress.js";
 
 /* ── Egy bug_fixes sor tényleges alkalmazása ───────────────────
    Kiszervezve, hogy egyaránt hívható legyen:
@@ -56,7 +57,7 @@ export async function applyBugFix(fixId, adminUserId) {
   // NEM hiba, ha nincs helyi fájl: R2 a tényleges forrás, oda mindenképp
   // feltöltjük a javítást; a helyi írás csak akkor történik meg, ha a
   // fejezet mappája ténylegesen létezik a lemezen.
-  const fileData = fs.readFileSync(fixedFile);
+  const { buffer: fileData } = await compressPageImage(fs.readFileSync(fixedFile), originalFilename);
   const chapterDirExists = fs.existsSync(chapterDir);
   if (chapterDirExists) {
     fs.writeFileSync(originalPath, fileData);

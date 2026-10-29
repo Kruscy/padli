@@ -3,6 +3,7 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import path from "path";
 import { UPLOADER_BASE_DIR } from "./lib/paths.js";
+import { Readable, pipeline } from "stream";
 
 export const r2 = new S3Client({
   region: "auto",
@@ -86,4 +87,17 @@ export async function deleteObjectsByPrefix(prefix) {
     token = listRes.NextContinuationToken;
   } while (token);
   return deleted;
+}
+
+// fetch() válaszának (R2 public URL) továbbítása az Express-válaszba.
+// A .pipe() nem kezeli a forrás hibáját: egy félbeszakadt letöltés
+// (időtúllépés, hálózati hiba) kezeletlen 'error' eseményként az egész
+// szervert leállította (2026-10-22: 6 összeomlás 13 perc alatt). A
+// pipeline mindkét oldalt lezárja, és a hiba csak ezt az egy kérést bontja.
+export function pipeFetchBody(body, res, label) {
+  pipeline(Readable.fromWeb(body), res, err => {
+    if (err && err.name !== "AbortError" && err.code !== "ERR_STREAM_PREMATURE_CLOSE") {
+      console.warn(`[R2 proxy] ${label}: ${err.name}: ${err.message}`);
+    }
+  });
 }

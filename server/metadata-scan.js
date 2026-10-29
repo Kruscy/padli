@@ -2,8 +2,9 @@ import { pool } from "./db.js";
 import fetch from "node-fetch";
 import dotenv from "dotenv";
 import { autoClaimWishlistForManga } from "./lib/wishlist-auto-claim.js";
-import { translateToHungarian } from "./lib/translate.js";
+import { tryTranslateToHungarian } from "./lib/translate.js";
 import { fetchMangaMetadata, TransientMetadataError } from "./lib/metadata-source.js";
+import { mergeAltTitles } from "./lib/manga-duplicates.js";
 dotenv.config();
 
 /* ================= CONFIG ================= */
@@ -96,7 +97,7 @@ async function scanMetadata() {
   console.log("🧠 Starting AniList metadata scan\n");
 
   const mangas = await pool.query(`
-    SELECT id, title, anilist_id, mal_id, mangadex_id, uploaders
+    SELECT id, title, anilist_id, mal_id, mangadex_id, uploaders, description
     FROM manga
     WHERE anilist_failed = FALSE
       AND (
@@ -152,11 +153,18 @@ async function scanMetadata() {
       const { source, media } = result;
       console.log(`📡 Forrás: ${source}`);
 
-      /* ===== TRANSLATE DESCRIPTION ===== */
+      /* ===== TRANSLATE DESCRIPTION =====
+         Csak ha még nincs leírás: a mentés COALESCE-szel úgyis megtartja a
+         meglévőt. Korábban a minden scanben újra feldolgozott mangák (pl.
+         AniList-pontszám nélküliek) leírását is mindig újrafordíttattuk —
+         2026-10-26-án ez egy óra alatt 377 Gemini-hívás volt. Sikertelen
+         fordításnál null marad (nem az angol szöveg), és egy későbbi scan
+         újrapróbálja. */
       let description = null;
-      if (media.description) {
+      if (media.description && !manga.description) {
         console.log("🌐 Translating description...");
-        description = await translateToHungarian(media.description);
+        description = await tryTranslateToHungarian(media.description);
+        if (!description) console.log("⚠️ A fordítás nem sikerült — a leírás üres marad, a következő scan újrapróbálja");
       }
 
       /* ===== SAVE MAIN DATA ===== */
@@ -186,6 +194,11 @@ async function scanMetadata() {
           manga.id
         ]
       );
+
+      /* ===== SAVE ALT TITLES (MangaUpdates) ===== */
+      if (media.altTitles?.length) {
+        await mergeAltTitles(manga.id, media.altTitles);
+      }
 
       /* ===== SAVE GENRES ===== */
       for (const genreName of media.genres || []) {
@@ -346,16 +359,18 @@ export async function refreshMetadataForManga(mangaId, anilistId = null) {
   }
  
   let description = null;
+  let keepOldDescription = false;
   if (media.description) {
-    description = await translateToHungarian(media.description);
+    description = await tryTranslateToHungarian(media.description);
+    keepOldDescription = !description;   // sikertelen fordítás: marad a régi
   }
  
-  // FELÜLÍR mindent – ez szándékos frissítés, nem COALESCE!
+  // FELÜLÍR mindent – ez szándékos frissítés, nem COALESCE! (kivéve ha a fordítás elbukott)
   await pool.query(
     `UPDATE manga
      SET anilist_id     = $1,
          cover_url      = $2,
-         description    = $3,
+         description    = CASE WHEN $8 THEN description ELSE $3 END,
          status         = $4,
          average_score  = $5,
          total_chapters = $6,
@@ -368,7 +383,8 @@ export async function refreshMetadataForManga(mangaId, anilistId = null) {
       media.status || null,
       media.averageScore || null,
       media.chapters || null,
-      mangaId
+      mangaId,
+      keepOldDescription
     ]
   );
  
