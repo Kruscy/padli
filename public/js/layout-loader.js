@@ -5,9 +5,12 @@ import { initSearch } from "./search.js?v=20261022";
 /* ================= PARTIAL LOADER ================= */
 
 async function loadPartial(id, url) {
+  // Nem minden oldalon van helye (pl. az olvasóban nincs fejléc) — ilyenkor
+  // le sem töltjük (eddig "Cannot set properties of null" hibát dobott)
+  const target = document.getElementById(id);
+  if (!target) return;
   const res = await fetch(url);
-  const html = await res.text();
-  document.getElementById(id).innerHTML = html;
+  target.innerHTML = await res.text();
 }
 
 /* ================= SEARCH TOGGLE ================= */
