@@ -72,7 +72,7 @@ async function loadUploaderRoots() {
 
   listEl.innerHTML = "<p style='color:#888'>Betöltés...</p>";
 
-  let users, uploaderNames, dirs;
+  let users, uploaderNames, canUploadUsers, dirs;
   try {
     const [rootsRes, dirsRes] = await Promise.all([
       fetch("/api/admin/uploader-roots"),
@@ -82,6 +82,7 @@ async function loadUploaderRoots() {
     dirs = await dirsRes.json();
     users = Array.isArray(rootsData) ? rootsData : rootsData.users;
     uploaderNames = Array.isArray(rootsData) ? [] : (rootsData.uploaderNames || []);
+    canUploadUsers = Array.isArray(rootsData) ? [] : (rootsData.canUploadUsers || []);
     if (!Array.isArray(dirs)) dirs = [];
   } catch (err) {
     listEl.innerHTML = `<p style='color:#ef4444'>Betöltési hiba: ${escHtml(String(err))}</p>`;
@@ -127,6 +128,39 @@ async function loadUploaderRoots() {
             💾 Mentés
           </button>
           <span id="root-status-${u.id}" style="font-size:.8rem;color:#22c55e;display:none">✓ Elmentve</span>
+        </div>`;
+    }).join("");
+  }
+
+  // Feltöltő jog nem-admin felhasználóknak (users.can_upload)
+  html += `<p style="${sectionStyle};margin-top:20px">Feltöltők admin jog nélkül</p>`;
+  html += `<div style="${rowStyle};border:1px dashed #334155">
+      <input id="grantUserSearch" type="text" placeholder="🔍 Felhasználó keresése..." autocomplete="off"
+        oninput="searchGrantUser(this.value)"
+        style="flex:1;min-width:180px;background:#1e293b;border:1px solid #334155;border-radius:8px;padding:7px 12px;color:#fff;font-size:.88rem">
+      <input id="grantFolder" type="text" placeholder="Saját mappa neve (pl. a felhasználónév)"
+        style="flex:1;min-width:180px;background:#1e293b;border:1px solid #334155;border-radius:8px;padding:7px 12px;color:#fff;font-size:.88rem">
+      <button onclick="grantUploader()"
+        style="background:#16a34a;color:#fff;border:none;padding:7px 16px;border-radius:8px;cursor:pointer;font-weight:600;font-size:.85rem;white-space:nowrap">
+        ➕ Feltöltő jog megadása
+      </button>
+      <div id="grantUserResults" style="width:100%;display:flex;gap:6px;flex-wrap:wrap"></div>
+    </div>`;
+  if (!canUploadUsers.length) {
+    html += `<p style="color:#555;font-size:.88rem">Nincs admin jog nélküli feltöltő.</p>`;
+  } else {
+    html += canUploadUsers.map(u => {
+      const on = u.can_upload;
+      return `
+        <div class="uploader-root-row" style="${rowStyle}">
+          <span style="font-weight:600;min-width:120px">${escHtml(u.username)}</span>
+          <span style="background:${on ? "#16a34a22" : "#64748b22"};color:${on ? "#4ade80" : "#94a3b8"};padding:2px 10px;border-radius:20px;font-size:.78rem;font-weight:700">${on ? "Feltölthet" : "Visszavonva"}</span>
+          <span style="flex:1;min-width:180px;color:#a78bfa;font-size:.88rem">📁 ${escHtml(u.uploader_root || u.username)}</span>
+          ${on
+            ? `<button onclick="revokeUploader(${u.id}, this.dataset.name)" data-name="${escHtml(u.username)}"
+                style="background:#7f1d1d;color:#fecaca;border:none;padding:7px 16px;border-radius:8px;cursor:pointer;font-weight:600;font-size:.85rem;white-space:nowrap">⛔ Visszavonás</button>`
+            : `<button onclick="grantUploader(${u.id}, this.dataset.folder)" data-folder="${escHtml(u.uploader_root || u.username)}"
+                style="background:#16a34a;color:#fff;border:none;padding:7px 16px;border-radius:8px;cursor:pointer;font-weight:600;font-size:.85rem;white-space:nowrap">✅ Újra engedélyez</button>`}
         </div>`;
     }).join("");
   }
@@ -221,6 +255,59 @@ async function syncUploaderManga() {
   }
 }
 
+/* ── Feltöltő jog megadása / visszavonása (nem-admin felhasználó) ── */
+let grantUserId = null;
+let grantSearchTimer = null;
+
+function searchGrantUser(q) {
+  grantUserId = null;
+  clearTimeout(grantSearchTimer);
+  const box = document.getElementById("grantUserResults");
+  if (!q.trim()) { box.innerHTML = ""; return; }
+  grantSearchTimer = setTimeout(async () => {
+    const res = await fetch(`/api/admin/users/search?q=${encodeURIComponent(q.trim())}`);
+    const list = res.ok ? await res.json() : [];
+    box.innerHTML = list.map(u =>
+      `<span onclick="pickGrantUser(${u.id}, this.dataset.name)" data-name="${escHtml(u.username)}"
+        style="background:#1e293b;color:#e2e8f0;padding:3px 10px;border-radius:20px;font-size:.8rem;cursor:pointer">${escHtml(u.username)} <span style="color:#64748b">#${u.id}</span></span>`
+    ).join("") || "<span style='color:#555;font-size:.8rem'>Nincs találat</span>";
+  }, 250);
+}
+
+function pickGrantUser(id, name) {
+  grantUserId = id;
+  document.getElementById("grantUserSearch").value = name;
+  const folder = document.getElementById("grantFolder");
+  if (!folder.value.trim()) folder.value = name;
+  document.getElementById("grantUserResults").innerHTML =
+    `<span style="color:#4ade80;font-size:.8rem">✓ Kiválasztva: ${escHtml(name)} (#${id})</span>`;
+}
+
+async function grantUploader(userId, folder) {
+  userId = userId || grantUserId;
+  folder = folder || document.getElementById("grantFolder").value.trim();
+  if (!userId) return alert("Válassz felhasználót a keresőből.");
+  if (!folder) return alert("Add meg a mappa nevét.");
+  if (!confirm(`Feltöltő jog megadása, saját mappa: ${folder}\n\nAdmin, scan és biztonsági napló jogot NEM kap.`)) return;
+  const res = await fetch("/api/admin/uploader-grant", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ userId, folder })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) return alert("Hiba: " + (data.error || "ismeretlen"));
+  grantUserId = null;
+  loadUploaderRoots();
+}
+
+async function revokeUploader(userId, name) {
+  if (!confirm(`${name} feltöltő jogának visszavonása?\n\nA mappája és a feltöltött művei megmaradnak.`)) return;
+  const res = await fetch(`/api/admin/uploader-revoke/${userId}`, { method: "POST" });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) return alert("Hiba: " + (data.error || "ismeretlen"));
+  loadUploaderRoots();
+}
+
 function fillRoot(dir) {
   const focused = document.activeElement;
   if (focused && (focused.id.startsWith("root-input-") || focused.id.startsWith("name-root-input-"))) {
@@ -234,6 +321,10 @@ window.saveUploaderRoot = saveUploaderRoot;
 window.saveUploaderNameRoot = saveUploaderNameRoot;
 window.syncUploaderManga = syncUploaderManga;
 window.fillRoot = fillRoot;
+window.searchGrantUser = searchGrantUser;
+window.pickGrantUser = pickGrantUser;
+window.grantUploader = grantUploader;
+window.revokeUploader = revokeUploader;
 
 /* ===== FELHASZNÁLÓK ===== */
 let allUsers = [];

@@ -85,7 +85,9 @@ async function initAdminControls() {
 
   // Feltöltő gomb: Admin vagy Uploader tiernek
   const uploaderBtn = document.getElementById("uploaderBtn");
-  if (uploaderBtn && (user.tier === "Admin" || user.tier === "Uploader")) {
+  // can_upload: nem-admin feltöltő (admin felületen megadott jog) — neki
+  // csak ez a gomb jár, az admin/scan/biztonsági gombok a role-hoz kötöttek
+  if (uploaderBtn && (user.tier === "Admin" || user.tier === "Uploader" || user.can_upload)) {
     uploaderBtn.classList.remove("hidden");
     uploaderBtn.addEventListener("click", () => { window.location.href = "/uploader.html"; });
   }

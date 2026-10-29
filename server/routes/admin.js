@@ -575,6 +575,124 @@ router.post("/uploader-root/:userId", express.json(), async (req, res) => {
   res.json({ ok: true });
 });
 
+/* ── Feltöltő jog nem-admin felhasználónak (users.can_upload) ──
+   Saját mappát kap a Kavita alatt, és úgy töltöget, mint a többi
+   feltöltő, de admin/scan/biztonsági napló jog nélkül. Egy lépésben:
+   mappa + libraries.json (ebből veszi fel a scan a library táblába) +
+   uploader_names (manga.uploaders) + patreon_status.uploader_root. ── */
+const LIBRARIES_FILE = path.join(process.cwd(), "libraries.json");
+const UPLOADER_FOLDER_RE = /^[\p{L}\p{N}][\p{L}\p{N} _.-]{1,39}$/u;
+
+function readLibraries() {
+  return JSON.parse(fs.readFileSync(LIBRARIES_FILE, "utf8"));
+}
+
+// Soronként egy könyvtár, ahogy kézzel is szerkesztik; tmp + rename, hogy egy
+// épp induló scan sose olvasson félig írt fájlt
+function writeLibraries(libs) {
+  const body = "[\n" + libs.map(l => "  " + JSON.stringify(l)).join(",\n") + "\n]\n";
+  JSON.parse(body);
+  const tmp = LIBRARIES_FILE + ".tmp";
+  fs.writeFileSync(tmp, body);
+  fs.renameSync(tmp, LIBRARIES_FILE);
+}
+
+router.post("/uploader-grant", express.json(), async (req, res) => {
+  const userId = parseInt(req.body.userId, 10);
+  const folder = String(req.body.folder || "").trim();
+  if (!userId) return res.status(400).json({ error: "Hiányzó felhasználó" });
+  if (!UPLOADER_FOLDER_RE.test(folder) || folder.includes("..")) {
+    return res.status(400).json({ error: "A mappanév 2–40 karakter: betű, szám, szóköz, _ . - (perjel nélkül)" });
+  }
+  const fullPath = resolveRoot(folder);
+  if (!fullPath || path.dirname(fullPath) !== KAVITA_BASE) return res.status(400).json({ error: "Érvénytelen mappa" });
+
+  try {
+    const { rows: [user] } = await pool.query(`SELECT id, username, role FROM users WHERE id = $1`, [userId]);
+    if (!user) return res.status(404).json({ error: "Nincs ilyen felhasználó" });
+
+    // A mappa nem lehet más feltöltőé (könyvtár, névsor vagy gyökér szerint).
+    // Meglévő könyvtárat csak akkor veszünk át, ha bizonyíthatóan ugyanezé a
+    // felhasználóé (újra-megadás visszavonás után) — pl. Ascyra könyvtárának
+    // root_path-ja üres, a puszta név-egyezés nem elég.
+    const libs = readLibraries();
+    const existingLib = libs.find(l => path.resolve(l.path) === fullPath);
+    const [{ rows: nameClash }, { rows: rootClash }, { rows: ownRoot }] = await Promise.all([
+      pool.query(`SELECT name FROM uploader_names WHERE root_path = $1 AND name <> $2`, [folder, user.username]),
+      pool.query(`SELECT user_id FROM patreon_status WHERE uploader_root = $1 AND user_id <> $2`, [folder, userId]),
+      pool.query(`SELECT 1 FROM patreon_status WHERE user_id = $1 AND uploader_root = $2`, [userId, folder]),
+    ]);
+    const ownLib = existingLib && ownRoot.length ? existingLib : null;
+    const nested = libs.some(l => path.resolve(l.path).startsWith(fullPath + "/"));
+    if (nameClash.length || rootClash.length || nested || (existingLib && !ownLib)) {
+      return res.status(409).json({ error: `A(z) „${folder}” mappa már más feltöltőhöz tartozik` });
+    }
+    // Létező, de senkihez nem rendelt mappát (pl. régi, letiltott könyvtár) csak üresen veszünk át
+    if (!ownLib && fs.existsSync(fullPath) && fs.readdirSync(fullPath).length) {
+      return res.status(409).json({ error: `A(z) „${folder}” mappa már létezik és nem üres — válassz másik nevet` });
+    }
+
+    fs.mkdirSync(fullPath, { recursive: true });
+    if (!ownLib) {
+      const nextId = Math.max(0, ...libs.map(l => parseInt(String(l.id).replace(/\D/g, ""), 10) || 0)) + 1;
+      libs.push({ id: `lib${nextId}`, name: folder, path: fullPath, enabled: true });
+      writeLibraries(libs);
+    } else if (!ownLib.enabled) {
+      ownLib.enabled = true;
+      writeLibraries(libs);
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(`UPDATE users SET can_upload = true, upload_granted = true WHERE id = $1`, [userId]);
+      const { rowCount } = await client.query(`UPDATE patreon_status SET uploader_root = $1 WHERE user_id = $2`, [folder, userId]);
+      if (!rowCount) {
+        await client.query(
+          `INSERT INTO patreon_status (patreon_user_id, user_id, active, uploader_root) VALUES ($1, $2, false, $3)`,
+          [`manual_${userId}`, userId, folder]
+        );
+      }
+      await client.query(
+        `INSERT INTO uploader_names (name, root_path) VALUES ($1, $2)
+         ON CONFLICT (name) DO UPDATE SET root_path = EXCLUDED.root_path`,
+        [user.username, folder]
+      );
+      await client.query("COMMIT");
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
+    }
+
+    await logAdminAction(req, {
+      action: "uploader_grant", targetType: "user", targetId: userId, targetTitle: user.username,
+      details: { folder, path: fullPath, newLibrary: !ownLib },
+    });
+    res.json({ ok: true, folder, path: fullPath, newLibrary: !ownLib });
+  } catch (err) {
+    console.error("[uploader-grant]", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Visszavonás: a mappa, a könyvtár és a feltöltött művek maradnak,
+// csak feltölteni nem tud többé (újra megadható ugyanazzal a mappával)
+router.post("/uploader-revoke/:userId", async (req, res) => {
+  const userId = parseInt(req.params.userId, 10);
+  try {
+    const { rows: [user] } = await pool.query(
+      `UPDATE users SET can_upload = false WHERE id = $1 RETURNING username`, [userId]
+    );
+    if (!user) return res.status(404).json({ error: "Nincs ilyen felhasználó" });
+    await logAdminAction(req, { action: "uploader_revoke", targetType: "user", targetId: userId, targetTitle: user.username });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.post("/uploader-name-root", express.json(), async (req, res) => {
   let { name, root } = req.body;
   if (!name?.trim()) return res.status(400).json({ error: "Hiányzó név" });
