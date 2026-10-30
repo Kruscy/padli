@@ -363,10 +363,12 @@ router.post("/webhook", async (req, res) => {
         if (!rows.length) break;
         const user = rows[0];
 
-        // Periódus frissítés
+        // Periódus frissítés — sikeres fizetés visszaadja a hozzáférést és
+        // törli a past_due-követést is (lásd check-past-due-subscriptions.js)
         const periodEnd = new Date(getCurrentPeriodEnd(sub) * 1000);
         await pool.query(`
-          UPDATE patreon_status SET stripe_period_end = $1, active = true
+          UPDATE patreon_status
+          SET stripe_period_end = $1, active = true, past_due_since = NULL, past_due_notified_at = NULL
           WHERE user_id = $2 AND payment_source = 'stripe'
         `, [periodEnd, user.id]);
 

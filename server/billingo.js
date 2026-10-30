@@ -2,8 +2,31 @@
    billingo.js — Billingo v3 számla kiállítás
    ============================================================ */
 
+import { pool } from "./db.js";
+
 const BASE     = "https://api.billingo.hu/v3";
 const BLOCK_ID = 321919;
+
+// Sikertelen számlakiállításról riasztás a #riasztás Discord-csatornára +
+// security_events bejegyzés, hogy ne csak a logban maradjon nyoma (lásd
+// 2026-10-30-i Stripe↔Billingo egyeztetés — akkor még mind rendben volt,
+// de a hibát addig semmi sem jelezte volna kifelé).
+async function alertInvoiceFailed({ email, items, error }) {
+  const text = `🧾 **Sikertelen Billingo-számla kiállítás** — email: ${email || "?"}, tétel: ${items?.[0]?.name || "?"}, hiba: ${error}`;
+  console.error("[Billingo]", text);
+  try {
+    await pool.query(
+      `INSERT INTO security_events (type, severity, details) VALUES ('billingo_invoice_failed', 'high', $1)`,
+      [JSON.stringify({ text, email, items, error })]
+    );
+  } catch {}
+  try {
+    const { sendSecurityAlert } = await import("./discord-bot.js");
+    await sendSecurityAlert(text);
+  } catch (err) {
+    console.error("[Billingo] Discord riasztás hiba:", err.message);
+  }
+}
 
 async function req(method, path, body) {
   const apiKey = process.env.BILLINGO_API_KEY;
@@ -130,7 +153,7 @@ export async function createInvoice({ email, name, items, paymentMethod = "onlin
     console.log(`[Billingo] ✅ Számla kiállítva: ${invoice.invoice_number} (id: ${invoice.id})`);
     return invoice.id || null;
   } catch (err) {
-    console.error("[Billingo] ❌ Hiba:", err.message);
+    await alertInvoiceFailed({ email, items, error: err.message });
     return null;
   }
 }
