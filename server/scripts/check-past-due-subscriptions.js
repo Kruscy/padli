@@ -41,7 +41,7 @@ function paymentFailedHtml(username) {
 async function run() {
   const { rows } = await pool.query(`
     SELECT ps.user_id, ps.stripe_subscription_id, ps.active, ps.past_due_since, ps.past_due_notified_at,
-           u.username, u.email
+           ps.patreon_raw_active, u.username, u.email
     FROM patreon_status ps
     JOIN users u ON u.id = ps.user_id
     WHERE ps.payment_source = 'stripe' AND ps.stripe_subscription_id IS NOT NULL
@@ -74,6 +74,24 @@ async function run() {
             [row.user_id]
           );
         }
+      }
+      continue;
+    }
+
+    // Dupla-fizetés: ha valódi (nem Stripe) Patreon-tagsága is aktív, a
+    // Stripe-oldali past_due miatt SOSEM vesszük el a hozzáférést és SOSEM
+    // mondjuk le a Stripe-előfizetést — helyette elengedjük a payment_source-ot,
+    // hogy a patreon-sync.js a valódi Patreon-állapot alapján azonnal vissza-
+    // állítsa a hozzáférést (lásd 2026-10-31-i bandesz006/Hazafi0610 eset —
+    // ők emiatt estek ki feleslegesen 3 napra).
+    if (row.patreon_raw_active) {
+      console.log(`user_id=${row.user_id} (${row.username}) — past_due, de valódi Patreon-tagsága aktív, DUPLAFIZETÉS FELOLDÁSA (payment_source elengedve)`);
+      recovered++;
+      if (!DRY_RUN) {
+        await pool.query(
+          `UPDATE patreon_status SET payment_source = NULL, past_due_since = NULL, past_due_notified_at = NULL WHERE user_id = $1`,
+          [row.user_id]
+        );
       }
       continue;
     }
