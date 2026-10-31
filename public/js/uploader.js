@@ -859,13 +859,13 @@ function renderFiles(items) {
       <div class="file-item">
         <span class="file-item-icon">${icon}</span>
         <span class="file-item-name ${isDir ? "is-dir" : "is-file"}"
-              onclick="${isDir ? `navigateTo('${itemPath.replace(/'/g, "\\'")}')` : ""}"
-              title="${item.name}">
-          ${item.name}
+              ${isDir ? act("navigateTo", itemPath) : ""}
+              title="${escAttr(item.name)}">
+          ${escAttr(item.name)}
         </span>
         ${size ? `<span class="file-item-size">${size}</span>` : ""}
         <button class="file-item-del" title="Törlés"
-                onclick="deleteItem('${itemPath.replace(/'/g, "\\'")}', ${isDir})">
+                ${act("deleteItem", itemPath, isDir)}>
           🗑️
         </button>
       </div>
@@ -889,17 +889,17 @@ function navigateTo(path) {
 
 function renderBreadcrumb() {
   const parts = currentPath ? currentPath.split("/") : [];
-  let html = `<span class="breadcrumb-part" onclick="navigateTo('')">🏠 Gyökér</span>`;
+  let html = `<span class="breadcrumb-part" ${act("navigateTo", "")}>🏠 Gyökér</span>`;
   let built = "";
   parts.forEach((p, i) => {
     built = built ? `${built}/${p}` : p;
     const isLast = i === parts.length - 1;
     html += `<span class="breadcrumb-sep">/</span>`;
     if (isLast) {
-      html += `<span class="breadcrumb-current">${p}</span>`;
+      html += `<span class="breadcrumb-current">${escAttr(p)}</span>`;
     } else {
       const snap = built;
-      html += `<span class="breadcrumb-part" onclick="navigateTo('${snap.replace(/'/g, "\\'")}')">${p}</span>`;
+      html += `<span class="breadcrumb-part" ${act("navigateTo", snap)}>${escAttr(p)}</span>`;
     }
   });
   breadcrumb.innerHTML = html;
@@ -946,9 +946,8 @@ async function deleteItem(itemPath, isDir) {
   }
 }
 
-// Globálisba tesszük hogy az onclick attribútumok elérjék
-window.navigateTo = navigateTo;
-window.deleteItem = deleteItem;
+// A fájllista data-on-click elemei által hívható függvények (actions.js)
+window.PadliActions.register({ navigateTo, deleteItem });
 
 /* ── Böngésző kereső ── */
 if (browserSearch) {
@@ -961,3 +960,106 @@ if (browserSearch) {
 /* ── Indulás ── */
 loadFiles("");
 renderQueue();
+
+/* ══════════════════════════════════════════════════════════
+   MANGÁIM ADATLAPJA — cím/leírás/borító/műfaj/címke szerkesztés
+   a saját (uploaders listában szereplő) mangákra
+   ══════════════════════════════════════════════════════════ */
+(async function initMyManga() {
+  const section = document.getElementById("myMangaSection");
+  const select  = document.getElementById("myMangaSelect");
+  const form    = document.getElementById("myMangaForm");
+  if (!section || !select || !form) return;
+
+  let mangas = [];
+  try {
+    const r = await fetch("/api/uploader/my-manga");
+    if (!r.ok) return; // nincs feltöltői jogosultság, a szekció marad rejtve
+    mangas = await r.json();
+  } catch { return; }
+
+  if (!mangas.length) return;
+  section.style.display = "";
+
+  for (const m of mangas) {
+    const opt = document.createElement("option");
+    opt.value = m.slug;
+    opt.textContent = m.title;
+    select.appendChild(opt);
+  }
+
+  const titleEl    = document.getElementById("mmTitle");
+  const descEl     = document.getElementById("mmDescription");
+  const coverUrlEl = document.getElementById("mmCoverUrl");
+  const coverFileEl = document.getElementById("mmCoverFile");
+  const coverPreview = document.getElementById("mmCoverPreview");
+  const genresEl   = document.getElementById("mmGenres");
+  const tagsEl     = document.getElementById("mmTags");
+  const saveBtn    = document.getElementById("mmSaveBtn");
+  const saveStatus = document.getElementById("mmSaveStatus");
+
+  select.addEventListener("change", async () => {
+    saveStatus.textContent = "";
+    if (!select.value) { form.style.display = "none"; return; }
+    const r = await fetch(`/api/uploader/manga/${encodeURIComponent(select.value)}`);
+    if (!r.ok) { alert("Nem sikerült betölteni az adatlapot."); return; }
+    const data = await r.json();
+    titleEl.value = data.title || "";
+    descEl.value = data.description || "";
+    coverUrlEl.value = data.cover_url || "";
+    coverPreview.src = data.cover_url || "";
+    coverPreview.style.display = data.cover_url ? "" : "none";
+    genresEl.value = (data.genres || []).join(", ");
+    tagsEl.value = (data.tags || []).join(", ");
+    coverFileEl.value = "";
+    form.style.display = "";
+  });
+
+  coverUrlEl.addEventListener("input", () => {
+    coverPreview.src = coverUrlEl.value;
+    coverPreview.style.display = coverUrlEl.value ? "" : "none";
+  });
+  coverFileEl.addEventListener("change", () => {
+    const file = coverFileEl.files[0];
+    if (!file) return;
+    coverUrlEl.value = "";
+    coverPreview.src = URL.createObjectURL(file);
+    coverPreview.style.display = "";
+  });
+
+  saveBtn.addEventListener("click", async () => {
+    const slug = select.value;
+    if (!slug) return;
+    saveStatus.style.color = "#22c55e";
+    saveStatus.textContent = "Mentés...";
+
+    try {
+      if (coverFileEl.files[0]) {
+        const fd = new FormData();
+        fd.append("cover", coverFileEl.files[0]);
+        const rCover = await fetch(`/api/uploader/manga/${encodeURIComponent(slug)}/cover`, { method: "POST", body: fd });
+        if (!rCover.ok) throw new Error((await rCover.json()).error || "Borító-feltöltés sikertelen");
+      }
+
+      const genres = genresEl.value.split(",").map(s => s.trim()).filter(Boolean);
+      const tags = tagsEl.value.split(",").map(s => s.trim()).filter(Boolean);
+      const r = await fetch(`/api/uploader/manga/${encodeURIComponent(slug)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: titleEl.value.trim(),
+          description: descEl.value.trim(),
+          cover_url: coverFileEl.files[0] ? null : (coverUrlEl.value.trim() || null),
+          genres, tags,
+        }),
+      });
+      if (!r.ok) throw new Error((await r.json()).error || "Mentés sikertelen");
+
+      saveStatus.textContent = "✓ Elmentve";
+      setTimeout(() => { saveStatus.textContent = ""; }, 2500);
+    } catch (err) {
+      saveStatus.style.color = "#f87171";
+      saveStatus.textContent = "Hiba: " + err.message;
+    }
+  });
+})();

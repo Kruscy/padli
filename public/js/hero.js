@@ -103,6 +103,16 @@
         </div>
       </div>
     `;
+    trackAnnouncementLinks(heroInner.querySelector(".hero-card-text"), item.id);
+  }
+
+  /* ===== Kattintás-számláló a kiírásban lévő linkekre ===== */
+  function trackAnnouncementLinks(container, id) {
+    container?.querySelectorAll("a[href]").forEach(a => {
+      a.addEventListener("click", () => {
+        fetch(`/api/announcements/${id}/click`, { method: "POST" }).catch(() => {});
+      });
+    });
   }
 
   function renderPoll(item) {
@@ -316,6 +326,7 @@
       </div>
     `;
     document.body.appendChild(modal);
+    trackAnnouncementLinks(document.getElementById("ann-body"), id);
     document.getElementById("ann-close").onclick = () => modal.remove();
     document.getElementById("ann-backdrop").onclick = () => modal.remove();
   };

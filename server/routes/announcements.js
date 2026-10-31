@@ -8,7 +8,7 @@ const router = express.Router();
 router.get("/", requireLogin, async (req, res) => {
   try {
     const { rows } = await pool.query(`
-      SELECT id, title, body, image_url, expires_at
+      SELECT id, title, body, image_url, expires_at, click_count
       FROM announcements
       WHERE expires_at > now()
       ORDER BY created_at DESC
@@ -87,6 +87,15 @@ router.delete("/:id", requireLogin, async (req, res) => {
   }
 
   await pool.query(`DELETE FROM announcements WHERE id = $1`, [req.params.id]);
+  res.json({ ok: true });
+});
+
+/* ===== POST kattintás-számláló (a kiírásban lévő linkre kattintva) ===== */
+router.post("/:id/click", requireLogin, async (req, res) => {
+  await pool.query(
+    `UPDATE announcements SET click_count = click_count + 1 WHERE id = $1`,
+    [req.params.id]
+  );
   res.json({ ok: true });
 });
 

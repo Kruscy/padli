@@ -10,6 +10,7 @@ import { findExistingSeries } from "../lib/manga-duplicates.js";
 import { logSecurityEvent } from "../lib/security-log.js";
 import { isImageBuffer } from "../lib/safe-path.js";
 import { compressPageImage } from "../lib/image-compress.js";
+import { updateMangaCore } from "../lib/manga-meta.js";
 
 const r2 = new S3Client({
   region: "auto",
@@ -72,6 +73,18 @@ setInterval(drainR2Queue, 10_000);
 
 const router = express.Router();
 const BASE_DIR = "/mnt/manga/Kavita";
+
+// Feltöltés kikapcsolása (pl. szerverköltözéskor): ha a jelzőfájl létezik,
+// a fájlokat módosító végpontok 423-at adnak (a kliens 4xx-nél nem próbálja
+// újra, a hibaüzenetet kiírja). A fájl az /opt/padli-n KÍVÜL van, így a
+// kód-/adatszinkron nem viszi át egy másik gépre.
+const UPLOAD_DISABLED_FLAG = "/etc/padli/upload-disabled";
+const UPLOAD_WRITE_PATHS = new Set(["/upload", "/mkdir", "/file", "/scan"]);
+router.use((req, res, next) => {
+  if (req.method === "GET" || !UPLOAD_WRITE_PATHS.has(req.path)) return next();
+  if (!fs.existsSync(UPLOAD_DISABLED_FLAG)) return next();
+  res.status(423).json({ error: "A feltöltés átmenetileg szünetel (szerverköltözés). Próbáld újra később." });
+});
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -493,6 +506,106 @@ router.post("/mkdir", requireUploader, express.json(), async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+/* ── GET /api/uploader/my-manga — saját feltöltött mangák listája ── */
+router.get("/my-manga", requireUploader, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT slug, title, cover_url FROM manga
+       WHERE $1 = ANY(uploaders) ORDER BY title`,
+      [req.session.user.username]
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: "DB error" });
+  }
+});
+
+/* ── Manga adatlap szerkesztése — csak a saját (uploaders listában szereplő)
+   mangákra, és csak cím/leírás/borító/műfaj/címke (nem státusz, AniList-link,
+   uploaders-lista vagy törlés — azok admin-csak jogkörben maradnak). ── */
+async function loadEditableManga(req, res, next) {
+  const { slug } = req.params;
+  try {
+    const { rows } = await pool.query(
+      `SELECT m.id, m.uploaders FROM manga m
+       LEFT JOIN chapter c ON c.manga_id = m.id
+       WHERE m.slug = $1
+       GROUP BY m.id
+       ORDER BY COUNT(DISTINCT c.id) DESC, m.id ASC
+       LIMIT 1`,
+      [slug]
+    );
+    if (!rows.length) return res.status(404).json({ error: "Nem található" });
+    const manga = rows[0];
+    const isOwner = (manga.uploaders || []).includes(req.session.user.username);
+    if (req.session.user.role !== "admin" && !isOwner) {
+      return res.status(403).json({ error: "Csak a saját feltöltött mangáid adatlapját szerkesztheted" });
+    }
+    req.editableMangaId = manga.id;
+    next();
+  } catch (err) {
+    res.status(500).json({ error: "DB error" });
+  }
+}
+
+router.get("/manga/:slug", requireUploader, loadEditableManga, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT m.title, m.description, m.cover_url,
+              COALESCE(array_agg(DISTINCT g.name) FILTER (WHERE g.name IS NOT NULL), '{}') AS genres,
+              COALESCE(array_agg(DISTINCT t.name) FILTER (WHERE t.name IS NOT NULL), '{}') AS tags
+       FROM manga m
+       LEFT JOIN manga_genre mg ON mg.manga_id = m.id
+       LEFT JOIN genre g ON g.id = mg.genre_id
+       LEFT JOIN manga_tag mt ON mt.manga_id = m.id
+       LEFT JOIN tag t ON t.id = mt.tag_id
+       WHERE m.id = $1
+       GROUP BY m.id`,
+      [req.editableMangaId]
+    );
+    res.json(rows[0] || null);
+  } catch (err) {
+    res.status(500).json({ error: "DB error" });
+  }
+});
+
+router.post("/manga/:slug", requireUploader, loadEditableManga, express.json(), async (req, res) => {
+  const { cover_url, description, title, genres, tags } = req.body;
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await updateMangaCore(client, req.editableMangaId, { cover_url, description, title, genres, tags });
+    await client.query("COMMIT");
+    res.json({ ok: true });
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    console.error("UPLOADER MANGA EDIT ERROR:", err);
+    res.status(500).json({ error: "DB error" });
+  } finally {
+    client.release();
+  }
+});
+
+const coverStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, "uploads/"),
+  filename: (req, file, cb) => {
+    const ext = file.mimetype.split("/")[1].toLowerCase();
+    cb(null, `cover-${Date.now()}.${ext}`);
+  }
+});
+const coverUpload = multer({ storage: coverStorage, limits: { fileSize: 5 * 1024 * 1024 } });
+
+router.post("/manga/:slug/cover", requireUploader, loadEditableManga, coverUpload.single("cover"), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "Nincs fájl" });
+  const filePath = `/uploads/${req.file.filename}`;
+  try {
+    await pool.query(`UPDATE manga SET cover_url = $1 WHERE id = $2`, [filePath, req.editableMangaId]);
+    res.json({ ok: true, cover_url: filePath });
+  } catch (err) {
+    res.status(500).json({ error: "DB error" });
   }
 });
 

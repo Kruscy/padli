@@ -5,6 +5,7 @@ import { requireLogin } from "../middleware/auth.js";
 import { getMangaById as getJikanMangaById, searchMangaByTitle as searchJikanByTitle } from "../lib/jikan.js";
 import { getMangaById as getMangaDexMangaById, searchMangaByTitle as searchMangaDexByTitle } from "../lib/mangadex.js";
 import { titlesMatch } from "../lib/title-match.js";
+import { isUploaderUser } from "../lib/uploader-check.js";
 
 const router = express.Router();
 
@@ -310,8 +311,8 @@ router.post("/:id/like", requireLogin, async (req, res) => {
 
 /* ================= CLAIM TOGGLE (Dolgozik rajta) ================= */
 router.post("/:id/claim", requireLogin, async (req, res) => {
-  if (req.session.user.role !== "admin") {
-    return res.status(403).json({ error: "Admin only" });
+  if (req.session.user.role !== "admin" && !(await isUploaderUser(req.session.user.id))) {
+    return res.status(403).json({ error: "Admin vagy feltöltő jogosultság szükséges" });
   }
 
   const id = req.params.id;
@@ -345,8 +346,8 @@ router.post("/:id/claim", requireLogin, async (req, res) => {
 
 /* ================= PLAN TOGGLE (Tervben van) ================= */
 router.post("/:id/plan", requireLogin, async (req, res) => {
-  if (req.session.user.role !== "admin") {
-    return res.status(403).json({ error: "Admin only" });
+  if (req.session.user.role !== "admin" && !(await isUploaderUser(req.session.user.id))) {
+    return res.status(403).json({ error: "Admin vagy feltöltő jogosultság szükséges" });
   }
 
   const id = req.params.id;

@@ -91,7 +91,7 @@ async function loadUploaderRoots() {
 
   hintEl.innerHTML = dirs.length
     ? "<span style='color:#888;font-size:.8rem;margin-right:4px'>Elérhető mappák:</span>" +
-      dirs.map(d => `<span class="dir-chip" onclick="fillRoot('${escHtml(d)}')" style="background:#1e293b;color:#a78bfa;padding:3px 10px;border-radius:20px;font-size:.8rem;cursor:pointer">${escHtml(d)}</span>`).join("")
+      dirs.map(d => `<span class="dir-chip" ${act("fillRoot", d)} style="background:#1e293b;color:#a78bfa;padding:3px 10px;border-radius:20px;font-size:.8rem;cursor:pointer">${escHtml(d)}</span>`).join("")
     : "<span style='color:#555;font-size:.8rem'>Nincs mappa a Kavita könyvtárban.</span>";
 
   const sectionStyle = "margin:0 0 6px;font-size:.8rem;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.05em";
@@ -101,7 +101,7 @@ async function loadUploaderRoots() {
 
   // Szinkronizálás gomb
   html += `<div style="margin-bottom:16px">
-    <button onclick="syncUploaderManga()" id="syncBtn"
+    <button ${act("syncUploaderManga")} id="syncBtn"
       style="background:#0f172a;color:#94a3b8;border:1px solid #334155;padding:7px 18px;border-radius:8px;cursor:pointer;font-size:.85rem;font-weight:600">
       🔄 Feltöltők szinkronizálása mangákhoz
     </button>
@@ -123,7 +123,7 @@ async function loadUploaderRoots() {
           <input id="root-input-${u.id}" type="text" value="${escHtml(currentRoot)}"
             placeholder="pl. felhasználonev/almappa"
             style="flex:1;min-width:180px;background:#1e293b;border:1px solid #334155;border-radius:8px;padding:7px 12px;color:#fff;font-size:.88rem">
-          <button onclick="saveUploaderRoot(${u.id})"
+          <button ${act("saveUploaderRoot", u.id)}
             style="background:#7c3aed;color:#fff;border:none;padding:7px 16px;border-radius:8px;cursor:pointer;font-weight:600;font-size:.85rem;white-space:nowrap">
             💾 Mentés
           </button>
@@ -136,11 +136,11 @@ async function loadUploaderRoots() {
   html += `<p style="${sectionStyle};margin-top:20px">Feltöltők admin jog nélkül</p>`;
   html += `<div style="${rowStyle};border:1px dashed #334155">
       <input id="grantUserSearch" type="text" placeholder="🔍 Felhasználó keresése..." autocomplete="off"
-        oninput="searchGrantUser(this.value)"
+        ${actOn("input", "searchGrantUser", "$value")}
         style="flex:1;min-width:180px;background:#1e293b;border:1px solid #334155;border-radius:8px;padding:7px 12px;color:#fff;font-size:.88rem">
       <input id="grantFolder" type="text" placeholder="Saját mappa neve (pl. a felhasználónév)"
         style="flex:1;min-width:180px;background:#1e293b;border:1px solid #334155;border-radius:8px;padding:7px 12px;color:#fff;font-size:.88rem">
-      <button onclick="grantUploader()"
+      <button ${act("grantUploader")}
         style="background:#16a34a;color:#fff;border:none;padding:7px 16px;border-radius:8px;cursor:pointer;font-weight:600;font-size:.85rem;white-space:nowrap">
         ➕ Feltöltő jog megadása
       </button>
@@ -157,9 +157,9 @@ async function loadUploaderRoots() {
           <span style="background:${on ? "#16a34a22" : "#64748b22"};color:${on ? "#4ade80" : "#94a3b8"};padding:2px 10px;border-radius:20px;font-size:.78rem;font-weight:700">${on ? "Feltölthet" : "Visszavonva"}</span>
           <span style="flex:1;min-width:180px;color:#a78bfa;font-size:.88rem">📁 ${escHtml(u.uploader_root || u.username)}</span>
           ${on
-            ? `<button onclick="revokeUploader(${u.id}, this.dataset.name)" data-name="${escHtml(u.username)}"
+            ? `<button ${act("revokeUploader", u.id, u.username)}
                 style="background:#7f1d1d;color:#fecaca;border:none;padding:7px 16px;border-radius:8px;cursor:pointer;font-weight:600;font-size:.85rem;white-space:nowrap">⛔ Visszavonás</button>`
-            : `<button onclick="grantUploader(${u.id}, this.dataset.folder)" data-folder="${escHtml(u.uploader_root || u.username)}"
+            : `<button ${act("grantUploader", u.id, u.uploader_root || u.username)}
                 style="background:#16a34a;color:#fff;border:none;padding:7px 16px;border-radius:8px;cursor:pointer;font-weight:600;font-size:.85rem;white-space:nowrap">✅ Újra engedélyez</button>`}
         </div>`;
     }).join("");
@@ -179,7 +179,7 @@ async function loadUploaderRoots() {
           <input id="name-root-input-${safeId}" data-name="${escHtml(un.name)}" type="text" value="${escHtml(un.root_path || '')}"
             placeholder="pl. FeltoltoNeve/almappa"
             style="flex:1;min-width:180px;background:#1e293b;border:1px solid #334155;border-radius:8px;padding:7px 12px;color:#fff;font-size:.88rem">
-          <button data-name="${escHtml(un.name)}" onclick="saveUploaderNameRoot(this)"
+          <button data-name="${escHtml(un.name)}" ${act("saveUploaderNameRoot", "$el")}
             style="background:#1d4ed8;color:#fff;border:none;padding:7px 16px;border-radius:8px;cursor:pointer;font-weight:600;font-size:.85rem;white-space:nowrap">
             💾 Mentés
           </button>
@@ -268,7 +268,7 @@ function searchGrantUser(q) {
     const res = await fetch(`/api/admin/users/search?q=${encodeURIComponent(q.trim())}`);
     const list = res.ok ? await res.json() : [];
     box.innerHTML = list.map(u =>
-      `<span onclick="pickGrantUser(${u.id}, this.dataset.name)" data-name="${escHtml(u.username)}"
+      `<span ${act("pickGrantUser", u.id, u.username)}
         style="background:#1e293b;color:#e2e8f0;padding:3px 10px;border-radius:20px;font-size:.8rem;cursor:pointer">${escHtml(u.username)} <span style="color:#64748b">#${u.id}</span></span>`
     ).join("") || "<span style='color:#555;font-size:.8rem'>Nincs találat</span>";
   }, 250);
@@ -396,7 +396,7 @@ async function loadAnnouncements() {
       <div class="ann-item-info">
         <h3>${escHtml(a.title)}</h3>
         <p>${escHtml(a.body?.slice(0, 100))}${a.body?.length > 100 ? "…" : ""}</p>
-        <p>Lejár: ${new Date(a.expires_at).toLocaleDateString("hu-HU")}</p>
+        <p>Lejár: ${new Date(a.expires_at).toLocaleDateString("hu-HU")} · 👆 ${a.click_count ?? 0} kattintás</p>
       </div>
       <div class="ann-item-actions">
         <button class="ann-edit" data-id="${a.id}">✏️ Szerkesztés</button>
@@ -631,7 +631,7 @@ async function loadApiUsage() {
         <strong style="color:#e2e8f0">${escHtml(k.label)}</strong>
         <div style="display:flex;align-items:center;gap:8px">
           ${badge}
-          <button onclick="deleteGeminiKey(${k.id}, '${escHtml(k.label).replace(/'/g, "\\'")}')" title="Kulcs törlése"
+          <button ${act("deleteGeminiKey", k.id, k.label)} title="Kulcs törlése"
             style="background:#1e293b;color:#f87171;border:1px solid #334155;padding:3px 8px;border-radius:6px;cursor:pointer;font-size:.75rem">🗑</button>
         </div>
       </div>
@@ -652,7 +652,7 @@ async function loadApiUsage() {
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <input id="newGeminiKeyLabel" placeholder="Címke (opcionális)" style="flex:1;min-width:120px;background:#1e293b;border:1px solid #334155;border-radius:6px;padding:6px 10px;color:#e2e8f0;font-size:.85rem">
       <input id="newGeminiKeyValue" placeholder="API kulcs" style="flex:2;min-width:200px;background:#1e293b;border:1px solid #334155;border-radius:6px;padding:6px 10px;color:#e2e8f0;font-size:.85rem">
-      <button onclick="addGeminiKey()" style="background:#7c3aed;color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:.85rem;font-weight:700">Hozzáadás</button>
+      <button ${act("addGeminiKey")} style="background:#7c3aed;color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:.85rem;font-weight:700">Hozzáadás</button>
     </div>
     <div id="newGeminiKeyStatus" style="font-size:.8rem;margin-top:6px"></div>
   </div>`;
@@ -827,9 +827,9 @@ async function loadSubtitleRequests() {
         </div>
       </div>
       <div style="display:flex;gap:6px;flex-shrink:0">
-        <button onclick="updateSubtitleRequestStatus(${r.id}, 'done')" title="Kész"
+        <button ${act("updateSubtitleRequestStatus", r.id, "done")} title="Kész"
           style="background:#14532d33;color:#86efac;border:1px solid #22c55e55;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:.8rem;font-weight:700">✅ Kész</button>
-        <button onclick="updateSubtitleRequestStatus(${r.id}, 'rejected')" title="Elutasítás"
+        <button ${act("updateSubtitleRequestStatus", r.id, "rejected")} title="Elutasítás"
           style="background:#7f1d1d33;color:#f87171;border:1px solid #ef444455;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:.8rem;font-weight:700">✖ Elutasítás</button>
       </div>
     </div>`;
@@ -866,16 +866,16 @@ async function loadAnimeCatalog() {
   loadedAnimeAdmin.clear();
   listEl.innerHTML = rows.map(a => `
     <div style="background:#0f172a;border-radius:10px;margin-bottom:10px;max-width:700px;overflow:hidden" id="animeCard-${a.id}">
-      <div style="display:flex;gap:14px;align-items:center;padding:14px 18px;cursor:pointer" onclick="toggleAnimeCatalog(${a.id}, '${escHtml(a.slug)}')">
+      <div style="display:flex;gap:14px;align-items:center;padding:14px 18px;cursor:pointer" ${act("toggleAnimeCatalog", a.id, a.slug)}>
         <img src="${escHtml(a.cover_url || '/assets/no-cover.png')}" style="width:46px;height:66px;object-fit:cover;border-radius:6px;background:#1a1a2e;flex-shrink:0">
         <div style="flex:1;min-width:0">
           <strong style="color:#e2e8f0">${escHtml(a.title)}</strong>
           <div style="color:#64748b;font-size:.78rem;margin-top:2px">${a.episode_count} feltöltött rész &nbsp;•&nbsp; slug: ${escHtml(a.slug)}</div>
         </div>
-        <div style="display:flex;gap:6px;flex-shrink:0" onclick="event.stopPropagation()">
-          <button onclick="startEditAnime(${a.id}, ${escHtml(JSON.stringify(a.title))}, ${escHtml(JSON.stringify(a.cover_url || ""))})"
+        <div style="display:flex;gap:6px;flex-shrink:0" ${act("stop")}>
+          <button ${act("startEditAnime", a.id, a.title, a.cover_url || "")}
             style="background:#1e293b;color:#93c5fd;border:1px solid #334155;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:.78rem">✏️ Szerkesztés</button>
-          <button onclick="deleteAnimeCatalog(${a.id}, ${escHtml(JSON.stringify(a.title))})"
+          <button ${act("deleteAnimeCatalog", a.id, a.title)}
             style="background:#1e293b;color:#f87171;border:1px solid #334155;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:.78rem">🗑 Törlés</button>
         </div>
       </div>
@@ -906,13 +906,13 @@ async function toggleAnimeCatalog(id, slug) {
     <div style="padding-top:12px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
         <strong style="color:#c4b5fd;font-size:.85rem">${s.season_number}. évad</strong>
-        <button onclick="deleteAnimeSeason(${s.id}, ${id}, '${escHtml(slug)}')"
+        <button ${act("deleteAnimeSeason", s.id, id, slug)}
           style="background:#1e293b;color:#f87171;border:1px solid #334155;padding:3px 9px;border-radius:6px;cursor:pointer;font-size:.72rem">🗑 Évad törlése</button>
       </div>
       ${s.episodes.length ? s.episodes.map(ep => `
         <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 10px;background:#1a1a2e;border-radius:6px;margin-bottom:4px;font-size:.82rem;color:#ddd">
           <span>${ep.episode_number}. rész</span>
-          <button onclick="deleteAnimeEpisode(${ep.id}, ${id}, '${escHtml(slug)}')"
+          <button ${act("deleteAnimeEpisode", ep.id, id, slug)}
             style="background:none;color:#f87171;border:none;cursor:pointer;font-size:.75rem">🗑</button>
         </div>
       `).join("") : "<p style='color:#64748b;font-size:.8rem'>Nincs feltöltött rész.</p>"}
@@ -929,8 +929,8 @@ function startEditAnime(id, title, coverUrl) {
         style="flex:2;min-width:180px;background:#1e293b;border:1px solid #334155;border-radius:6px;padding:6px 10px;color:#e2e8f0;font-size:.85rem">
       <input id="animeEditCover-${id}" value="${escHtml(coverUrl)}" placeholder="Borítókép URL"
         style="flex:3;min-width:220px;background:#1e293b;border:1px solid #334155;border-radius:6px;padding:6px 10px;color:#e2e8f0;font-size:.85rem">
-      <button onclick="saveAnimeEdit(${id})" style="background:#7c3aed;color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:.85rem;font-weight:700">Mentés</button>
-      <button onclick="document.getElementById('animeEdit-${id}').style.display='none'" style="background:#1e293b;color:#94a3b8;border:1px solid #334155;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:.85rem">Mégse</button>
+      <button ${act("saveAnimeEdit", id)} style="background:#7c3aed;color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:.85rem;font-weight:700">Mentés</button>
+      <button ${act("hideById", `animeEdit-${id}`)} style="background:#1e293b;color:#94a3b8;border:1px solid #334155;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:.85rem">Mégse</button>
     </div>
     <div id="animeEditStatus-${id}" style="font-size:.8rem;margin-top:6px"></div>
   `;
@@ -1015,7 +1015,7 @@ async function loadGifts() {
     const linkDisplay = isPurchased
       ? `<span style="color:#475569;font-size:.8rem;font-family:monospace">${escHtml(g.display_link)}</span>`
       : `<span id="gift-link-${g.id}" style="color:#475569;font-size:.8rem;font-family:monospace;filter:blur(4px);user-select:none">${escHtml(g.display_link)}</span>
-         <button onclick="revealGift(${g.id})" title="Mutasd a linket"
+         <button ${act("revealGift", g.id)} title="Mutasd a linket"
            style="background:#1e293b;color:#94a3b8;border:1px solid #334155;padding:3px 8px;border-radius:6px;cursor:pointer;font-size:.75rem;white-space:nowrap">👁</button>`;
 
     const purchaseInfo = isPurchased
@@ -1023,7 +1023,7 @@ async function loadGifts() {
       : "";
 
     const deleteBtn = isPurchased ? "" :
-      `<button onclick="deleteGift(${g.id})" title="Törlés"
+      `<button ${act("deleteGift", g.id)} title="Törlés"
         style="background:#7f1d1d33;color:#f87171;border:1px solid #7f1d1d55;padding:3px 10px;border-radius:6px;cursor:pointer;font-size:.78rem;margin-left:auto;white-space:nowrap">🗑</button>`;
 
     return `<div style="${rowStyle}">
@@ -1106,3 +1106,16 @@ async function sendVerificationEmails() {
 }
 
 window.sendVerificationEmails = sendVerificationEmails;
+
+// A gombok kezelője (korábban inline onclick az admin.html-ben)
+document.getElementById("sendVerifyEmailsBtn")?.addEventListener("click", sendVerificationEmails);
+document.getElementById("addGiftsBtn")?.addEventListener("click", addGifts);
+
+// A generált HTML data-on-click gombjai által hívható függvények (actions.js)
+window.PadliActions.register({
+  saveUploaderRoot, saveUploaderNameRoot, syncUploaderManga, fillRoot,
+  searchGrantUser, pickGrantUser, grantUploader, revokeUploader,
+  addGeminiKey, deleteGeminiKey, updateSubtitleRequestStatus,
+  toggleAnimeCatalog, startEditAnime, saveAnimeEdit, deleteAnimeCatalog,
+  deleteAnimeSeason, deleteAnimeEpisode, revealGift, deleteGift,
+});

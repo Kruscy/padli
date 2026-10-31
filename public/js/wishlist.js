@@ -1,4 +1,5 @@
 let isAdmin = false;
+let canManageWishlist = false; // admin vagy feltöltő — claim/terv gombok
 
 // A címek, borítók és felhasználónevek külső API-ból / felhasználótól
 // jönnek → HTML-be csak escape-elve kerülhetnek
@@ -18,6 +19,9 @@ let allWishlistData = [];
     const user = await me.json();
     if (user.role === "admin") {
       isAdmin = true;
+    }
+    if (isAdmin || user.tier === "Admin" || user.tier === "Uploader" || user.can_upload) {
+      canManageWishlist = true;
     }
   }
 
@@ -135,21 +139,22 @@ function renderWishlist(items, containerId) {
           🍆
         </button>
 
-        ${isAdmin ? `
-          <button 
+        ${canManageWishlist ? `
+          <button
             data-action="claim"
             class="${item.claimed_by_me ? 'active-claim' : ''}"
             style="background:${item.claimed_by_me ? '#10b981' : '#2f3651'}">
             ${item.claimed_by_me ? '✓ Dolgozom rajta' : '🔧 Claim'}
           </button>
-          
-          <button 
+
+          <button
             data-action="plan"
             class="${item.planned_by_me ? 'active-plan' : ''}"
             style="background:${item.planned_by_me ? '#8b5cf6' : '#2f3651'}">
             ${item.planned_by_me ? '✓ Tervezve' : '📅 Tervben'}
           </button>
-          
+        ` : ""}
+        ${isAdmin ? `
           <button data-action="removeWish" style="background:#ef4444">
             🗑
           </button>

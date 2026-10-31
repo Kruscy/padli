@@ -79,6 +79,37 @@
     <div class="queue-list" id="queueList"></div>
   </div>
 
+  <!-- Mangáim adatlapja -->
+  <div class="browser-section" id="myMangaSection" style="display:none">
+    <h2>📖 Mangáim adatlapja</h2>
+    <select id="myMangaSelect" class="browser-search" style="margin-bottom:10px">
+      <option value="">— Válassz a feltöltött mangáid közül —</option>
+    </select>
+    <div id="myMangaForm" style="display:none">
+      <label style="display:block;margin-bottom:8px">Cím
+        <input type="text" id="mmTitle" class="browser-search" style="margin-top:4px">
+      </label>
+      <label style="display:block;margin-bottom:8px">Leírás
+        <textarea id="mmDescription" rows="5" class="browser-search" style="margin-top:4px;resize:vertical"></textarea>
+      </label>
+      <label style="display:block;margin-bottom:8px">Borító URL
+        <input type="text" id="mmCoverUrl" class="browser-search" style="margin-top:4px">
+      </label>
+      <label style="display:block;margin-bottom:8px">...vagy borítókép feltöltése
+        <input type="file" id="mmCoverFile" accept="image/*" style="margin-top:4px">
+      </label>
+      <img id="mmCoverPreview" style="max-width:120px;display:none;border-radius:6px;margin-bottom:8px">
+      <label style="display:block;margin-bottom:8px">Műfajok (vesszővel elválasztva)
+        <input type="text" id="mmGenres" class="browser-search" style="margin-top:4px">
+      </label>
+      <label style="display:block;margin-bottom:8px">Címkék (vesszővel elválasztva)
+        <input type="text" id="mmTags" class="browser-search" style="margin-top:4px">
+      </label>
+      <button class="btn btn-primary" id="mmSaveBtn">💾 Mentés</button>
+      <span id="mmSaveStatus" style="margin-left:10px;color:#22c55e"></span>
+    </div>
+  </div>
+
   <!-- Fájlböngésző -->
   <div class="browser-section">
     <h2>📁 A te mappád</h2>
@@ -93,6 +124,7 @@
 </main>
 
 <script type="module" src="/js/layout-loader.js?v=20261004"></script>
-<script src="/js/uploader.js?v=20261016"></script>
+<script src="/js/actions.js?v=20261029"></script>
+<script src="/js/uploader.js?v=20261031"></script>
 </body>
 </html>

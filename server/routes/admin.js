@@ -9,6 +9,7 @@ import { mangaImageToR2Key, deleteObjectsByPrefix, listFiles } from "../r2.js";
 import { purgeChapterImages } from "../lib/cf-purge.js";
 import { requestScan, SCAN_OWNER_USER_ID } from "../lib/scan-runner.js";
 import { logAdminAction } from "../lib/admin-log.js";
+import { updateMangaCore } from "../lib/manga-meta.js";
 import fs from "fs";
 import path from "path";
 
@@ -81,38 +82,16 @@ router.post("/manga/:slug", async (req, res) => {
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
+      await updateMangaCore(client, mangaId, { cover_url, description, title, genres, tags });
       await client.query(
         `UPDATE manga SET
-          cover_url = COALESCE($1, cover_url),
-          description = COALESCE($2, description),
-          title = COALESCE($3, title),
-          uploaders = $4::text[],
-          anilist_id = CASE WHEN $5::int IS NOT NULL THEN $5::int ELSE anilist_id END,
-          status = CASE WHEN $6::boolean THEN $7::text ELSE status END
-         WHERE id = $8`,
-        [cover_url || null, description || null, title || null,
-         uploaders || [], anilist_id || null,
+          uploaders = $1::text[],
+          anilist_id = CASE WHEN $2::int IS NOT NULL THEN $2::int ELSE anilist_id END,
+          status = CASE WHEN $3::boolean THEN $4::text ELSE status END
+         WHERE id = $5`,
+        [uploaders || [], anilist_id || null,
          statusValue !== undefined, statusValue ?? null, mangaId]
       );
-
-      for (const [list, table, link, extraCol] of [
-        [genres, "genre", "manga_genre", ""],
-        [tags, "tag", "manga_tag", ", rank"],
-      ]) {
-        if (!list) continue;
-        const names = [...new Set(list.map(String).filter(Boolean))];
-        await client.query(`DELETE FROM ${link} WHERE manga_id = $1`, [mangaId]);
-        if (!names.length) continue;
-        await client.query(
-          `INSERT INTO ${table} (name) SELECT unnest($1::text[]) ON CONFLICT (name) DO NOTHING`, [names]
-        );
-        await client.query(
-          `INSERT INTO ${link} (manga_id, ${table}_id${extraCol})
-           SELECT $1, id${extraCol ? ", 0" : ""} FROM ${table} WHERE name = ANY($2::text[])
-           ON CONFLICT DO NOTHING`,
-          [mangaId, names]
-        );
-      }
       await client.query("COMMIT");
     } catch (txErr) {
       await client.query("ROLLBACK").catch(() => {});
