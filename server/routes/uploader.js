@@ -11,6 +11,7 @@ import { logSecurityEvent } from "../lib/security-log.js";
 import { isImageBuffer } from "../lib/safe-path.js";
 import { compressPageImage } from "../lib/image-compress.js";
 import { updateMangaCore } from "../lib/manga-meta.js";
+import { purgeChapterImages } from "../lib/cf-purge.js";
 
 const r2 = new S3Client({
   region: "auto",
@@ -507,6 +508,92 @@ router.post("/mkdir", requireUploader, express.json(), async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+/* ── Hibajegyek: feltöltés után rákérdezés, hogy a feltöltő javította-e
+   a nyitott hibajegyeket (egyéni kép vagy teljes rész). A kliens a sikeresen
+   feltöltött fájlok (manga-mappa, fejezet-mappa) párjait küldi, a szerver
+   megkeresi az ezekhez tartozó, még nyitott hibajegyeket. ── */
+router.post("/bugfix-check", requireUploader, express.json(), async (req, res) => {
+  const items = Array.isArray(req.body?.items) ? req.body.items.slice(0, 1000) : [];
+  if (!items.length) return res.json([]);
+
+  const pairs = [...new Map(
+    items.filter(i => i?.mangaFolder && i?.chapterFolder)
+      .map(i => [`${i.mangaFolder} ${i.chapterFolder}`, i])
+  ).values()];
+
+  const results = [];
+  for (const { mangaFolder, chapterFolder } of pairs) {
+    try {
+      const { rows } = await pool.query(
+        `SELECT br.id, br.image_file, br.image_index, br.type, br.description,
+                m.slug AS manga_slug, m.title AS manga_title
+         FROM bug_reports br
+         JOIN manga m ON m.slug = br.manga_slug
+         WHERE m.folder = $1 AND br.chapter = $2 AND br.is_closed = false
+         ORDER BY br.image_index NULLS FIRST, br.id`,
+        [mangaFolder, chapterFolder]
+      );
+      if (rows.length) {
+        results.push({ mangaFolder, chapterFolder, mangaTitle: rows[0].manga_title, reports: rows });
+      }
+    } catch (err) {
+      console.error("bugfix-check hiba:", err.message);
+    }
+  }
+
+  res.json(results);
+});
+
+/* ── Kijelölt hibajegyek lezárása javítottként (feltöltő) ── */
+router.post("/bugfix-close", requireUploader, express.json(), async (req, res) => {
+  const ids = Array.isArray(req.body?.ids)
+    ? [...new Set(req.body.ids.map(Number).filter(Number.isFinite))].slice(0, 1000)
+    : [];
+  if (!ids.length) return res.json({ closed: 0 });
+
+  const { rows } = await pool.query(
+    `UPDATE bug_reports
+     SET is_closed = true, close_reason = $1, closed_without_fix = false,
+         closed_at = NOW(), closed_by = $2
+     WHERE id = ANY($3::int[]) AND is_closed = false
+     RETURNING id, manga_slug, chapter, image_file`,
+    ["Feltöltő javította (újrafeltöltés)", req.session.user.id, ids]
+  );
+
+  // CF cache purge fejezetenkénti csoportosítással, hogy a javított kép
+  // azonnal (ne csak a következő CF-lejáratnál) frissüljön az olvasóknál.
+  const byChapter = new Map();
+  for (const r of rows) {
+    const key = `${r.manga_slug} ${r.chapter}`;
+    if (!byChapter.has(key)) byChapter.set(key, { mangaSlug: r.manga_slug, chapter: r.chapter, files: new Set() });
+    if (r.image_file) byChapter.get(key).files.add(String(r.image_file).replace(/\?r2=1$/, ""));
+  }
+  for (const { mangaSlug, chapter, files } of byChapter.values()) {
+    if (!files.size) continue;
+    try {
+      const { rows: libRows } = await pool.query(
+        `SELECT l.name AS library_name, l.path AS library_path, m.folder AS manga_folder
+         FROM manga m JOIN library l ON l.id = m.library_id
+         WHERE m.slug = $1 LIMIT 1`,
+        [mangaSlug]
+      );
+      if (libRows.length) {
+        await purgeChapterImages({
+          libraryName: libRows[0].library_name,
+          libraryPath: libRows[0].library_path,
+          mangaSlug, mangaFolder: libRows[0].manga_folder,
+          chapterFolder: chapter,
+          files: [...files],
+        });
+      }
+    } catch (err) {
+      console.warn("[bugfix-close] CF purge hiba:", err.message);
+    }
+  }
+
+  res.json({ closed: rows.length });
 });
 
 /* ── GET /api/uploader/my-manga — saját feltöltött mangák listája ── */

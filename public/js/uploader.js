@@ -10,6 +10,7 @@ let currentPath = "";
 let uploadQueue = []; // { file, relativePath, status, progress }
 let currentItems = []; // az aktuálisan betöltött fájlok/mappák
 let browserFilter = ""; // szűrési szöveg
+let bugfixPromptShown = false; // egy feltöltési kör alatt csak egyszer kérdezzünk
 
 /* ── DOM referenciák ── */
 const dropZone     = document.getElementById("dropZone");
@@ -214,6 +215,10 @@ function renderQueue() {
       if (error === 0) {
         doneMsg.classList.remove("hidden");
       }
+      if (!bugfixPromptShown && done > 0) {
+        bugfixPromptShown = true;
+        checkBugfixAfterUpload();
+      }
     }
   } else {
     progressWrap.classList.add("hidden");
@@ -326,6 +331,91 @@ function showSeriesExistsModal(blocked) {
   });
 }
 
+/* ══════════════════════════════════════════════════════════
+   HIBAJEGYEK — feltöltés után rákérdezés, javítva lett-e
+   ══════════════════════════════════════════════════════════ */
+async function checkBugfixAfterUpload() {
+  const items = uploadQueue
+    .filter(i => i.status === "done")
+    .map(i => {
+      const full = currentPath ? `${currentPath}/${i.relativePath}` : i.relativePath;
+      const parts = full.split("/");
+      if (parts.length < 3) return null; // nincs manga/fejezet/kép szintű mélység
+      return { mangaFolder: parts[0], chapterFolder: parts[1], imageFile: parts[parts.length - 1] };
+    })
+    .filter(Boolean);
+  if (!items.length) return;
+
+  let groups;
+  try {
+    const r = await fetch("/api/uploader/bugfix-check", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items }),
+    });
+    groups = r.ok ? await r.json() : [];
+  } catch { return; }
+  if (!groups?.length) return;
+
+  const typeLabel = { other: "Egyéb", english_remained: "Angol maradt", wrong_chapter: "Rossz fejezet/kép" };
+
+  const rowsHtml = groups.map(g => {
+    const reportRows = g.reports.map(r => `
+      <label style="display:flex;gap:8px;align-items:flex-start;margin:6px 0;cursor:pointer;color:#e8e8f5">
+        <input type="checkbox" data-bugid="${r.id}" checked style="margin-top:4px">
+        <span>
+          ${r.image_index == null ? "<b>Egész rész</b>" : `<b>${escAttr(r.image_file || "")}</b> (${r.image_index}. kép)`}
+          — ${escAttr(typeLabel[r.type] || r.type || "")}
+          ${r.description ? `<br><span style="color:#9ca3af;font-size:.82rem">${escAttr(r.description)}</span>` : ""}
+        </span>
+      </label>`).join("");
+    return `
+      <li style="margin-bottom:16px;line-height:1.5">
+        <div style="color:#a78bfa;font-weight:600">${escAttr(g.mangaTitle)} — ${escAttr(g.chapterFolder)}</div>
+        ${reportRows}
+      </li>`;
+  }).join("");
+
+  const overlay = document.createElement("div");
+  overlay.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:99999;
+    display:flex;align-items:center;justify-content:center;padding:16px;`;
+  overlay.innerHTML = `
+    <div style="background:#13131f;border:1px solid rgba(255,255,255,.1);border-radius:16px;
+                padding:28px 24px;max-width:560px;width:100%;max-height:90vh;overflow-y:auto;
+                font-family:Poppins,sans-serif;color:#e8e8f5;">
+      <div style="font-size:2rem;margin-bottom:12px">🐛</div>
+      <h3 style="margin-bottom:8px;font-size:1.1rem">Nyitott hibajegy van ebben a feltöltésben</h3>
+      <p style="color:#9ca3af;font-size:.88rem;margin-bottom:12px">
+        Javítottad a lentieket ezzel a feltöltéssel? A bejelölteket lezárjuk javítottként.</p>
+      <ul style="margin:0 0 16px 0;padding:0;list-style:none;font-size:.88rem">${rowsHtml}</ul>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <button id="bf-close" style="background:#10b981;color:#fff;border:none;padding:11px 16px;
+                border-radius:10px;font-weight:600;cursor:pointer;font-size:.9rem">✅ Igen, zárjuk be a bejelölteket</button>
+        <button id="bf-skip" style="background:none;color:#6b7280;border:none;
+                padding:8px;cursor:pointer;font-size:.85rem">Nem, hagyjuk nyitva</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  overlay.querySelector("#bf-skip").onclick = () => document.body.removeChild(overlay);
+  overlay.querySelector("#bf-close").onclick = async () => {
+    const ids = [...overlay.querySelectorAll("[data-bugid]:checked")].map(el => Number(el.dataset.bugid));
+    document.body.removeChild(overlay);
+    if (!ids.length) return;
+    try {
+      const r = await fetch("/api/uploader/bugfix-close", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids }),
+      });
+      const data = await r.json();
+      if (data.closed) alert(`✅ ${data.closed} hibajegy lezárva javítottként.`);
+    } catch {
+      alert("Hiba történt a hibajegyek lezárásakor.");
+    }
+  };
+}
+
 function resetUploadButtons() {
   uploadBtn.disabled = false;
   clearBtn.disabled  = false;
@@ -335,6 +425,8 @@ function resetUploadButtons() {
 async function startUpload() {
   let pending = uploadQueue.filter(i => i.status === "pending" || (i.status === "error" && !i.blocked));
   if (!pending.length) return;
+
+  bugfixPromptShown = false;
 
   // Az előző feltöltés scan-csíkja eltűnik (az új feltöltés végén új scan indul)
   clearTimeout(scanPollTimer);
