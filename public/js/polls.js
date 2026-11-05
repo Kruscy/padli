@@ -5,7 +5,7 @@ const createBtn = document.getElementById("createPollBtn");
   const me = await fetch("/api/auth/me");
   if (me.ok) {
     const user = await me.json();
-    if (user.role === "admin") {
+    if (user.role === "admin" || user.tier === "Admin" || user.tier === "Uploader" || user.can_upload) {
       createBtn.classList.remove("hidden");
       createBtn.onclick = () => location.href = "/create-poll.html";
     }

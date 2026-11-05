@@ -6,14 +6,15 @@ const fillMyPlannedBtn = document.getElementById("fillMyPlannedBtn");
 
 let optionCount = 0;
 
-/* ================= ADMIN CHECK ================= */
+/* ================= ADMIN / FELTÖLTŐ CHECK ================= */
 
 (async function checkAdmin() {
   const res = await fetch("/api/auth/me");
   if (!res.ok) return location.href = "/";
 
   const user = await res.json();
-  if (user.role !== "admin") {
+  const allowed = user.role === "admin" || user.tier === "Admin" || user.tier === "Uploader" || user.can_upload;
+  if (!allowed) {
     location.href = "/";
   }
 })();

@@ -9,6 +9,33 @@ import { isUploaderUser } from "../lib/uploader-check.js";
 
 const router = express.Router();
 
+/* ── Ha a kért mű már szerepel a kívánságlistán: lájkoljuk (ha még nem
+   tette) a nevében, és erről tájékoztatjuk — ne hozzon létre újat. ── */
+async function respondExisting(wishId, userId, res) {
+  const liked = await pool.query(`
+    SELECT 1 FROM wishlist_likes WHERE wishlist_id = $1 AND user_id = $2
+  `, [wishId, userId]);
+
+  if (liked.rowCount) {
+    return res.json({
+      alreadyExists: true,
+      alreadyLiked: true,
+      message: "Már padlizsánoztad ezt a művet 🍆"
+    });
+  }
+
+  await pool.query(`
+    INSERT INTO wishlist_likes (wishlist_id, user_id) VALUES ($1, $2)
+    ON CONFLICT (wishlist_id, user_id) DO NOTHING
+  `, [wishId, userId]);
+
+  return res.json({
+    alreadyExists: true,
+    alreadyLiked: false,
+    message: "Már fent volt - kapott egy 🍆 tőled!"
+  });
+}
+
 /* ── Értesítés a kérőnek ÉS a lájkolóknak, ha egy admin claimeli/
    tervbe veszi a mangájukat (a saját magukat érintő eset kihagyva).
    buildMessage(username, title, reason) állítja elő a pontos, a
@@ -26,11 +53,26 @@ export async function notifyWishlistWatchers(wishlistId, actingUser, type, build
     );
     const likerIds = likeRows.map(r => r.user_id);
 
-    const recipients = new Set([requesterId, ...likerIds].filter(Boolean));
+    // Akik claimelték ("dolgozik rajta") vagy tervbe vették — ők is kapjanak
+    // értesítést, ha valaki más is lép ugyanazon a tételen, különben két
+    // fordító észrevétlenül ugyanazt fordíthatja le párhuzamosan.
+    const { rows: claimRows } = await pool.query(
+      `SELECT DISTINCT user_id FROM wishlist_claims WHERE wishlist_id = $1`, [wishlistId]
+    );
+    const { rows: plannedRows } = await pool.query(
+      `SELECT DISTINCT user_id FROM wishlist_planned WHERE wishlist_id = $1`, [wishlistId]
+    );
+    const claimerIds = claimRows.map(r => r.user_id);
+    const plannerIds = plannedRows.map(r => r.user_id);
+
+    const recipients = new Set([requesterId, ...likerIds, ...claimerIds, ...plannerIds].filter(Boolean));
     recipients.delete(actingUser.id);
 
     for (const recipientId of recipients) {
-      const reason = recipientId === requesterId ? "amit te kértél" : "amit te lájkoltál";
+      const reason = recipientId === requesterId ? "amit te kértél"
+        : claimerIds.includes(recipientId) ? "amin te is dolgozol"
+        : plannerIds.includes(recipientId) ? "amit te is tervbe vettél"
+        : "amit te lájkoltál";
       await pool.query(
         `INSERT INTO notifications (user_id, type, message, link)
          VALUES ($1, $2, $3, '/wishlist.html')`,
@@ -89,35 +131,7 @@ router.post("/", requireLogin, async (req, res) => {
     ]);
 
     if (exists.rowCount) {
-      const wishId = exists.rows[0].id;
-      const userId = req.session.user.id;
-
-      // megnézzük lájkolta-e már
-      const liked = await pool.query(`
-        SELECT 1 FROM wishlist_likes
-        WHERE wishlist_id = $1 AND user_id = $2
-      `, [wishId, userId]);
-
-      if (liked.rowCount) {
-        // már lájkolta
-        return res.json({
-          alreadyExists: true,
-          alreadyLiked: true,
-          message: "Már padlizsánoztad ezt a művet 🍆"
-        });
-      }
-
-      // még nem lájkolta → auto like
-      await pool.query(`
-        INSERT INTO wishlist_likes (wishlist_id, user_id)
-        VALUES ($1, $2)
-      `, [wishId, userId]);
-
-      return res.json({
-        alreadyExists: true,
-        alreadyLiked: false,
-        message: "Már fent volt - kapott egy 🍆 tőled!"
-      });
+      return respondExisting(exists.rows[0].id, req.session.user.id, res);
     }
 
     /* ===== Metaadat lekérés a forrás szerint ===== */
@@ -204,20 +218,39 @@ router.post("/", requireLogin, async (req, res) => {
       } catch {}
     }
 
-    const result = await pool.query(`
-      INSERT INTO wishlist (user_id, anilist_id, mal_id, mangadex_id, source, title, cover_url, episodes)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-      RETURNING *
-    `, [
-      req.session.user.id,
-      crossAnilistId,
-      crossMalId,
-      crossMangadexId,
-      source,
-      title,
-      coverUrl,
-      chapters
-    ]);
+    let result;
+    try {
+      result = await pool.query(`
+        INSERT INTO wishlist (user_id, anilist_id, mal_id, mangadex_id, source, title, cover_url, episodes)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+        RETURNING *
+      `, [
+        req.session.user.id,
+        crossAnilistId,
+        crossMalId,
+        crossMangadexId,
+        source,
+        title,
+        coverUrl,
+        chapters
+      ]);
+    } catch (insertErr) {
+      // 23505 = egyedi kényszer ütközés — két egyidejű kérés (pl. dupla
+      // kattintás) között valaki más közben már beszúrta ugyanezt.
+      // 2026-11-01-i incidens: ez korábban duplikátumokat hozott létre,
+      // mert a fenti "exists" ellenőrzés és ez a beszúrás között nem volt
+      // atomi garancia — most legalább az ütközést kezeljük, nem hibázunk.
+      if (insertErr.code === "23505") {
+        const retry = await pool.query(`
+          SELECT id FROM wishlist
+          WHERE (anilist_id  IS NOT NULL AND anilist_id  = $1)
+             OR (mal_id      IS NOT NULL AND mal_id      = $2)
+             OR (mangadex_id IS NOT NULL AND mangadex_id = $3)
+        `, [crossAnilistId, crossMalId, crossMangadexId]);
+        if (retry.rowCount) return respondExisting(retry.rows[0].id, req.session.user.id, res);
+      }
+      throw insertErr;
+    }
 
     res.json(result.rows[0]);
 
@@ -391,8 +424,8 @@ router.delete("/:id", requireLogin, async (req, res) => {
 /* ================= FOR POLLS - UNCLAIMED RANDOM ================= */
 router.get("/for-polls/unclaimed", requireLogin, async (req, res) => {
   try {
-    if (req.session.user.role !== "admin") {
-      return res.status(403).json({ error: "Admin only" });
+    if (req.session.user.role !== "admin" && !(await isUploaderUser(req.session.user.id))) {
+      return res.status(403).json({ error: "Admin vagy feltöltő jogosultság szükséges" });
     }
 
     const { limit = 10 } = req.query;
@@ -419,8 +452,8 @@ router.get("/for-polls/unclaimed", requireLogin, async (req, res) => {
 /* ================= FOR POLLS - ADMIN'S PLANNED ================= */
 router.get("/for-polls/my-planned", requireLogin, async (req, res) => {
   try {
-    if (req.session.user.role !== "admin") {
-      return res.status(403).json({ error: "Admin only" });
+    if (req.session.user.role !== "admin" && !(await isUploaderUser(req.session.user.id))) {
+      return res.status(403).json({ error: "Admin vagy feltöltő jogosultság szükséges" });
     }
 
     const userId = req.session.user.id;

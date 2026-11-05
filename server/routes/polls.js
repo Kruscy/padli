@@ -1,15 +1,16 @@
 import express from "express";
 import { pool } from "../db.js";
 import { requireLogin } from "../middleware/auth.js";
+import { isUploaderUser } from "../lib/uploader-check.js";
 
 const router = express.Router();
 
 /* =====================================================
-   CREATE POLL (ADMIN)
+   CREATE POLL (ADMIN vagy feltöltő)
 ===================================================== */
 router.post("/", requireLogin, async (req, res) => {
-  if (req.session.user.role !== "admin") {
-    return res.status(403).json({ error: "Admin only" });
+  if (req.session.user.role !== "admin" && !(await isUploaderUser(req.session.user.id))) {
+    return res.status(403).json({ error: "Admin vagy feltöltő jogosultság szükséges" });
   }
 
   const { title, durationDays, options } = req.body;
