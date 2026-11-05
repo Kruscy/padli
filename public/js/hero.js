@@ -50,12 +50,16 @@
         voted: false
       }));
 
+    const giveawayRes = await fetch("/api/giveaway/active");
+    const giveaway = giveawayRes.ok ? await giveawayRes.json() : null;
+    const giveawaySlides = giveaway ? [{ type: "giveaway", ...giveaway }] : [];
+
     const adultMode = localStorage.getItem("adultMode") === "1";
     const res = await fetch(adultMode ? "/api/featured?adult=1" : "/api/featured");
     const featured = res.ok ? await res.json() : [];
     const mangaSlides = featured.map(m => ({ type: "manga", ...m }));
 
-    slides = [...announcementSlides, ...pollSlides, ...mangaSlides];
+    slides = [...giveawaySlides, ...announcementSlides, ...pollSlides, ...mangaSlides];
   } catch (err) {
     console.error("Hero load error:", err);
     return;
@@ -75,6 +79,8 @@
         renderAnnouncement(item);
       } else if (item.type === "poll") {
         renderPoll(item);
+      } else if (item.type === "giveaway") {
+        renderGiveaway(item);
       } else {
         renderManga(item);
       }
@@ -104,6 +110,60 @@
       </div>
     `;
     trackAnnouncementLinks(heroInner.querySelector(".hero-card-text"), item.id);
+  }
+
+  /* ===== NYEREMÉNYJÁTÉK ===== */
+  function renderGiveaway(item) {
+    const hasImage = !!item.image_url;
+    const endsAt = new Date(item.ends_at);
+    const daysLeft = Math.max(0, Math.ceil((endsAt - Date.now()) / 86400000));
+    const entered = item.entered_by_me;
+
+    heroInner.innerHTML = `
+      <div class="hero-card announcement-card ${hasImage ? 'has-image' : ''}">
+        ${hasImage ? `
+          <div class="hero-card-image">
+            <img src="${escHtml(item.image_url)}" alt="${escHtml(item.title)}">
+          </div>
+        ` : ""}
+        <div class="hero-card-body">
+          <div class="hero-card-tag">🎁 Nyereményjáték</div>
+          <h2>${escHtml(item.title)}</h2>
+          <div class="hero-card-text">${formatBody(item.description || "")}</div>
+          <p style="color:#9ca3af;font-size:.85rem;margin:6px 0">
+            👥 ${item.entry_count} jelentkező · ⏳ ${daysLeft > 0 ? `még ${daysLeft} nap` : "ma zárul"}
+          </p>
+          <button class="hero-btn" id="giveawayEnterBtn" ${entered ? "disabled" : ""}
+            style="${entered ? "opacity:.6;cursor:default" : ""}">
+            ${entered ? "✓ Jelentkeztél" : "🎉 Jelentkezem"}
+          </button>
+        </div>
+      </div>
+    `;
+
+    const btn = heroInner.querySelector("#giveawayEnterBtn");
+    if (btn && !entered) {
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        btn.textContent = "...";
+        try {
+          const r = await fetch(`/api/giveaway/${item.id}/enter`, { method: "POST" });
+          const data = await r.json();
+          if (r.ok) {
+            item.entered_by_me = true;
+            item.entry_count = data.entryCount;
+            renderGiveaway(item);
+          } else {
+            alert(data.error || "Hiba történt");
+            btn.disabled = false;
+            btn.textContent = "🎉 Jelentkezem";
+          }
+        } catch {
+          btn.disabled = false;
+          btn.textContent = "🎉 Jelentkezem";
+        }
+      });
+    }
   }
 
   /* ===== Kattintás-számláló a kiírásban lévő linkekre ===== */

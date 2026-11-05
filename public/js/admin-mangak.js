@@ -55,7 +55,7 @@ function initTabs() {
       btn.classList.add("active");
       document.getElementById(btn.dataset.tab).classList.add("active");
       if (btn.dataset.tab === "tab-libraries") loadUploaderRoots();
-      if (btn.dataset.tab === "tab-gifts") loadGifts();
+      if (btn.dataset.tab === "tab-gifts") { loadGifts(); loadGiveaways(); }
       if (btn.dataset.tab === "tab-api-usage") loadApiUsage();
       if (btn.dataset.tab === "tab-remote-usage") loadRemoteUsage();
       if (btn.dataset.tab === "tab-subtitle-requests") loadSubtitleRequests();
@@ -976,6 +976,40 @@ async function deleteAnimeEpisode(episodeId, animeId, slug) {
   if (!res.ok) { alert("Törlés sikertelen"); return; }
   loadedAnimeAdmin.delete(animeId);
   loadAnimeCatalog();
+}
+
+/* ===== NYEREMÉNYJÁTÉKOK ===== */
+async function loadGiveaways() {
+  const listEl = document.getElementById("giveawaysList");
+  if (!listEl) return;
+  listEl.innerHTML = "<p style='color:#888'>Betöltés...</p>";
+
+  const res = await fetch("/api/giveaway/admin");
+  if (!res.ok) { listEl.innerHTML = "<p style='color:#ef4444'>Betöltési hiba</p>"; return; }
+  const giveaways = await res.json();
+
+  if (!giveaways.length) {
+    listEl.innerHTML = "<p style='color:#888'>Nincs még nyereményjáték.</p>";
+    return;
+  }
+
+  listEl.innerHTML = giveaways.map(g => {
+    const ended = new Date(g.ends_at) <= new Date();
+    const statusHtml = g.winner_user_id
+      ? `<span style="color:#86efac">🏆 Nyertes: ${escHtml(g.winner_username || "?")}</span>`
+      : ended
+        ? `<span style="color:#fbbf24">⏳ Lejárt, sorsolásra vár</span>`
+        : `<span style="color:#60a5fa">🟢 Aktív, lezárás: ${new Date(g.ends_at).toLocaleString("hu-HU")}</span>`;
+    return `
+      <div style="background:#0f172a;border-radius:10px;padding:14px 18px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+        <div>
+          <strong style="color:#e2e8f0">${escHtml(g.title)}</strong><br>
+          <span style="font-size:.85rem">${statusHtml}</span>
+        </div>
+        <div style="font-size:1.1rem;font-weight:700;color:#a78bfa">👥 ${g.entry_count} jelentkező</div>
+      </div>
+    `;
+  }).join("");
 }
 
 /* ===== PATREON GIFT ===== */
