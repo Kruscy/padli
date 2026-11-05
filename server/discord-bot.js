@@ -31,7 +31,11 @@ const MOD_ROLE_ID = "1382765977522929676";
    vissza tudjon térni, ha rendbe tette a fiókját). Ehhez a
    botnak "Kick Members" ÉS "Manage Messages" jogosultság is
    kell a szerveren (a "Manage Roles" mellett). ── */
-const RAID_WINDOW_MS = 10000;
+// 2026-11-02-i hadessc-eset: a csatornánkénti terjedés kb. 6-22 mp-enként
+// történt (Discord rate-limit miatt lassabb, mint egy gyors flood), a 10 mp-es
+// ablak mire a 3. csatornáig ért, már elfelejtette az első (@everyone-os)
+// üzenetet — sosem gyűlt össze elég bizonyíték egyszerre. 60 mp-re növelve.
+const RAID_WINDOW_MS = 60000;
 const RAID_MIN_CHANNELS = 3;
 const RAID_MIN_MENTIONS_TOTAL = 8;
 const RAID_MIN_MESSAGES_WITH_IMAGES = 5;
