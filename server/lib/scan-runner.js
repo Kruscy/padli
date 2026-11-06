@@ -12,8 +12,13 @@ const SCAN_LOCK = "/tmp/padlizsanfansub.scan.lock";
 
 // Az admin gomb és a feltöltő ugyanazt a sort használja, így egyszerre
 // legfeljebb egy scan fut és legfeljebb egy vár utána.
+// queuedScopes: null = nincs várakozó kérés; Set<string|null> = várakozó
+// kérések könyvtár-útvonalai (null = teljes scan). Ha a futó scan végén
+// pontosan egy, nem-teljes scope várakozik, csak azt futtatjuk újra —
+// ha több különböző (vagy egy teljes) scope gyűlt össze, biztonságból
+// teljes scant indítunk, hogy semelyik feltöltőé ne maradjon ki.
 const state = {
-  queued: false,
+  queuedScopes: null,
   lastStartedAt: null,
   lastFinishedAt: null,
   lastExitCode: null,
@@ -51,13 +56,17 @@ function openScanLog() {
   }
 }
 
-function spawnScan() {
+function spawnScan(scopeLibraryPath = null) {
   clearNewReleasesCache();
   const logFd = openScanLog();
+  const env = { ...process.env };
+  if (scopeLibraryPath) env.SCAN_LIBRARY_PATH = scopeLibraryPath;
+  else delete env.SCAN_LIBRARY_PATH;
   const scan = spawn("node", ["./server/scan.js"], {
     cwd: process.cwd(),
     detached: true,
-    stdio: ["ignore", logFd, logFd]
+    stdio: ["ignore", logFd, logFd],
+    env,
   });
   if (typeof logFd === "number") fs.closeSync(logFd); // a gyerekfolyamat már örökölte
   state.lastStartedAt = new Date();
@@ -75,27 +84,32 @@ function spawnScan() {
     console.error("❌ Scan spawn hiba:", err.message);
   });
   scan.unref();
-  console.log("🔄 Scan started");
+  console.log(`🔄 Scan started${scopeLibraryPath ? ` (szűkítve: ${scopeLibraryPath})` : ""}`);
 }
 
-// "started" | "queued"
-export function requestScan() {
+// "started" | "queued" — scopeLibraryPath: ha meg van adva, csak ennek a
+// könyvtárnak az útvonalát nézi át a scan (feltöltés utáni auto-scan);
+// ha nincs (admin gomb, cron), teljes scan megy.
+export function requestScan(scopeLibraryPath = null) {
   if (!isScanRunning()) {
-    spawnScan();
+    spawnScan(scopeLibraryPath);
     return "started";
   }
-  if (!state.queued) {
-    state.queued = true;
+  if (!state.queuedScopes) {
+    state.queuedScopes = new Set([scopeLibraryPath]);
     console.log("⏳ Scan már fut – a következő scan sorba állt");
     // Megvárjuk amíg a lock felszabadul, majd elindítjuk
     const interval = setInterval(() => {
       if (!isScanRunning()) {
         clearInterval(interval);
-        state.queued = false;
-        spawnScan();
+        const scopes = state.queuedScopes;
+        state.queuedScopes = null;
+        const finalScope = (scopes.size === 1 && !scopes.has(null)) ? [...scopes][0] : null;
+        spawnScan(finalScope);
       }
     }, 5000); // 5 másodpercenként ellenőrzi
   } else {
+    state.queuedScopes.add(scopeLibraryPath);
     console.log("⏳ Scan már fut és egy scan már sorban van – összevonva");
   }
   return "queued";
@@ -121,7 +135,7 @@ export function getScanStatus() {
   return {
     progress: readProgress(),
     running: isScanRunning(),
-    queued: state.queued,
+    queued: !!state.queuedScopes,
     lastStartedAt: state.lastStartedAt,
     lastFinishedAt: state.lastFinishedAt,
     lastExitCode: state.lastExitCode,

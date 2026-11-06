@@ -155,8 +155,16 @@ if (!fs.existsSync(LIB_FILE)) {
   process.exit(1);
 }
 
+// Feltöltés utáni automata scan csak a feltöltő saját könyvtárát nézi át
+// (server/lib/scan-runner.js adja át SCAN_LIBRARY_PATH env-ben) — a teljes,
+// minden könyvtárat átvizsgáló scan csak az admin "Scan library" gombjára
+// és az órás cronra marad, hogy egy feltöltés ne lassítsa az egészet.
+const SCOPE_PATH = process.env.SCAN_LIBRARY_PATH ? path.resolve(process.env.SCAN_LIBRARY_PATH) : null;
+if (SCOPE_PATH) console.log(`🔎 Szűkített scan: csak "${SCOPE_PATH}"`);
+
 const libraries = JSON.parse(fs.readFileSync(LIB_FILE, "utf8"))
-  .filter(l => l.enabled && fs.existsSync(l.path));
+  .filter(l => l.enabled && fs.existsSync(l.path))
+  .filter(l => !SCOPE_PATH || path.resolve(l.path) === SCOPE_PATH);
 
 /* ================= SCAN ================= */
 

@@ -405,7 +405,7 @@ router.post("/client-error", requireUploader, express.json({ limit: "256kb" }), 
 router.post("/scan", requireUploader, (req, res) => {
   try {
     const requestedAt = new Date();
-    const state = requestScan();
+    const state = requestScan(userBaseOf(req.uploaderRoot));
     console.log(`🔄 Feltöltés utáni scan kérés: ${req.session.user.username} (${state})`);
     res.json({ ok: true, state, requestedAt });
   } catch (err) {
