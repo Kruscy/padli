@@ -9,6 +9,7 @@ import { mangaImageToR2Key, deleteObjectsByPrefix, listFiles } from "../r2.js";
 import { purgeChapterImages } from "../lib/cf-purge.js";
 import { requestScan, SCAN_OWNER_USER_ID } from "../lib/scan-runner.js";
 import { logAdminAction } from "../lib/admin-log.js";
+import { buildUploaderRoots, matchUploaderRoot, assignUploaderIfEmpty } from "../lib/uploader-roots.js";
 import { updateMangaCore } from "../lib/manga-meta.js";
 import fs from "fs";
 import path from "path";
@@ -688,41 +689,44 @@ router.post("/uploader-name-root", express.json(), async (req, res) => {
   res.json({ ok: true });
 });
 
+/* ── Hiányzó fordítók kitöltése (2026-11-06) ──────────────────
+   Ugyanaz a szabály, mint a scanben (lib/uploader-roots.js): a mappa
+   tulajdonosának neve CSAK azokhoz a mangákhoz kerül, ahol még nincs
+   fordító — az admin által beírt (más) fordítót nem írja felül és nem
+   bővíti. Korábban minden mangához hozzáfűzte a mappa tulajdonosát.
+   Csak a tulajdonos (SCAN_OWNER_USER_ID) futtathatja. ── */
 router.post("/sync-uploader-manga", async (req, res) => {
+  if (req.session.user.id !== SCAN_OWNER_USER_ID) {
+    return res.status(403).json({ error: "Ezt csak az oldal tulajdonosa futtathatja." });
+  }
   try {
-    const { rows: uploaderRoots } = await pool.query(
-      `SELECT name, root_path FROM uploader_names WHERE root_path IS NOT NULL AND root_path != ''`
-    );
-    if (!uploaderRoots.length) return res.json({ updated: 0 });
+    const roots = await buildUploaderRoots(pool);
+    if (!roots.length) return res.json({ updated: 0, items: [] });
 
     const { rows: mangas } = await pool.query(`
-      SELECT m.id, m.uploaders, l.path AS lib_path, m.folder
+      SELECT m.id, m.title, l.path AS lib_path, m.folder
       FROM manga m
       JOIN library l ON l.id = m.library_id
+      WHERE cardinality(COALESCE(m.uploaders, '{}')) = 0
     `);
 
-    let updated = 0;
+    const items = [];
     for (const manga of mangas) {
-      const mangaFullPath = (manga.lib_path + "/" + manga.folder).replace(/\/+/g, "/");
-      for (const uploader of uploaderRoots) {
-        const uploaderBase = uploader.root_path.startsWith("/")
-          ? path.resolve(uploader.root_path)
-          : (KAVITA_BASE + "/" + uploader.root_path).replace(/\/+/g, "/");
-        if (mangaFullPath.startsWith(uploaderBase + "/") || mangaFullPath === uploaderBase) {
-          const current = manga.uploaders || [];
-          if (!current.includes(uploader.name)) {
-            await pool.query(
-              `UPDATE manga SET uploaders = array_append(COALESCE(uploaders, '{}'), $1) WHERE id = $2 AND NOT ($1 = ANY(COALESCE(uploaders, '{}')))`,
-              [uploader.name, manga.id]
-            );
-            updated++;
-          }
-        }
+      const ur = matchUploaderRoot(roots, path.join(manga.lib_path, manga.folder || manga.title));
+      if (ur && await assignUploaderIfEmpty(pool, manga.id, ur.name)) {
+        items.push({ id: manga.id, title: manga.title, uploader: ur.name });
       }
     }
 
-    res.json({ updated });
+    if (items.length) {
+      await logAdminAction(req, {
+        action: "uploader_credit_sync", targetType: "manga",
+        details: { updated: items.length, items: items.slice(0, 200) },
+      });
+    }
+    res.json({ updated: items.length, items });
   } catch (err) {
+    console.error("[sync-uploader-manga]", err);
     res.status(500).json({ error: err.message });
   }
 });

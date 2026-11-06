@@ -3,12 +3,15 @@ function escHtml(s) {
   return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 }
 
+let canOwnerActions = false;
+
 document.addEventListener("DOMContentLoaded", async () => {
   try {
     const res = await fetch("/api/auth/me");
     if (!res.ok) { location.replace("/index.html"); return; }
     const user = await res.json();
     if (user.role !== "admin") { location.replace("/index.html"); return; }
+    canOwnerActions = !!user.can_scan; // tulajdonos-csak műveletek (pl. fordítók kitöltése)
 
     document.body.classList.remove("hidden");
 
@@ -99,11 +102,12 @@ async function loadUploaderRoots() {
 
   let html = "";
 
-  // Szinkronizálás gomb
-  html += `<div style="margin-bottom:16px">
+  // Hiányzó fordítók kitöltése — csak a tulajdonosnak (a szerver is ellenőrzi)
+  if (canOwnerActions) html += `<div style="margin-bottom:16px">
     <button ${act("syncUploaderManga")} id="syncBtn"
+      title="A fordító nélküli mangákhoz beírja a mappájuk feltöltőjét. Meglévő fordítót nem módosít."
       style="background:#0f172a;color:#94a3b8;border:1px solid #334155;padding:7px 18px;border-radius:8px;cursor:pointer;font-size:.85rem;font-weight:600">
-      🔄 Feltöltők szinkronizálása mangákhoz
+      🔄 Hiányzó fordítók kitöltése
     </button>
     <span id="syncStatus" style="margin-left:10px;font-size:.82rem;color:#22c55e;display:none"></span>
   </div>`;
@@ -244,14 +248,16 @@ async function syncUploaderManga() {
     const res = await fetch("/api/admin/sync-uploader-manga", { method: "POST" });
     const data = await res.json();
     if (res.ok) {
-      status.textContent = `✓ ${data.updated} manga frissítve`;
+      status.textContent = data.updated
+        ? `✓ ${data.updated} mangához beírva: ` + data.items.slice(0, 5).map(i => `${i.title} → ${i.uploader}`).join(", ") + (data.updated > 5 ? " …" : "")
+        : "✓ Nincs fordító nélküli manga, amihez feltöltő tartozik";
       status.style.display = "inline";
     } else {
       alert("Hiba: " + (data.error || "ismeretlen"));
     }
   } finally {
     btn.disabled = false;
-    btn.textContent = "🔄 Feltöltők szinkronizálása mangákhoz";
+    btn.textContent = "🔄 Hiányzó fordítók kitöltése";
   }
 }
 

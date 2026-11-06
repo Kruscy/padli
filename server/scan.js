@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import { spawn } from "child_process";
 import { pool } from "./db.js";
+import { buildUploaderRoots, matchUploaderRoot, assignUploaderIfEmpty } from "./lib/uploader-roots.js";
 import { scanMetadata } from "./metadata-scan.js";
 import { setNewMangaCache } from "./cache/new-manga.js";
 import { Client, GatewayIntentBits } from "discord.js";
@@ -159,23 +160,11 @@ const libraries = JSON.parse(fs.readFileSync(LIB_FILE, "utf8"))
 
 /* ================= SCAN ================= */
 
-const KAVITA_BASE = "/mnt/manga/Kavita";
-
-async function buildUploaderRoots() {
-  const { rows } = await pool.query(
-    `SELECT name, root_path FROM uploader_names WHERE root_path IS NOT NULL AND root_path != ''`
-  );
-  return rows.map(r => ({
-    name: r.name,
-    base: r.root_path.startsWith("/") ? path.resolve(r.root_path) : path.join(KAVITA_BASE, r.root_path)
-  }));
-}
-
 async function scan() {
   console.log("📚 Starting scan\n");
   const newChapters = {}; // slug -> { title, cover_url, slug, count }
 
-  const uploaderRoots = await buildUploaderRoots();
+  const uploaderRoots = await buildUploaderRoots(pool);
 
   // Előre megszámoljuk a manga-mappákat, hogy a csík százalékot mutathasson
   let totalDirs = 0;
@@ -247,17 +236,10 @@ async function scan() {
           mangaId = mangaRes.rows[0].id;
         }
 
-        // Feltöltő auto-hozzárendelés root_path alapján
-        for (const ur of uploaderRoots) {
-          if (mangaPath.startsWith(ur.base + path.sep) || mangaPath === ur.base) {
-            await pool.query(
-              `UPDATE manga SET uploaders = array_append(COALESCE(uploaders, '{}'), $1)
-               WHERE id = $2 AND NOT ($1 = ANY(COALESCE(uploaders, '{}')))`,
-              [ur.name, mangaId]
-            );
-            break;
-          }
-        }
+        // Feltöltő auto-hozzárendelés (fordító) a mappa alapján — CSAK ha még
+        // nincs fordító (lásd lib/uploader-roots.js)
+        const ur = matchUploaderRoot(uploaderRoots, mangaPath);
+        if (ur) await assignUploaderIfEmpty(pool, mangaId, ur.name);
       } catch (err) {
         console.error(`❌ DB error (manga): ${mangaTitle}`, err.message);
         continue;
