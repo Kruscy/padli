@@ -218,3 +218,10 @@ window.submitAllBugFixes = async function() {
 
 renderBugFixPanel();
 window._refreshBugFixPanel = renderBugFixPanel;
+
+// A padlicrome.html data-on-click gombjai által hívható függvények (actions.js)
+window.PadliActions.register({
+  newProject: window.newProject, openMergeModal, downloadAllZip,
+  submitAllBugFixes: window.submitAllBugFixes, toggleAll,
+  startTranslation, requestStop, requestForceStop,
+});

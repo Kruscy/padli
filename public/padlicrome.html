@@ -29,7 +29,7 @@
       <span id="pcSubscriberBadge" class="pc-subscriber-badge" style="display:none">⭐ Előfizető</span>
       <a href="/shop.html" class="pc-points-badge" style="text-decoration:none">🏆 <span id="pcPoints">...</span> pont</a>
       <a href="/shop.html" class="pc-btn pc-btn-secondary pc-btn-sm" style="text-decoration:none">🛒 Pontok</a>
-      <button class="pc-btn pc-btn-secondary pc-btn-sm" onclick="newProject()">🆕 Új projekt</button>
+      <button class="pc-btn pc-btn-secondary pc-btn-sm" data-on-click="newProject">🆕 Új projekt</button>
     </div>
   </div>
 
@@ -95,7 +95,7 @@
             Több képet egyetlen hosszú képpé fűzhetsz össze fordítás előtt.
             A fordító így 1 pontból több oldalt dolgoz fel.
           </div>
-          <button class="pc-btn pc-btn-secondary pc-btn-full" id="pcMergeBtn" onclick="openMergeModal()" disabled>
+          <button class="pc-btn pc-btn-secondary pc-btn-full" id="pcMergeBtn" data-on-click="openMergeModal" disabled>
             🔗 Kijelöltek összefűzése
           </button>
           <div id="pcMergeSubMsg" style="font-size:.78rem;color:var(--pc-muted);margin-top:8px;text-align:center;display:none">
@@ -114,13 +114,13 @@
           <a href="/padlicrome-reader.html" class="pc-btn pc-btn-primary pc-btn-full" id="pcReaderBtn" style="margin-top:12px;text-decoration:none">
             📖 Elolvasom
           </a>
-          <button class="pc-btn pc-btn-secondary pc-btn-full" id="pcZipBtn" style="margin-top:8px" onclick="downloadAllZip()">
+          <button class="pc-btn pc-btn-secondary pc-btn-full" id="pcZipBtn" style="margin-top:8px" data-on-click="downloadAllZip">
             📦 Összes ZIP-ben
           </button>
           <div id="pcBugFixPanel" style="display:none;margin-top:12px;padding:12px;background:#1e1230;border:1px solid #7c3aed;border-radius:10px">
             <div style="font-size:.82rem;color:#c4b5fd;margin-bottom:8px;font-weight:600">🔮 Bugfix képek</div>
             <div id="pcBugFixList" style="display:flex;flex-direction:column;gap:8px"></div>
-            <button class="pc-btn pc-btn-primary pc-btn-full" id="pcSubmitAllBtn" onclick="submitAllBugFixes()" style="margin-top:10px">
+            <button class="pc-btn pc-btn-primary pc-btn-full" id="pcSubmitAllBtn" data-on-click="submitAllBugFixes" style="margin-top:10px">
               💾 Összes lefordított mentése
             </button>
             <div id="pcBugFixGlobalStatus" style="margin-top:6px;font-size:.82rem;color:#888"></div>
@@ -138,8 +138,8 @@
         <div class="pc-panel-header">
           <span class="pc-panel-title">🖼️ Képek</span>
           <div class="pc-gallery-actions">
-            <button class="pc-btn pc-btn-sm pc-btn-secondary" onclick="toggleAll(true)" title="Mindet aktív">👁️ Mind</button>
-            <button class="pc-btn pc-btn-sm pc-btn-secondary" onclick="toggleAll(false)" title="Mindet inaktív">🚫 Mind</button>
+            <button class="pc-btn pc-btn-sm pc-btn-secondary" data-on-click="toggleAll" data-args='[true]' title="Mindet aktív">👁️ Mind</button>
+            <button class="pc-btn pc-btn-sm pc-btn-secondary" data-on-click="toggleAll" data-args='[false]' title="Mindet inaktív">🚫 Mind</button>
           </div>
         </div>
         <div class="pc-panel-body">
@@ -180,13 +180,13 @@
             <div class="pc-translate-info" id="pcTranslateInfo">
               Nincsenek aktív képek
             </div>
-            <button class="pc-btn pc-btn-primary" id="pcTranslateBtn" onclick="startTranslation()" disabled>
+            <button class="pc-btn pc-btn-primary" id="pcTranslateBtn" data-on-click="startTranslation" disabled>
               ▶ Fordítás indítása
             </button>
-            <button class="pc-btn pc-btn-danger" id="pcStopBtn" onclick="requestStop()" style="display:none">
+            <button class="pc-btn pc-btn-danger" id="pcStopBtn" data-on-click="requestStop" style="display:none">
               ⏹️ Stop
             </button>
-            <button class="pc-btn pc-btn-danger" id="pcForceStopBtn" onclick="requestForceStop()" style="display:none" disabled>
+            <button class="pc-btn pc-btn-danger" id="pcForceStopBtn" data-on-click="requestForceStop" style="display:none" disabled>
               🛑 Force Stop
             </button>
           </div>
@@ -206,7 +206,7 @@
     <h3>🆕 Új projekt</h3>
     <p>Az új projekt indításával a jelenlegi projekt és az összes feltöltött kép törlődik. Biztosan folytatod?</p>
     <div class="pc-modal-actions">
-      <button class="pc-btn pc-btn-secondary" onclick="document.getElementById('pcNewProjectModal').style.display='none'">Mégse</button>
+      <button class="pc-btn pc-btn-secondary" data-on-click="hideById" data-args='["pcNewProjectModal"]'>Mégse</button>
       <button class="pc-btn pc-btn-danger" id="pcNewProjectConfirm">🗑️ Törlés és új projekt</button>
     </div>
   </div>
@@ -259,24 +259,24 @@
 </div>
 
 <!-- Kép megtekintés modal -->
-<div class="pc-modal-overlay" id="pcViewModal" style="display:none" onclick="this.style.display='none'">
-  <div style="max-width:92vw;max-height:92vh;overflow:auto;display:flex;flex-direction:column;gap:10px" onclick="event.stopPropagation()">
+<div class="pc-modal-overlay" id="pcViewModal" style="display:none" data-on-click="hideSelf" data-args='["$el"]'>
+  <div style="max-width:92vw;max-height:92vh;overflow:auto;display:flex;flex-direction:column;gap:10px" data-on-click="stop">
     <div style="display:flex;align-items:center;justify-content:space-between">
       <span id="pcViewTitle" style="color:#fff;font-weight:700;font-size:.95rem"></span>
-      <button class="pc-btn pc-btn-secondary pc-btn-sm" onclick="document.getElementById('pcViewModal').style.display='none'">✕ Bezárás</button>
+      <button class="pc-btn pc-btn-secondary pc-btn-sm" data-on-click="hideById" data-args='["pcViewModal"]'>✕ Bezárás</button>
     </div>
     <img id="pcViewImg" style="max-width:100%;display:block;border-radius:8px;max-height:80vh;object-fit:contain" alt="">
   </div>
 </div>
 
 <!-- Kísérleti Gemini fordítás-teszt eredménye -->
-<div class="pc-modal-overlay" id="pcGeminiModal" style="display:none" onclick="if(event.target===this) this.style.display='none'">
+<div class="pc-modal-overlay" id="pcGeminiModal" style="display:none" data-on-click="hideIfTarget" data-args='["$el","$event"]'>
   <div class="pc-modal" style="max-width:560px;max-height:80vh;overflow:auto">
     <h3>🧪 Gemini fordítás-teszt</h3>
     <p style="color:#888;font-size:.82rem;margin-top:-8px">Csak szöveg-kinyerés + fordítás, minőség-összehasonlításhoz — nem ír vissza képet.</p>
     <div id="pcGeminiModalBody" style="display:flex;flex-direction:column;gap:10px;margin:14px 0"></div>
     <div class="pc-modal-actions">
-      <button class="pc-btn pc-btn-secondary" onclick="document.getElementById('pcGeminiModal').style.display='none'">✕ Bezárás</button>
+      <button class="pc-btn pc-btn-secondary" data-on-click="hideById" data-args='["pcGeminiModal"]'>✕ Bezárás</button>
     </div>
   </div>
 </div>
@@ -288,7 +288,8 @@
 <script src="/js/email-verify-modal.js?v=20260808"></script>
 <script src="/js/auth-check.js?v=20260323"></script>
 
-<script type="module" src="/js/padlicrome-main-init.js?v=20260810"></script>
+<script src="/js/actions.js?v=20261029"></script>
+<script type="module" src="/js/padlicrome-main-init.js?v=20261029"></script>
 
 
 </body>

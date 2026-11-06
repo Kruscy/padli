@@ -121,6 +121,11 @@ function toggleFullscreen() {
   document.body.classList.toggle("fullscreen");
 }
 
+// Gombok (korábban inline onclick; a könyv mód 📖 gombjának nem is volt
+// kezelője, így görgetős módból nem lehetett átváltani)
+document.getElementById("btnFullscreen").addEventListener("click", toggleFullscreen);
+document.querySelectorAll(".btn-mode").forEach(btn => btn.addEventListener("click", cycleMode));
+
 /* ── UI MEGJELENÍTÉS ─────────────────────────────────────── */
 function showUI() {
   document.querySelector(".topbar").style.opacity = "1";
