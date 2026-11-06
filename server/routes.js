@@ -47,6 +47,7 @@ import gdprRoutes from "./routes/gdpr.js";
 import patreonInvoiceRoutes from "./routes/patreon-invoice.js";
 import animeSubtitlesRoutes from "./routes/anime-subtitles.js";
 import { rateLimit } from "express-rate-limit";
+import { SESSION_MAX_AGE } from "./session.js";
 
 const router = express.Router();
 
@@ -352,7 +353,7 @@ router.post("/auth/login", async (req, res) => {
     // belépés előtti esetleges munkamenet azonosítója nem marad érvényes.
     await new Promise((resolve, reject) => req.session.regenerate(err => err ? reject(err) : resolve()));
     req.session.user = { id: user.id, username: user.username, avatar: user.avatar, role: user.role };
-    if (remember) req.session.cookie.maxAge = 1000 * 60 * 60 * 24 * 30;
+    if (remember) req.session.cookie.maxAge = SESSION_MAX_AGE; // 1 hét, használatkor hosszabbodik (session.js)
     await new Promise((resolve, reject) => req.session.save(err => err ? reject(err) : resolve()));
 
     if (!user.email_verified) {

@@ -2,7 +2,7 @@ import express from "express";
 import { errorHandler } from "./lib/async-errors.js";
 import path from "path";
 import { fileURLToPath } from "url";
-import { sessionMiddleware } from "./session.js";
+import { sessionMiddleware, sessionRenewal } from "./session.js";
 import helmet from "helmet";
 import { rateLimit, ipKeyGenerator } from "express-rate-limit";
 import routes from "./routes.js";
@@ -147,6 +147,7 @@ app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: false }));
 /* ===== SESSION (AUTH) — lásd server/session.js ===== */
 app.use(sessionMiddleware);
+app.use(sessionRenewal);
 
 /* ===== BUILD VERSION (cache busting) ===== */
 import { readFileSync, statSync } from "fs";

@@ -22,6 +22,8 @@ if (!process.env.SESSION_SECRET) {
   console.warn("⚠️  SESSION_SECRET rövid (32 karakternél rövidebb) — érdemes hosszabb, véletlenszerű értékre cserélni.");
 }
 
+export const SESSION_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 1 hét
+
 export const sessionMiddleware = session({
   store: new PgSession({
     // Közös pool az alkalmazással (külön conString-gel egy második,
@@ -42,6 +44,29 @@ export const sessionMiddleware = session({
     httpOnly: true,
     secure: isProd,
     sameSite: "lax",
-    maxAge: 30 * 24 * 60 * 60 * 1000,
+    maxAge: SESSION_MAX_AGE, // 1 hét; használatkor naponta meghosszabbodik (sessionRenewal)
   },
 });
+
+/* ── Bejelentkezés meghosszabbítása használatkor (2026-11-06) ───────
+   A süti lejárata a belépéskor rögzült (30 nap, rolling nélkül), így aki
+   rendszeresen használta az oldalt, annak is pontosan 30 nap után lejárt —
+   SKYPRO-nak épp feltöltés közben (99 kép „Bejelentkezés szükséges”).
+   Itt a bejelentkezett felhasználó munkamenetét naponta legfeljebb egyszer
+   újabb 1 hétre hosszabbítjuk (a user kérésére 30 nap helyett 1 hét: aki
+   használja az oldalt, úgyis folyamatosan meghosszabbodik): a session módosul → a store elmenti (az
+   adatbázisbeli lejáratot is), és új sütit kap. Kérésenkénti „touch” helyett
+   napi egy írás, mert az oldalak képenként is kérnek (lásd disableTouch). */
+const RENEW_EVERY = 24 * 60 * 60 * 1000;
+
+export function sessionRenewal(req, _res, next) {
+  const s = req.session;
+  if (s?.user) {
+    const now = Date.now();
+    if (!s.renewedAt || now - s.renewedAt > RENEW_EVERY) {
+      s.renewedAt = now;
+      s.cookie.maxAge = SESSION_MAX_AGE;
+    }
+  }
+  next();
+}
