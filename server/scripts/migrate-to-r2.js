@@ -282,7 +282,13 @@ async function main() {
     console.log(`Fájlok száma: ${files.length}`);
     totalFiles += files.length;
 
-    // Kavitánál nyilvántartjuk az újonnan feltöltött manga könyvtárakat
+    // Kavitánál nyilvántartjuk azokat a manga-könyvtárakat, amelyeknek a képei
+    // mostantól (is) az R2-n vannak: ahová most töltöttünk fel, ÉS ahonnan helyi
+    // fájlt töröltünk. 2026-11-06: korábban csak a feltöltés számított — ha egy
+    // törölt, majd újra feltöltött manga képei már fent voltak az R2-n („kihagyva”),
+    // a helyi fájlok törlődtek, de az r2_migrated=false maradt, így az olvasó a
+    // (már üres) helyi mappát listázta → a fejezetek kép nélkül jelentek meg
+    // (The Maid With a Child, mind a 35 fejezet).
     const uploadedMangaDirs = new Set();
 
     // Kavitánál csak a DB-ben már regisztrált fejezetek helyi fájljai törölhetők
@@ -321,6 +327,7 @@ async function main() {
           } else {
             fs.unlinkSync(filePath);
             deletedLocal++;
+            if (name === "kavita") uploadedMangaDirs.add(path.dirname(path.dirname(filePath)));
           }
         } else {
           verifyFailed++;
