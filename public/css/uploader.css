@@ -159,6 +159,7 @@ h1 {
 .queue-item-status.pending  { color: var(--muted); }
 .queue-item-status.uploading { color: #f59e0b; }
 .queue-item-status.retrying  { color: #fb923c; }
+.queue-item-status.login     { color: #fbbf24; }
 .queue-item-status.done     { color: #22c55e; }
 .queue-item-status.error    { color: #f87171; }
 

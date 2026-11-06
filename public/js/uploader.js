@@ -180,7 +180,7 @@ function renderQueue() {
   const done    = uploadQueue.filter(i => i.status === "done").length;
   const skipped = uploadQueue.filter(i => i.status === "skipped").length;
   const error   = uploadQueue.filter(i => i.status === "error").length;
-  const active  = uploadQueue.filter(i => i.status === "uploading" || i.status === "retrying" || i.status === "pending").length;
+  const active  = uploadQueue.filter(i => i.status === "uploading" || i.status === "retrying" || i.status === "pending" || i.status === "login").length;
 
   statTotal.textContent = uploadQueue.length;
   statDone.textContent  = done;
@@ -194,7 +194,7 @@ function renderQueue() {
 
   const total    = uploadQueue.length;
   const finished = done + skipped + error;
-  const isActive = uploadQueue.some(i => i.status === "uploading" || i.status === "pending");
+  const isActive = uploadQueue.some(i => i.status === "uploading" || i.status === "pending" || i.status === "login");
 
   if (isActive || finished > 0) {
     progressWrap.classList.remove("hidden");
@@ -226,7 +226,7 @@ function renderQueue() {
 }
 
 function statusLabel(s) {
-  return { pending: "⏳ Vár", uploading: "⬆️ Tölt...", retrying: "🔁 Újrapróbálás...", done: "✅ Kész", error: "❌ Hiba", skipped: "⏭️ Kihagyva" }[s] || s;
+  return { pending: "⏳ Vár", uploading: "⬆️ Tölt...", retrying: "🔁 Újrapróbálás...", login: "🔑 Belépésre vár", done: "✅ Kész", error: "❌ Hiba", skipped: "⏭️ Kihagyva" }[s] || s;
 }
 
 function formatSize(bytes) {
@@ -567,8 +567,11 @@ async function startUpload() {
   // Folyamatos sor: amint egy fájl kész, jön a következő (korábban 4-es
   // kötegekben ment, és egy lassú fájl a másik hármat is visszatartotta).
   let nextIndex = 0;
+  const roundStartedAt = Date.now();
+  toUpload.forEach(i => { i.attempts = []; });
+  uploadStopped = false;
   const worker = async () => {
-    while (nextIndex < toUpload.length) {
+    while (nextIndex < toUpload.length && !uploadStopped) {
       await uploadItem(toUpload[nextIndex++]);
     }
   };
@@ -578,6 +581,8 @@ async function startUpload() {
   clearBtn.disabled  = false;
   uploadBtn.textContent = "⬆️ Feltöltés indítása";
   loadFiles();
+
+  reportUploadErrors(toUpload, roundStartedAt);
 
   // Ha a sorban minden hibátlanul felment (és volt is mit feltölteni),
   // automatikusan indul egy scan, hogy az új fejezetek megjelenjenek.
@@ -744,11 +749,14 @@ function uploadAttempt(item) {
     const xhr = new XMLHttpRequest();
     let settled = false;
     let lastActivity = Date.now();
+    const startedAt = Date.now();
+    let sent = 0, total = item.file.size, bodySent = false;
     const finish = result => {
       if (settled) return;
       settled = true;
       clearInterval(watchdog);
-      resolve(result);
+      // Diagnosztika a hibajelentéshez: a teljes fájl kiment-e már, amikor elakadt
+      resolve({ ...result, sent, total, bodySent, ms: Date.now() - startedAt });
     };
     const watchdog = setInterval(() => {
       if (Date.now() - lastActivity > STALL_MS) {
@@ -759,14 +767,19 @@ function uploadAttempt(item) {
 
     xhr.open("POST", "/api/uploader/upload");
     xhr.timeout = MAX_REQUEST_MS;
+    // A szerver így akkor is tudja, melyik fájl volt, ha a törzs nem érkezik meg
+    xhr.setRequestHeader("X-Upload-Path", encodeURIComponent(destPath));
 
     xhr.upload.onprogress = e => {
       lastActivity = Date.now();
+      sent = e.loaded;
+      if (e.lengthComputable) total = e.total;
       if (e.lengthComputable) {
         item.progress = Math.round((e.loaded / e.total) * 100);
         renderQueue();
       }
     };
+    xhr.upload.onload = () => { bodySent = true; sent = total; lastActivity = Date.now(); };
     xhr.onreadystatechange = () => { lastActivity = Date.now(); };
 
     xhr.onload = () => {
@@ -809,6 +822,12 @@ async function uploadItem(item) {
     renderQueue();
 
     const result = await uploadAttempt(item);
+    if (!result.ok) {
+      (item.attempts ||= []).push({
+        status: result.status, error: result.status ? null : result.responseText,
+        sent: result.sent, total: result.total, bodySent: result.bodySent, ms: result.ms,
+      });
+    }
     if (result.ok) {
       item.status = "done";
       item.progress = 100;
@@ -817,6 +836,17 @@ async function uploadItem(item) {
       return;
     }
     item.errorMsg = uploadErrorMessage(result);
+
+    // Lejárt a bejelentkezés (2026-11-06: SKYPRO 30 napos sessionje feltöltés
+    // közben járt le, 99 kép bukott el): a sor szünetel, újra-belépés után
+    // ugyanez a fájl újra megy — ez nem számít bele a próbálkozásokba.
+    if (result.status === 401) {
+      if (uploadStopped) break;
+      item.status = "login";
+      renderQueue();
+      if (await waitForRelogin()) { attempt--; continue; }
+      break;
+    }
 
     if (result.status >= 400 && result.status < 500) {
       console.warn("Upload hiba (nem javul újrapróbálásra):", result.responseText);
@@ -831,6 +861,107 @@ async function uploadItem(item) {
 
   item.status = "error";
   renderQueue();
+}
+
+// Újra-belépés megvárása: egyszerre csak egy ablak, a párhuzamos feltöltések
+// mind erre várnak. true = újra be van jelentkezve, mehet tovább.
+let reloginPromise = null;
+let uploadStopped = false; // a user a belépés-ablakban leállította a kört
+function waitForRelogin() {
+  if (!reloginPromise) {
+    reloginPromise = showReloginModal().finally(() => { reloginPromise = null; });
+  }
+  return reloginPromise;
+}
+
+async function isUploadSessionOk() {
+  try {
+    const r = await fetch("/api/uploader/speedtest/ping", { cache: "no-store" });
+    return r.ok;
+  } catch { return false; }
+}
+
+function showReloginModal() {
+  return new Promise(resolve => {
+    const overlay = document.createElement("div");
+    overlay.style.cssText = `
+      position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:99999;
+      display:flex;align-items:center;justify-content:center;padding:16px;`;
+    overlay.innerHTML = `
+      <div style="background:#13131f;border:1px solid rgba(255,255,255,.1);border-radius:16px;
+                  padding:28px 24px;max-width:460px;width:100%;font-family:Poppins,sans-serif;color:#e8e8f5;">
+        <div style="font-size:2rem;margin-bottom:12px">🔑</div>
+        <h3 style="margin-bottom:8px;font-size:1.1rem">Lejárt a bejelentkezésed</h3>
+        <p style="color:#9ca3af;font-size:.9rem;margin-bottom:16px;line-height:1.6">
+          A feltöltés <strong style="color:#fbbf24">szünetel</strong>, semmi nem veszett el.
+          Jelentkezz be újra egy új lapon, majd gyere vissza ide, és kattints a
+          <strong>Folytatás</strong> gombra — a feltöltés onnan megy tovább, ahol megállt.
+          <br><span style="font-size:.8rem">Ezt a lapot ne zárd be és ne frissítsd, különben a sor elveszik.</span>
+        </p>
+        <div id="rl-msg" style="color:#f87171;font-size:.85rem;margin-bottom:10px;display:none"></div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <a href="/login.html" target="_blank" rel="noopener" style="text-align:center;background:rgba(255,255,255,.07);color:#ccc;
+             border:1px solid rgba(255,255,255,.1);padding:11px 16px;border-radius:10px;font-weight:600;text-decoration:none;font-size:.9rem">
+            🔑 Bejelentkezés új lapon
+          </a>
+          <button id="rl-continue" style="background:#7c3aed;color:#fff;border:none;padding:11px 16px;
+                  border-radius:10px;font-weight:600;cursor:pointer;font-size:.9rem">
+            ▶️ Folytatás
+          </button>
+          <button id="rl-cancel" style="background:none;color:#6b7280;border:none;padding:8px;cursor:pointer;font-size:.85rem">
+            Feltöltés leállítása
+          </button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    const msg = overlay.querySelector("#rl-msg");
+    const btn = overlay.querySelector("#rl-continue");
+    btn.onclick = async () => {
+      btn.disabled = true;
+      btn.textContent = "⏳ Ellenőrzés...";
+      if (await isUploadSessionOk()) {
+        document.body.removeChild(overlay);
+        resolve(true);
+        return;
+      }
+      msg.textContent = "Még nem vagy bejelentkezve (vagy nincs feltöltési jogod). Jelentkezz be az új lapon, aztán próbáld újra.";
+      msg.style.display = "block";
+      btn.disabled = false;
+      btn.textContent = "▶️ Folytatás";
+    };
+    overlay.querySelector("#rl-cancel").onclick = () => {
+      uploadStopped = true; // a még el nem indult fájlok „Vár” állapotban maradnak
+      document.body.removeChild(overlay);
+      resolve(false);
+    };
+  });
+}
+
+// A feltöltési kör hibás fájljainak elküldése a szervernek (naplózás,
+// 2026-11-06: a „❌ Hiba” okát eddig csak a feltöltő böngészője látta).
+function reportUploadErrors(items, roundStartedAt) {
+  const failed = items.filter(i => i.status === "error" && !i.blocked);
+  if (!failed.length) return;
+  const conn = navigator.connection;
+  const body = {
+    queued: items.length,
+    done: items.filter(i => i.status === "done").length,
+    failed: failed.length,
+    concurrent: CONCURRENT,
+    elapsedMs: Date.now() - roundStartedAt,
+    online: navigator.onLine,
+    connection: conn ? { effectiveType: conn.effectiveType, downlink: conn.downlink, rtt: conn.rtt } : null,
+    items: failed.slice(0, 300).map(i => ({
+      path: currentPath ? `${currentPath}/${i.relativePath}` : i.relativePath,
+      size: i.file?.size ?? null,
+      attempts: i.attempts || [],
+    })),
+  };
+  fetch("/api/uploader/client-error", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  }).catch(() => {});
 }
 
 clearBtn.addEventListener("click", () => {

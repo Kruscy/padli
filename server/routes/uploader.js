@@ -12,6 +12,7 @@ import { isImageBuffer } from "../lib/safe-path.js";
 import { compressPageImage } from "../lib/image-compress.js";
 import { updateMangaCore } from "../lib/manga-meta.js";
 import { purgeChapterImages } from "../lib/cf-purge.js";
+import { trackUploadRequest, handleClientUploadReport } from "../lib/upload-log.js";
 
 const r2 = new S3Client({
   region: "auto",
@@ -341,7 +342,7 @@ function syncToR2IfMigrated(fullPath, buffer) {
 }
 
 /* ── POST /api/uploader/upload ──────────────────────────── */
-router.post("/upload", requireUploader, upload.single("file"), async (req, res) => {
+router.post("/upload", trackUploadRequest, requireUploader, upload.single("file"), async (req, res) => {
   const uploaderRoot = req.uploaderRoot;
   const relativePath = req.body.path || "";
 
@@ -390,6 +391,10 @@ router.post("/upload", requireUploader, upload.single("file"), async (req, res) 
     res.status(500).json({ error: err.message });
   }
 });
+
+/* ── POST /api/uploader/client-error – a böngésző jelenti a feltöltési
+   kör hibás fájljait (lásd lib/upload-log.js) ── */
+router.post("/client-error", requireUploader, express.json({ limit: "256kb" }), handleClientUploadReport);
 
 /* ── POST /api/uploader/scan – scan a sikeres feltöltés után ───────
    A kliens akkor hívja, ha a feltöltési sor minden fájlja hibátlanul
