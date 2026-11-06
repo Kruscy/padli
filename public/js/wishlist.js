@@ -236,35 +236,48 @@ async function search(q) {
 
 const SLUG_MAP_BY_SOURCE = { anilist: () => anilistToSlug, jikan: () => malToSlug, mangadex: () => mangadexToSlug };
 
+// Türelmetlen (dupla-/tripla-kattintásos) felhasználók a kérés lefutása
+// előtt újra rákattintottak az eredményre, ami duplikátumokat hozott létre
+// a kívánságlistán (2026-11-01-i incidens) — amíg egy kérés fut, nem
+// engedünk újat indítani.
+let addInFlight = false;
+
 async function addFromSearch(id, source) {
+  if (addInFlight) return;
+
   const slugMap = (SLUG_MAP_BY_SOURCE[source] || SLUG_MAP_BY_SOURCE.anilist)();
   if (slugMap[id]) {
     window.location.href = `/chapters.html?slug=${slugMap[id]}`;
     return;
   }
 
-  const res = await fetch("/api/wishlist", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ source, id })
-  });
+  addInFlight = true;
+  try {
+    const res = await fetch("/api/wishlist", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source, id })
+    });
 
-  const data = await res.json();
+    const data = await res.json();
 
-  if (!res.ok) {
-    alert(data.error || "Hiba történt");
-    return;
+    if (!res.ok) {
+      alert(data.error || "Hiba történt");
+      return;
+    }
+
+    if (data.alreadyExists) {
+      window.showToast(data.message);
+    } else {
+      window.showToast("Hozzáadva!");
+    }
+
+    resultsBox.innerHTML = "";
+    input.value = "";
+    load();
+  } finally {
+    addInFlight = false;
   }
-
-  if (data.alreadyExists) {
-    window.showToast(data.message);
-  } else {
-    window.showToast("Hozzáadva!");
-  }
-
-  resultsBox.innerHTML = "";
-  input.value = "";
-  load();
 }
 
 /* ================= CLAIM (Dolgozik rajta) ================= */
