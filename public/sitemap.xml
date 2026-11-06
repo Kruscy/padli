@@ -3,65 +3,89 @@
 
   <url>
     <loc>https://padlizsanfansub.hu/</loc>
-    <lastmod>2026-10-28</lastmod>
+    <lastmod>2026-11-06</lastmod>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/blog/</loc>
-    <lastmod>2026-10-28</lastmod>
+    <lastmod>2026-11-06</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/login.html</loc>
-    <lastmod>2026-10-28</lastmod>
+    <lastmod>2026-11-06</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/register.html</loc>
-    <lastmod>2026-10-28</lastmod>
+    <lastmod>2026-11-06</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/leaderboard.html</loc>
-    <lastmod>2026-10-28</lastmod>
+    <lastmod>2026-11-06</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/polls.html</loc>
-    <lastmod>2026-10-28</lastmod>
+    <lastmod>2026-11-06</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/partners.html</loc>
-    <lastmod>2026-10-28</lastmod>
+    <lastmod>2026-11-06</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.4</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/impressum.html</loc>
-    <lastmod>2026-10-28</lastmod>
+    <lastmod>2026-11-06</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/privacy.html</loc>
-    <lastmod>2026-10-28</lastmod>
+    <lastmod>2026-11-06</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/aszf.html</loc>
-    <lastmod>2026-10-28</lastmod>
+    <lastmod>2026-11-06</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
 
+  <url>
+    <loc>https://padlizsanfansub.hu/blog/digitalis-vs-nyomtatott-manga.html</loc>
+    <lastmod>2026-11-06</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://padlizsanfansub.hu/blog/webtoon-vs-hagyomanyos-manga-format.html</loc>
+    <lastmod>2026-11-04</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://padlizsanfansub.hu/blog/manga-vs-light-novel-kulonbseg.html</loc>
+    <lastmod>2026-11-02</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://padlizsanfansub.hu/blog/legjobb-2020-as-evek-webtoon-manhwai.html</loc>
+    <lastmod>2026-10-30</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
   <url>
     <loc>https://padlizsanfansub.hu/blog/klasszikus-90-es-evek-mangai.html</loc>
     <lastmod>2026-10-28</lastmod>
