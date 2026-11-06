@@ -525,7 +525,7 @@ router.post("/bugfix-check", requireUploader, express.json(), async (req, res) =
 
   const pairs = [...new Map(
     items.filter(i => i?.mangaFolder && i?.chapterFolder)
-      .map(i => [`${i.mangaFolder} ${i.chapterFolder}`, i])
+      .map(i => [`${i.mangaFolder}\n${i.chapterFolder}`, i])
   ).values()];
 
   const results = [];
@@ -571,7 +571,7 @@ router.post("/bugfix-close", requireUploader, express.json(), async (req, res) =
   // azonnal (ne csak a következő CF-lejáratnál) frissüljön az olvasóknál.
   const byChapter = new Map();
   for (const r of rows) {
-    const key = `${r.manga_slug} ${r.chapter}`;
+    const key = `${r.manga_slug}\n${r.chapter}`;
     if (!byChapter.has(key)) byChapter.set(key, { mangaSlug: r.manga_slug, chapter: r.chapter, files: new Set() });
     if (r.image_file) byChapter.get(key).files.add(String(r.image_file).replace(/\?r2=1$/, ""));
   }
