@@ -10,6 +10,7 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import { config } from "dotenv";
+import { pickTimelyTopic, insertPremierTable, markCovered } from "../lib/blog-anime-seasons.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 config({ path: path.join(__dirname, "../../.env") });
@@ -684,6 +685,37 @@ Formázás: HTML (h2, h3, p, ul/li, strong). Legyen benne FAQ szekció.`
   },
 ];
 
+// ── BORÍTÓKÉP-STÍLUSOK (2026-11-07) ──────────────────────────────────────────
+// A régi fekete-fehér ceruzarajz helyett változatos, színes stílusok; a
+// generátor a legutóbbi bejegyzések stílusát kerüli, így egymás után nem ismétlődik.
+export const IMAGE_STYLES = [
+  "vibrant modern anime key visual, cel-shaded, saturated colors, dramatic lighting",
+  "soft watercolor illustration, pastel palette, dreamy atmosphere, visible paper texture",
+  "neon cyberpunk night scene, glowing magenta and cyan lights, rain reflections, anime style",
+  "retro 1990s anime aesthetic, film grain, warm faded colors, hand-painted cel look",
+  "epic fantasy digital painting, painterly brushwork, golden hour light, rich colors",
+  "bold flat vector illustration, limited bright color palette, clean geometric shapes",
+  "Korean webtoon full-color style, crisp line art, glossy rendering, vivid gradients",
+  "cozy lo-fi anime illustration, warm lamp light, purple and orange evening tones",
+  "dynamic action comic style, halftone dots, speed lines, high-contrast bright colors",
+  "Chinese ink-and-color painting style mixed with anime, flowing brush strokes, jade and red accents",
+  "dreamy shoujo illustration, sparkles, floral frame, soft pink and lavender palette",
+  "3D-rendered stylized anime look, soft global illumination, vivid toy-like colors",
+];
+const IMAGE_RULES = "Original characters only — do not depict any existing copyrighted character. No text, no letters, no logos, no watermarks. Wide 3:2 landscape banner composition.";
+
+async function pickImageStyle() {
+  const used = new Set();
+  try {
+    const { rows } = await pool.query(
+      "SELECT image_style FROM blog_posts WHERE image_style IS NOT NULL ORDER BY created_at DESC LIMIT 6");
+    rows.forEach(r => used.add(r.image_style));
+  } catch {}
+  const pool_ = IMAGE_STYLES.filter(s => !used.has(s));
+  const list = pool_.length ? pool_ : IMAGE_STYLES;
+  return list[Math.floor(Math.random() * list.length)];
+}
+
 // ── BORÍTÓKÉP MENTÉS (uploads/blog-covers/ — statikusan tálalt Express által) ─
 function saveCoverLocally(slug, imageBuffer) {
   if (!fs.existsSync(COVERS_DIR)) fs.mkdirSync(COVERS_DIR, { recursive: true });
@@ -700,7 +732,7 @@ function slugify(text) {
 }
 
 // ── FŐ GENERÁTOR ─────────────────────────────────────────────────────────────
-export async function generateBlogPost(topicIndex = null, customTopic = null) {
+export async function generateBlogPost(topicIndex = null, customTopic = null, opts = {}) {
   if (!process.env.OPENAI_API_KEY) {
     throw new Error("OPENAI_API_KEY nincs beállítva a .env fájlban");
   }
@@ -714,6 +746,14 @@ export async function generateBlogPost(topicIndex = null, customTopic = null) {
   } else if (topicIndex !== null) {
     topic = BLOG_TOPICS[topicIndex];
   } else {
+    // Időszerű téma (anime-szezon előzetes / szezonon kívüli manhwa-anime) előnyt élvez
+    try {
+      topic = await pickTimelyTopic(opts.today || new Date());
+    } catch (err) {
+      console.warn(`[BlogGen] Időszerű téma ellenőrzése sikertelen (marad a témalista): ${err.message}`);
+    }
+  }
+  if (!topic && !customTopic && topicIndex === null) {
     // Megnézzük melyik slug nem létezik még
     const { rows: existing } = await pool.query(
       "SELECT slug FROM blog_posts WHERE slug = ANY($1)",
@@ -728,6 +768,11 @@ export async function generateBlogPost(topicIndex = null, customTopic = null) {
   }
 
   console.log(`[BlogGen] Generálás: "${topic.title}"`);
+  const imageStyle = await pickImageStyle();
+
+  if (opts.dryRun) {
+    return { dryRun: true, topic, imageStyle };
+  }
 
   // 1. Tartalom generálás GPT-4o-val
   const contentResp = await openai.chat.completions.create({
@@ -739,11 +784,13 @@ export async function generateBlogPost(topicIndex = null, customTopic = null) {
       },
       { role: "user", content: topic.prompt }
     ],
-    temperature: 0.7,
-    max_tokens: 3000,
+    temperature: topic.temperature ?? 0.7,
+    max_tokens: 4000,
   });
 
-  const content = contentResp.choices[0].message.content;
+  let content = contentResp.choices[0].message.content
+    .replace(/^```(?:html)?\s*/i, "").replace(/\s*```\s*$/, "");
+  if (topic.tableItems) content = insertPremierTable(content, topic.tableItems);
 
   // Excerpt kinyerése az első <p> tagből
   const excerptMatch = content.match(/<p[^>]*>([\s\S]*?)<\/p>/);
@@ -760,7 +807,7 @@ export async function generateBlogPost(topicIndex = null, customTopic = null) {
       messages: [
         {
           role: "system",
-          content: "You write image generation prompts for manga blog covers. Given a blog post, write ONE detailed English prompt (3-5 sentences) for a wide banner illustration. ONLY use a colorful, stylized approach if the post discusses well-known manga/manhwa titles with a recognizable and distinct visual style (e.g. Solo Leveling, Berserk, shoujo romance). In that case, mirror their actual color palette, mood, and characteristic visual elements. If the post is general or the titles don't have a strong distinct visual identity, default to: black and white manga pencil sketch on white background, clean confident line art, sketchbook aesthetic with light hatching, no color. No text, no watermarks, wide 3:2 landscape format."
+          content: `You write image generation prompts for manga blog covers. Given a blog post, write ONE detailed English prompt (3-5 sentences) for a wide, full-color banner illustration that captures the mood, genre and color palette of the post's topic (e.g. dark fantasy, romance, action). Render it in this art style: ${imageStyle}. Use original characters inspired by the genre, never existing copyrighted characters. No text, no watermarks, wide 3:2 landscape format.`
         },
         {
           role: "user",
@@ -773,9 +820,9 @@ export async function generateBlogPost(topicIndex = null, customTopic = null) {
     imagePromptFull = imgPromptResp.choices[0].message.content.trim();
     console.log(`[BlogGen] Képprompt (színes): ${imagePromptFull}`);
   } else {
-    // Nem ajánló: ceruzarajz stílus
-    const subject = topic.imagePrompt || "anime characters reading manga books";
-    imagePromptFull = `Black and white manga pencil sketch on white background. Clean confident line art, anime/manga style, sketchbook aesthetic with light hatching. No color, no text, no watermarks, wide horizontal banner. Subject: ${subject}`;
+    // Nem ajánló: a téma alanya a soron következő színes stílusban
+    const subject = topic.imageSubject || topic.imagePrompt || "anime characters reading manga books";
+    imagePromptFull = `${imageStyle}. Subject: ${subject}. ${IMAGE_RULES}`;
   }
 
   // 3. Borítókép generálás
@@ -801,8 +848,8 @@ export async function generateBlogPost(topicIndex = null, customTopic = null) {
 
   // 3. DB mentés
   const { rows } = await pool.query(
-    `INSERT INTO blog_posts (slug, title, excerpt, content, cover_url, category, tags, author, published)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)
+    `INSERT INTO blog_posts (slug, title, excerpt, content, cover_url, category, tags, author, published, image_style)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, $9)
      ON CONFLICT (slug) DO NOTHING
      RETURNING *`,
     [
@@ -814,6 +861,7 @@ export async function generateBlogPost(topicIndex = null, customTopic = null) {
       topic.category || "ajanlo",
       topic.tags || [],
       "Padlizsán Fansub",
+      coverUrl ? imageStyle : null,
     ]
   );
 
@@ -821,6 +869,8 @@ export async function generateBlogPost(topicIndex = null, customTopic = null) {
     console.log(`[BlogGen] Slug már létezik, kihagyva: ${topic.slug}`);
     return null;
   }
+
+  if (topic.coveredIds?.length) await markCovered(topic.coveredIds, topic.slug);
 
   // 4. Statikus HTML generálás
   await generateStaticPost(topic.slug);
@@ -831,10 +881,20 @@ export async function generateBlogPost(topicIndex = null, customTopic = null) {
 
 // ── CLI MÓD: node server/scripts/blog-auto-generator.js ─────────────────────
 if (process.argv[1] && process.argv[1].endsWith("blog-auto-generator.js")) {
-  const idx = process.argv[2] ? parseInt(process.argv[2]) : null;
-  generateBlogPost(idx)
+  // --dry-run [--today=YYYY-MM-DD]: csak megmutatja, mi készülne (nincs OpenAI-hívás, nincs mentés)
+  const dryRun = process.argv.includes("--dry-run");
+  const todayArg = process.argv.find(a => a.startsWith("--today="));
+  const today = todayArg ? new Date(todayArg.slice(8) + "T10:00:00Z") : undefined;
+  const idxArg = process.argv.slice(2).find(a => /^\d+$/.test(a));
+  const idx = idxArg ? parseInt(idxArg) : null;
+  generateBlogPost(idx, null, { dryRun, today })
     .then(post => {
-      if (post) console.log("Létrehozva:", post.slug);
+      if (post?.dryRun) {
+        console.log("TÉMA:", post.topic.title, "\nSLUG:", post.topic.slug, "\nKÉPSTÍLUS:", post.imageStyle);
+        if (post.topic.tableItems) console.log("ANIMÉK:", post.topic.tableItems.length, "\n" +
+          post.topic.tableItems.map(i => `  ${i.kind.padEnd(6)} ${i.startText.padEnd(32)} ${i.title}${i.local ? "  ← NÁLUNK: " + i.local.url : ""}`).join("\n"));
+        if (process.argv.includes("--prompt")) console.log(post.topic.prompt);
+      } else if (post) console.log("Létrehozva:", post.slug);
       process.exit(0);
     })
     .catch(err => {
