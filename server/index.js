@@ -18,6 +18,7 @@ import "./discord-bot.js";
 import cron from "node-cron";
 import { generateBlogPost } from "./scripts/blog-auto-generator.js";
 import { generateSitemap } from "./sitemap-generator.js";
+import { mangaSeoMiddleware } from "./lib/manga-seo.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -164,6 +165,9 @@ function injectVersion(html) {
 /* ===== STATIC FRONTEND ===== */
 app.use('/downloads', express.static(path.join(PUBLIC_DIR, 'downloads')));
 
+// chapters.html?slug= → a mű saját címe/leírása a Google-nek (a verziózó réteg ELŐTT)
+app.use(mangaSeoMiddleware(PUBLIC_DIR, html => injectVersion(html)));
+
 // Minden .html kérést verzióval szolgálunk ki. A verziózott HTML-t
 // memóriában tartjuk (a fájl módosítási ideje alapján frissül), nem
 // olvassuk és alakítjuk át minden oldalbetöltésnél.
@@ -271,6 +275,11 @@ cron.schedule("0 10 * * 1,3,5", async () => {
   } catch (err) {
     console.error("[BlogCron] Hiba:", err.message);
   }
+}, { timezone: "Europe/Budapest" });
+
+/* ===== SITEMAP NAPI FRISSÍTÉS (új mangák/fejezetek) ===== */
+cron.schedule("30 4 * * *", () => {
+  generateSitemap().catch(e => console.error("[Sitemap] Napi frissítés hiba:", e.message));
 }, { timezone: "Europe/Budapest" });
 
 /* ===== START SERVER ===== */

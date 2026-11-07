@@ -10,7 +10,7 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import { config } from "dotenv";
-import { pickTimelyTopic, insertPremierTable, markCovered } from "../lib/blog-anime-seasons.js";
+import { pickTimelyTopic, insertPremierTable, markCovered, seasonTopic } from "../lib/blog-anime-seasons.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 config({ path: path.join(__dirname, "../../.env") });
@@ -731,6 +731,70 @@ function slugify(text) {
     .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
 
+// ── BORÍTÓKÉP KÉSZÍTÉS ───────────────────────────────────────────────────────
+// 2026-11-07: a gpt-image-1 megszűnt (10-26 óta minden bejegyzés kép nélkül
+// maradt, a hiba csak figyelmeztetésként ment a naplóba) → modell-lánc.
+const IMAGE_MODELS = (process.env.BLOG_IMAGE_MODEL ? [process.env.BLOG_IMAGE_MODEL] : [])
+  .concat(["gpt-image-2", "gpt-image-1.5", "gpt-image-1-mini"]);
+
+export async function makeCover(openai, topic, content, imageStyle) {
+  let imagePromptFull;
+  if (topic.category === "ajanlo") {
+    const imgPromptResp = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "system",
+          content: `You write image generation prompts for manga blog covers. Given a blog post, write ONE detailed English prompt (3-5 sentences) for a wide, full-color banner illustration that captures the mood, genre and color palette of the post's topic (e.g. dark fantasy, romance, action). Render it in this art style: ${imageStyle}. Use original characters inspired by the genre, never existing copyrighted characters. No text, no watermarks, wide 3:2 landscape format.`
+        },
+        { role: "user", content: `Blog post (Hungarian):\n${content.replace(/<[^>]*>/g, " ").slice(0, 2000)}\n\nWrite the image prompt.` }
+      ],
+      temperature: 0.8,
+      max_tokens: 200,
+    });
+    imagePromptFull = `${imgPromptResp.choices[0].message.content.trim()} ${IMAGE_RULES}`;
+  } else {
+    const subject = topic.imageSubject || topic.imagePrompt || "anime characters reading manga books";
+    imagePromptFull = `${imageStyle}. Subject: ${subject}. ${IMAGE_RULES}`;
+  }
+  console.log(`[BlogGen] Képprompt: ${imagePromptFull}`);
+
+  for (const model of IMAGE_MODELS) {
+    try {
+      const imageResp = await openai.images.generate({ model, prompt: imagePromptFull, size: "1536x1024", quality: "medium", n: 1 });
+      const imgData = imageResp.data[0];
+      const imgBuffer = imgData.b64_json
+        ? Buffer.from(imgData.b64_json, "base64")
+        : Buffer.from(await (await fetch(imgData.url)).arrayBuffer());
+      const url = saveCoverLocally(topic.slug, imgBuffer);
+      console.log(`[BlogGen] Borítókép kész (${model}): ${url}`);
+      return url;
+    } catch (err) {
+      console.warn(`[BlogGen] Borítókép hiba (${model}): ${err.message}`);
+    }
+  }
+  console.error(`[BlogGen] FIGYELEM: egyik képmodell sem működött, a bejegyzés kép nélkül készül: ${topic.slug}`);
+  return null;
+}
+
+// Kép nélküli bejegyzések borítójának pótlása (CLI: --fix-covers)
+export async function fixMissingCovers() {
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const { rows } = await pool.query("SELECT slug, title, category, content FROM blog_posts WHERE cover_url IS NULL AND published = true ORDER BY created_at DESC");
+  for (const p of rows) {
+    const known = BLOG_TOPICS.find(t => t.slug === p.slug) || {};
+    const style = await pickImageStyle();
+    const url = await makeCover(openai, { ...known, slug: p.slug, category: p.category,
+      imageSubject: p.slug.startsWith("anime-szezon-") ? "a group of original anime characters gathered in a cozy room watching a big screen showing a colorful anime premiere, autumn leaves falling outside the window" : known.imageSubject }, p.content, style);
+    if (url) {
+      await pool.query("UPDATE blog_posts SET cover_url=$1, image_style=$2, updated_at=now() WHERE slug=$3", [url, style, p.slug]);
+      await generateStaticPost(p.slug);
+      console.log(`[BlogGen] Borító pótolva: ${p.slug}`);
+    }
+  }
+  return rows.length;
+}
+
 // ── FŐ GENERÁTOR ─────────────────────────────────────────────────────────────
 export async function generateBlogPost(topicIndex = null, customTopic = null, opts = {}) {
   if (!process.env.OPENAI_API_KEY) {
@@ -794,58 +858,12 @@ export async function generateBlogPost(topicIndex = null, customTopic = null, op
 
   // Excerpt kinyerése az első <p> tagből
   const excerptMatch = content.match(/<p[^>]*>([\s\S]*?)<\/p>/);
-  const excerpt = excerptMatch
+  const excerpt = topic.excerpt ? topic.excerpt : excerptMatch
     ? excerptMatch[1].replace(/<[^>]*>/g, "").slice(0, 200).trim()
     : topic.title;
 
-  // 2. Képprompt összeállítása
-  let imagePromptFull;
-  if (topic.category === "ajanlo") {
-    // Ajánló poszt: GPT-4o kitalálja a stílust a cikkben szereplő mangák alapján, színesen
-    const imgPromptResp = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        {
-          role: "system",
-          content: `You write image generation prompts for manga blog covers. Given a blog post, write ONE detailed English prompt (3-5 sentences) for a wide, full-color banner illustration that captures the mood, genre and color palette of the post's topic (e.g. dark fantasy, romance, action). Render it in this art style: ${imageStyle}. Use original characters inspired by the genre, never existing copyrighted characters. No text, no watermarks, wide 3:2 landscape format.`
-        },
-        {
-          role: "user",
-          content: `Blog post (Hungarian):\n${content.replace(/<[^>]*>/g, " ").slice(0, 2000)}\n\nWrite an image prompt that captures the visual style of the manga/manhwa titles discussed.`
-        }
-      ],
-      temperature: 0.8,
-      max_tokens: 200,
-    });
-    imagePromptFull = imgPromptResp.choices[0].message.content.trim();
-    console.log(`[BlogGen] Képprompt (színes): ${imagePromptFull}`);
-  } else {
-    // Nem ajánló: a téma alanya a soron következő színes stílusban
-    const subject = topic.imageSubject || topic.imagePrompt || "anime characters reading manga books";
-    imagePromptFull = `${imageStyle}. Subject: ${subject}. ${IMAGE_RULES}`;
-  }
-
-  // 3. Borítókép generálás
-  let coverUrl = null;
-  try {
-    const imageResp = await openai.images.generate({
-      model: "gpt-image-1",
-      prompt: imagePromptFull,
-      size: "1536x1024",
-      quality: "medium",
-      n: 1,
-    });
-
-    const imgData = imageResp.data[0];
-    const imgBuffer = imgData.b64_json
-      ? Buffer.from(imgData.b64_json, "base64")
-      : Buffer.from(await (await fetch(imgData.url)).arrayBuffer());
-    coverUrl = saveCoverLocally(topic.slug, imgBuffer);
-    console.log(`[BlogGen] Borítókép feltöltve: ${coverUrl}`);
-  } catch (err) {
-    console.warn(`[BlogGen] Borítókép generálás sikertelen (folytatás kép nélkül): ${err.message}`);
-  }
-
+  // 2–3. Borítókép
+  const coverUrl = await makeCover(openai, topic, content, imageStyle);
   // 3. DB mentés
   const { rows } = await pool.query(
     `INSERT INTO blog_posts (slug, title, excerpt, content, cover_url, category, tags, author, published, image_style)
@@ -881,13 +899,19 @@ export async function generateBlogPost(topicIndex = null, customTopic = null, op
 
 // ── CLI MÓD: node server/scripts/blog-auto-generator.js ─────────────────────
 if (process.argv[1] && process.argv[1].endsWith("blog-auto-generator.js")) {
+  if (process.argv.includes("--fix-covers")) {
+    fixMissingCovers().then(n => { console.log("Átnézve:", n); process.exit(0); }).catch(e => { console.error(e); process.exit(1); });
+  } else {
   // --dry-run [--today=YYYY-MM-DD]: csak megmutatja, mi készülne (nincs OpenAI-hívás, nincs mentés)
   const dryRun = process.argv.includes("--dry-run");
   const todayArg = process.argv.find(a => a.startsWith("--today="));
   const today = todayArg ? new Date(todayArg.slice(8) + "T10:00:00Z") : undefined;
   const idxArg = process.argv.slice(2).find(a => /^\d+$/.test(a));
   const idx = idxArg ? parseInt(idxArg) : null;
-  generateBlogPost(idx, null, { dryRun, today })
+  // --season=FALL-2026: adott szezon bejegyzése kézzel (pl. a már futó szezonról)
+  const seasonArg = process.argv.find(a => a.startsWith("--season="));
+  const custom = seasonArg ? await seasonTopic(seasonArg.slice(9), today || new Date()) : null;
+  generateBlogPost(idx, custom, { dryRun, today })
     .then(post => {
       if (post?.dryRun) {
         console.log("TÉMA:", post.topic.title, "\nSLUG:", post.topic.slug, "\nKÉPSTÍLUS:", post.imageStyle);
@@ -901,4 +925,5 @@ if (process.argv[1] && process.argv[1].endsWith("blog-auto-generator.js")) {
       console.error("Hiba:", err.message);
       process.exit(1);
     });
+}
 }

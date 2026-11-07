@@ -2,6 +2,7 @@ import { pool } from "./db.js";
 import { writeFile } from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
+import { mangaSitemapEntries } from "./lib/manga-seo.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, "../public");
@@ -48,13 +49,30 @@ export async function generateSitemap() {
     <priority>0.8</priority>
   </url>`).join("");
 
+  // Manga-oldalak (2026-11-07): hogy a „<cím> magyarul” keresésekre is megtaláljanak
+  let mangaEntries = "", mangaCount = 0;
+  try {
+    const list = await mangaSitemapEntries();
+    mangaCount = list.length;
+    mangaEntries = list.map(m => `
+  <url>
+    <loc>${m.loc}</loc>${m.lastmod ? `
+    <lastmod>${m.lastmod}</lastmod>` : ""}
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>`).join("");
+  } catch (e) {
+    console.error("[Sitemap] Manga-lista hiba:", e.message);
+  }
+
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${staticEntries}
 ${blogEntries}
+${mangaEntries}
 </urlset>`;
 
   await writeFile(path.join(PUBLIC_DIR, "sitemap.xml"), xml, "utf8");
-  console.log(`[Sitemap] Frissítve: ${rows.length} blog poszt + ${STATIC_PAGES.length} statikus oldal`);
+  console.log(`[Sitemap] Frissítve: ${rows.length} blog poszt + ${mangaCount} manga + ${STATIC_PAGES.length} statikus oldal`);
   return rows.length;
 }

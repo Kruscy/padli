@@ -104,22 +104,38 @@ function fmtDate(d) {
   return `${d.year}. ${MONTH_HU[d.month - 1]} ${d.day}.`;
 }
 
-// Saját könyvtárunkban megvan-e az alapmű (AniList-azonosító alapján)
+// Saját könyvtárunkban megvan-e az alapmű. Az AniList-en egy manhwának több
+// bejegyzése is lehet (pl. Overgeared: 117460 és 105664 ALTERNATIVE), ezért
+// minden kapcsolódó képregény-azonosítót, majd a címeket is nézzük.
+const normTitle = t => String(t || "").toLowerCase()
+  .replace(/\s*(season\s*\d+|\d+(st|nd|rd|th)\s*season|part\s*\d+|\(\d{4}\))\s*/gi, " ")
+  .replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 async function attachLocal(items) {
-  const ids = items.map(i => i.sourceId).filter(Boolean);
-  if (!ids.length) return items;
+  const ids = [...new Set(items.flatMap(i => i.matchIds))];
+  const titles = [...new Set(items.flatMap(i => i.matchTitles.map(normTitle)).filter(t => t.length >= 4))];
   const { rows } = await pool.query(
-    `SELECT DISTINCT ON (anilist_id) anilist_id, slug, title FROM manga WHERE anilist_id = ANY($1) ORDER BY anilist_id, id`, [ids]);
-  const byId = new Map(rows.map(r => [r.anilist_id, r]));
+    `SELECT id, slug, title, anilist_id, alt_titles FROM manga
+      WHERE anilist_id = ANY($1)
+         OR lower(regexp_replace(title, '[^[:alnum:]]+', ' ', 'g')) = ANY($2)
+         OR EXISTS (SELECT 1 FROM unnest(alt_titles) a WHERE lower(regexp_replace(a, '[^[:alnum:]]+', ' ', 'g')) = ANY($2))
+      ORDER BY id`, [ids, titles]);
+  const norm = t => normTitle(t);
   for (const it of items) {
-    const local = it.sourceId && byId.get(it.sourceId);
+    const tset = new Set(it.matchTitles.map(norm));
+    const local = rows.find(r => r.anilist_id && it.matchIds.includes(r.anilist_id))
+               || rows.find(r => tset.has(norm(r.title)) || (r.alt_titles || []).some(a => tset.has(norm(a))));
     if (local) it.local = { title: local.title, url: `${SITE_URL}/chapters.html?slug=${encodeURIComponent(local.slug)}` };
   }
   return items;
 }
 
 function toItem(m, cls) {
+  const comics = (m.relations?.edges || []).filter(e => e.node.type === "MANGA" && ["MANGA", "ONE_SHOT"].includes(e.node.format)
+    && ["SOURCE", "ADAPTATION", "ALTERNATIVE"].includes(e.relationType));
   return {
+    matchIds: comics.map(e => e.node.id),
+    matchTitles: [cls.sourceTitle, ...comics.flatMap(e => [e.node.title.english, e.node.title.romaji]),
+                  m.title.english, m.title.romaji].filter(Boolean),
     anilistId: m.id,
     title: m.title.english || m.title.romaji,
     romaji: m.title.romaji,
@@ -224,18 +240,24 @@ const FACT_RULES = `SZIGORÚ SZABÁLYOK:
 - Ahol "magyarul_olvashato_nalunk" szerepel, ott írd ki kiemelten, hogy az alapmű magyarul olvasható a Padlizsán Fansubon, és pontosan a megadott linket használd: <a href="LINK">cím</a>. Más linket ne találj ki.
 - A címeket írd az angol címükön, mellette zárójelben a japán/eredeti címet, ha meg van adva.`;
 
-function buildPreviewTopic(target, items) {
+export function buildPreviewTopic(target, items, today = new Date()) {
   const { season, year } = target;
   const sHu = SEASON_HU[season];
+  const running = today.getTime() >= seasonStart(season, year).getTime(); // a szezon már fut
   const title = `${year} ${sHu} anime szezon – Manga-, manhwa- és manhua-adaptációk`;
   const counts = { manga: 0, manhwa: 0, manhua: 0 };
   items.forEach(i => counts[i.kind]++);
   const local = items.filter(i => i.local);
+  const localNames = local.map(i => i.local.title);
   return {
+    // meta description / bevezető: a keresőben ez jelenik meg
+    excerpt: (`A ${year} ${sHu} anime szezon manga-, manhwa- és manhua-adaptációi premierdátumokkal és stúdiókkal` +
+      (localNames.length ? `. Magyarul olvasható alapművek nálunk: ${localNames.slice(0, 3).join(", ")}${localNames.length > 3 ? " és még több" : ""}.` : ".")).slice(0, 300),
     slug: seasonPreviewSlug(target),
     title,
     category: "hir",
-    tags: [`${sHu} anime szezon ${year}`, "anime adaptáció", "manga anime", "manhwa anime", "manhua anime", "anime szezon"],
+    tags: [`${sHu} anime szezon ${year}`, "anime adaptáció", "manhwa anime", "manga anime",
+           ...localNames.slice(0, 6).map(n => `${n} magyarul`)],
     imageSubject: `a group of original anime characters gathered in a cozy room watching a big screen showing a colorful anime premiere, ${
       { WINTER: "snowy winter evening outside the window", SPRING: "cherry blossoms drifting outside the window", SUMMER: "bright summer sunset and fireworks outside the window", FALL: "autumn leaves falling outside the window" }[season]}`,
     coveredIds: items.map(i => i.anilistId),
@@ -244,7 +266,8 @@ function buildPreviewTopic(target, items) {
     prompt: `Írj egy 1300-1700 szavas, SEO-optimalizált magyar nyelvű hírösszefoglaló blogbejegyzést a Padlizsán Fansub weboldalra.
 
 Cím: "${title}"
-Téma: a ${year} ${sHu} anime szezonban (${MONTH_HU[SEASONS.indexOf(season) * 3]}–${MONTH_HU[SEASONS.indexOf(season) * 3 + 2]}) induló animék, amelyek mangából, manhwából vagy manhuából készülnek.
+Téma: a ${year} ${sHu} anime szezonban (${MONTH_HU[SEASONS.indexOf(season) * 3]}–${MONTH_HU[SEASONS.indexOf(season) * 3 + 2]}) ${running ? "már futó (elindult)" : "induló"} animék, amelyek mangából, manhwából vagy manhuából készülnek.${running ? `
+FONTOS: a szezon már ELKEZDŐDÖTT (ma ${today.getUTCFullYear()}. ${MONTH_HU[today.getUTCMonth()]} ${today.getUTCDate()}.). Múlt időben írj a már elindult sorozatokról ("elindult", "fut"), ne előzetesként.` : ""}
 Ebben a szezonban az adatok szerint ${counts.manga} japán manga-, ${counts.manhwa} koreai manhwa- és ${counts.manhua} kínai manhua-adaptáció van a listán${local.length ? `, közülük ${local.length} alapműve magyarul is olvasható nálunk` : ""}.
 
 Felépítés:
@@ -252,9 +275,9 @@ Felépítés:
 2. Közvetlenül a bevezető után írd be pontosan ezt a sort, külön: <!--PREMIER_TABLE-->  (ide kerül automatikusan a teljes premier-táblázat).
 3. ${counts.manhwa + counts.manhua ? "„Manhwa- és manhua-adaptációk” szekció — ezek kerüljenek előre, mindegyik saját H3-mal." : "Ha nincs manhwa/manhua-adaptáció, egy mondatban jelezd."}
 4. „A szezon legvártabb manga-adaptációi” — a japán mangák közül a 8-10 legnépszerűbb (a lista népszerűség szerint rendezett), saját H3-mal; a többit csak a táblázat sorolja.
-${local.length ? "5. „Olvasd el előre magyarul” szekció: a nálunk elérhető alapművek felsorolása a linkekkel.\n6." : "5."} Rövid FAQ (3-4 kérdés), pl. mikor kezdődik a ${sHu} szezon, melyik manhwából lesz anime.
+${local.length ? `5. „${running ? "Olvasd tovább magyarul" : "Olvasd el előre magyarul"}” szekció: a nálunk elérhető alapművek, mindegyik saját H3-mal, aminek a szövege PONTOSAN "<alapmű címe> magyarul" (pl. "${localNames[0]} magyarul"), alatta 2-3 mondat: hol tart az anime, és hogy a történet a ${"manhwában/mangában"} jóval előrébb jár, magyarul a linken olvasható.\n6.` : "5."} Rövid FAQ (3-4 kérdés), pl. mikor kezdődik a ${sHu} szezon, melyik manhwából lesz anime.
 
-Kulcsszavak természetesen: ${sHu} anime szezon ${year}, anime adaptáció, manhwa anime, manga anime, új anime.
+Kulcsszavak természetesen: ${sHu} anime szezon ${year}, anime adaptáció, manhwa anime, manga anime, új anime${localNames.length ? ", valamint minden nálunk olvasható címnél: \"<cím> magyarul\", \"<cím> anime\"" : ""}.
 
 ${FACT_RULES}
 
@@ -355,7 +378,7 @@ export async function pickTimelyTopic(today = new Date()) {
     const { rowCount } = await pool.query("SELECT 1 FROM blog_posts WHERE slug=$1", [slug]);
     if (!rowCount) {
       const items = await getSeasonAdaptations(target);
-      if (items.length >= 3) return buildPreviewTopic(target, items);
+      if (items.length >= 3) return buildPreviewTopic(target, items, today);
       console.log(`[BlogAnime] ${slug}: még csak ${items.length} adaptáció az AniList-en, később próbáljuk`);
     }
   }
@@ -373,4 +396,14 @@ export async function pickTimelyTopic(today = new Date()) {
     }
   }
   return null;
+}
+
+/* Kézi indítás: "FALL-2026" → az adott szezon bejegyzése (CLI --season=) */
+export async function seasonTopic(spec, today = new Date()) {
+  const [season, y] = String(spec).toUpperCase().split("-");
+  if (!SEASONS.includes(season) || !/^\d{4}$/.test(y)) throw new Error(`Rossz szezon: ${spec} (pl. FALL-2026)`);
+  const target = { season, year: Number(y) };
+  const items = await getSeasonAdaptations(target);
+  if (!items.length) throw new Error("Nincs adaptáció az AniList-en ehhez a szezonhoz");
+  return buildPreviewTopic(target, items, today);
 }
