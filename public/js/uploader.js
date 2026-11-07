@@ -180,7 +180,7 @@ function renderQueue() {
   const done    = uploadQueue.filter(i => i.status === "done").length;
   const skipped = uploadQueue.filter(i => i.status === "skipped").length;
   const error   = uploadQueue.filter(i => i.status === "error").length;
-  const active  = uploadQueue.filter(i => i.status === "uploading" || i.status === "retrying" || i.status === "pending" || i.status === "login").length;
+  const active  = uploadQueue.filter(i => i.status === "uploading" || i.status === "retrying" || i.status === "pending" || i.status === "login" || i.status === "network").length;
 
   statTotal.textContent = uploadQueue.length;
   statDone.textContent  = done;
@@ -226,7 +226,7 @@ function renderQueue() {
 }
 
 function statusLabel(s) {
-  return { pending: "⏳ Vár", uploading: "⬆️ Tölt...", retrying: "🔁 Újrapróbálás...", login: "🔑 Belépésre vár", done: "✅ Kész", error: "❌ Hiba", skipped: "⏭️ Kihagyva" }[s] || s;
+  return { pending: "⏳ Vár", uploading: "⬆️ Tölt...", retrying: "🔁 Újrapróbálás...", network: "📶 Kapcsolatra vár", login: "🔑 Belépésre vár", done: "✅ Kész", error: "❌ Hiba", skipped: "⏭️ Kihagyva" }[s] || s;
 }
 
 function formatSize(bytes) {
@@ -570,12 +570,24 @@ async function startUpload() {
   const roundStartedAt = Date.now();
   toUpload.forEach(i => { i.attempts = []; });
   uploadStopped = false;
-  const worker = async () => {
+  concurrencyLimit = CONCURRENT;
+  okStreak = 0;
+  uploadInProgress = true;
+  // Ingadozó netnél (2026-11-07) a párhuzamos szálak száma alkalmazkodik:
+  // elakadás után csökken, sok sikeres fájl után visszanő. A „felesleges”
+  // szálak addig várnak, amíg újra sorra kerülnek.
+  const worker = async id => {
     while (nextIndex < toUpload.length && !uploadStopped) {
+      if (id >= concurrencyLimit) { await sleep(1000); continue; }
       await uploadItem(toUpload[nextIndex++]);
     }
   };
-  await Promise.all(Array.from({ length: Math.min(CONCURRENT, toUpload.length) }, worker));
+  try {
+    await Promise.all(Array.from({ length: Math.min(CONCURRENT, toUpload.length) }, (_, id) => worker(id)));
+  } finally {
+    uploadInProgress = false;
+    hideNetBanner();
+  }
 
   uploadBtn.disabled = false;
   clearBtn.disabled  = false;
@@ -813,8 +825,92 @@ function uploadErrorMessage(result) {
   return `Szerverhiba (HTTP ${result.status}).`;
 }
 
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+/* ── Ingadozó / lassú net (2026-11-07) ─────────────────────────
+   Korábban egy rövid net-kiesésnél mind a 4 szál pár másodperc alatt
+   elhasználta a 3 próbálkozását (offline a kérés azonnal bukik), és a sor
+   hátralévő része „❌ Hiba” lett. Most hálózati hibánál először
+   megnézzük, eléri-e a böngésző a szervert: ha nem, a teljes sor
+   szünetel, amíg vissza nem jön a net — ez nem számít próbálkozásnak. */
+let concurrencyLimit = CONCURRENT;
+let okStreak = 0;
+let uploadInProgress = false;
+let connWaitPromise = null;
+
+function isNetworkFailure(result) {
+  // 0 = nem jött válasz; 502/503/504 és a Cloudflare 52x = a szerver/proxy épp nem elérhető
+  return result.status === 0 || [502, 503, 504, 520, 521, 522, 523, 524].includes(result.status);
+}
+
+function slowDown() {
+  okStreak = 0;
+  if (concurrencyLimit > 1) concurrencyLimit--;
+}
+
+function noteSuccess() {
+  if (++okStreak >= 8 && concurrencyLimit < CONCURRENT) { concurrencyLimit++; okStreak = 0; }
+}
+
+async function serverReachable() {
+  if (navigator.onLine === false) return false;
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 10000);
+  try {
+    const r = await fetch("/api/uploader/speedtest/ping", { cache: "no-store", signal: ctrl.signal });
+    return r.ok || r.status === 401; // 401: elérhető, csak a belépés járt le — azt a feltöltés kezeli
+  } catch { return false; } finally { clearTimeout(t); }
+}
+
+// Közös várakozás: az összes szál ugyanarra az egy ellenőrző ciklusra vár.
+function waitForConnection() {
+  if (!connWaitPromise) {
+    connWaitPromise = (async () => {
+      showNetBanner();
+      let delay = 3000;
+      while (!uploadStopped) {
+        await new Promise(r => {
+          const done = () => { clearTimeout(t); window.removeEventListener("online", done); r(); };
+          const t = setTimeout(done, delay);
+          window.addEventListener("online", done);
+        });
+        if (await serverReachable()) break;
+        delay = Math.min(delay * 1.5, 20000);
+      }
+      hideNetBanner();
+    })().finally(() => { connWaitPromise = null; });
+  }
+  return connWaitPromise;
+}
+
+function showNetBanner() {
+  let el = document.getElementById("netWaitBanner");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "netWaitBanner";
+    el.className = "net-wait-banner";
+    el.innerHTML = `📶 <strong>Megszakadt a kapcsolat a szerverrel.</strong>
+      A feltöltés szünetel, és magától folytatódik, amint visszajön a net — ne zárd be a lapot.
+      <button type="button" id="netWaitStop">Leállítás</button>`;
+    document.body.appendChild(el);
+    el.querySelector("#netWaitStop").onclick = () => { uploadStopped = true; hideNetBanner(); };
+  }
+  el.classList.remove("hidden");
+}
+
+function hideNetBanner() {
+  document.getElementById("netWaitBanner")?.classList.add("hidden");
+}
+
+// Feltöltés közben a lap bezárása/frissítése elveszítené a sort
+window.addEventListener("beforeunload", e => {
+  if (uploadInProgress) { e.preventDefault(); e.returnValue = ""; }
+});
+
 async function uploadItem(item) {
-  const MAX_ATTEMPTS = 3;
+  const MAX_ATTEMPTS = 5;      // valódi (nem net-kiesés miatti) hibák száma
+  const MAX_NET_WAITS = 30;    // ennyiszer várhat egy fájl a net visszatérésére
+  let netWaits = 0;
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     item.status = attempt === 1 ? "uploading" : "retrying";
@@ -829,6 +925,7 @@ async function uploadItem(item) {
       });
     }
     if (result.ok) {
+      noteSuccess();
       item.status = "done";
       item.progress = 100;
       item.errorMsg = null;
@@ -848,18 +945,33 @@ async function uploadItem(item) {
       break;
     }
 
-    if (result.status >= 400 && result.status < 500) {
+    if (uploadStopped) break;
+
+    if (isNetworkFailure(result)) {
+      slowDown();
+      // Nem éri el a szervert → a sor szünetel, a próbálkozás nem vész el
+      if (netWaits < MAX_NET_WAITS && !(await serverReachable())) {
+        netWaits++;
+        item.status = "network";
+        renderQueue();
+        await waitForConnection();
+        if (uploadStopped) break;
+        attempt--;
+        continue;
+      }
+    } else if (result.status >= 400 && result.status < 500) {
       console.warn("Upload hiba (nem javul újrapróbálásra):", result.responseText);
       break;
     }
     if (attempt < MAX_ATTEMPTS) {
-      await new Promise(r => setTimeout(r, attempt * 1500));
+      await sleep(Math.min(2000 * 2 ** (attempt - 1), 20000)); // 2, 4, 8, 16 mp
     } else {
       console.warn(`Upload hiba (${MAX_ATTEMPTS} próbálkozás után):`, result.responseText);
     }
   }
 
-  item.status = "error";
+  // Leállításkor a félbemaradt fájl visszakerül a várakozók közé (a következő „Feltöltés indítása” viszi)
+  item.status = uploadStopped && item.status !== "error" ? "pending" : "error";
   renderQueue();
 }
 
