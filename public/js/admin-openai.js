@@ -87,7 +87,20 @@
       </div>
       <div style="${card}"><div style="color:#94a3b8;font-size:.8rem;margin-bottom:8px">Napi költés</div>
         <div style="display:flex;gap:3px;align-items:flex-end;height:120px">${dayBars || '<span style="color:#64748b">Nincs adat.</span>'}</div></div>
-      <div style="${card};overflow-x:auto"><div style="color:#e2e8f0;font-weight:600;margin-bottom:8px">Kulcsonként – ki mennyit költött</div>
+      <div style="${card};overflow-x:auto"><div style="color:#e2e8f0;font-weight:600;margin-bottom:8px">Személyenként – ki hány forintot költött</div>
+        <table style="width:100%;border-collapse:collapse"><thead><tr>
+          <th style="${th}">Személy</th><th style="${th}">Kulcsai</th><th style="${th};text-align:right">Kérés</th>
+          <th style="${th};text-align:right">Ft / kérés</th><th style="${th}">Költés</th>
+        </tr></thead><tbody>${(d.persons || []).map(p => {
+          const share = d.totalHuf ? Math.round(100 * p.huf / d.totalHuf) : 0;
+          return `<tr><td style="${td}"><strong>${esc(p.name)}</strong></td>
+            <td style="${td};font-size:.78rem;color:#94a3b8">${p.keys.map(esc).join("<br>")}</td>
+            <td style="${tdr}">${num(p.requests)}</td><td style="${tdr}">${ft(p.hufPerRequest)}</td>
+            <td style="${td};min-width:160px"><div style="display:flex;align-items:center;gap:8px">
+              <div style="flex:1;background:#1e293b;border-radius:5px;height:8px;overflow:hidden"><div style="background:#22c55e;height:100%;width:${Math.round(100 * p.huf / Math.max(1, d.persons[0].huf))}%"></div></div>
+              <strong style="white-space:nowrap">${ft(p.huf)}</strong><span style="color:#64748b;font-size:.75rem">${share}%</span></div></td></tr>`;
+        }).join("")}</tbody></table></div>
+      <div style="${card};overflow-x:auto"><div style="color:#e2e8f0;font-weight:600;margin-bottom:8px">Kulcsonként – részletesen</div>
         <table style="width:100%;border-collapse:collapse"><thead><tr>
           <th style="${th}">Kulcs / tulajdonos</th><th style="${th}">Modellek</th><th style="${th};text-align:right">Kérés</th>
           <th style="${th};text-align:right" title="Egy kérés ≈ egy lefordított oldal">Ft / kérés</th><th style="${th};text-align:right">Ft / 1000 token</th><th style="${th}">Költés</th>

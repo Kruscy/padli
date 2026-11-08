@@ -11,6 +11,7 @@
    „projektszintű” sorba kerül. ── */
 import express from "express";
 import { SCAN_OWNER_USER_ID } from "../lib/scan-runner.js";
+import { pool } from "../db.js";
 
 const router = express.Router();
 const API = "https://api.openai.com/v1";
@@ -142,16 +143,39 @@ async function build(month) {
     } catch { /* nincs joga a kulcslistához: csak azonosító lesz */ }
   }));
 
+  // Kézi címkék (openai_key_labels): a projektlistában nem szereplő kulcsokhoz
+  // (szolgáltatásfiók, törölt kulcs) név, és hogy kinek a kulcsa (összevonáshoz)
+  const labels = new Map();
+  try {
+    const { rows } = await pool.query("SELECT key_id, name, owner_key_id FROM openai_key_labels");
+    for (const r of rows) labels.set(r.key_id, r);
+  } catch { /* tábla nélkül is működjön */ }
+  // személy = a kulcs NEVE szám és zárójeles rész nélkül („Ascyra2” → „Ascyra”).
+  // NEM a létrehozó e-mailje: a tulajdonos hozta létre mások kulcsát is
+  // (pl. Sempai), így az e-mail szerint összemosódnának. Kézi címkénél az
+  // owner_key_id kulcsának a neve dönt.
+  const baseName = n => String(n || "").replace(/\s*\(.*\)$/, "").replace(/\d+$/, "").trim();
+  const personOf = (keyId, info) => {
+    const lab = labels.get(keyId);
+    if (lab?.owner_key_id && keyInfo.get(lab.owner_key_id)) return baseName(keyInfo.get(lab.owner_key_id).name).toLowerCase();
+    return baseName(info.name).toLowerCase() || keyId;
+  };
+  const personName = new Map(); // személy-azonosító → megjelenített név (a legelső ismert kulcs neve)
+
   const keys = [...keyCost].map(([id, e]) => {
     const [project, key] = id.split("|");
     const us = usage.filter(u => u.project === project && u.key === key);
     const requests = us.reduce((a, u) => a + u.requests, 0);
     const input = us.reduce((a, u) => a + u.input, 0), output = us.reduce((a, u) => a + u.output, 0);
     const info = key === "_project" ? { name: "Projektszintű (kulcshoz nem köthető)", last4: "", owner: "" }
-      : keyInfo.get(key) || { name: `Ismeretlen / törölt kulcs (${key})`, last4: "", owner: "" };
+      : keyInfo.get(key)
+        || (labels.get(key) && { name: labels.get(key).name, last4: "", owner: keyInfo.get(labels.get(key).owner_key_id)?.owner || "", note: "kézi címke" })
+        || { name: `Ismeretlen / törölt kulcs (${key})`, last4: "", owner: "" };
+    const person = key === "_project" ? "_project" : personOf(key, info);
+    if (!personName.has(person) || keyInfo.get(key)) personName.set(person, key === "_project" ? info.name : baseName(keyInfo.get(key)?.name || info.name));
     const huf = e.usd * USD_HUF;
     return {
-      id: key, project: projName.get(project) || project, ...info,
+      id: key, person, project: projName.get(project) || project, ...info,
       requests, input, output,
       huf: +huf.toFixed(0),
       hufPerRequest: requests ? +(huf / requests).toFixed(2) : null,
@@ -169,13 +193,23 @@ async function build(month) {
     return { model, huf: +huf.toFixed(0), requests, hufPerRequest: requests ? +(huf / requests).toFixed(2) : null, hufPer1kTokens: tokens ? +(huf / (tokens / 1000)).toFixed(3) : null };
   }).filter(x => x.huf > 0).sort((a, b) => b.huf - a.huf);
 
+  // személyenként (egy ember több kulcsa egy sorban)
+  const people = new Map();
+  for (const k of keys) {
+    const p = people.get(k.person) || { name: personName.get(k.person) || k.name, huf: 0, requests: 0, keys: [] };
+    p.huf += k.huf; p.requests += k.requests; p.keys.push(k.name + (k.last4 ? ` …${k.last4}` : ""));
+    people.set(k.person, p);
+  }
+  const persons = [...people.values()].map(p => ({ ...p, hufPerRequest: p.requests ? +(p.huf / p.requests).toFixed(2) : null }))
+    .sort((a, b) => b.huf - a.huf);
+
   const totalUsd = [...dayUsd.values()].reduce((a, b) => a + b, 0);
   return {
     month, rate: USD_HUF,
     totalHuf: +(totalUsd * USD_HUF).toFixed(0), totalUsd: +totalUsd.toFixed(2),
     projects: [...projUsd].map(([p, usd]) => ({ name: projName.get(p) || p, huf: +(usd * USD_HUF).toFixed(0) })).sort((a, b) => b.huf - a.huf),
     days: [...dayUsd].sort().map(([day, usd]) => ({ day, huf: +(usd * USD_HUF).toFixed(0) })),
-    keys, models,
+    persons, keys, models,
   };
 }
 
