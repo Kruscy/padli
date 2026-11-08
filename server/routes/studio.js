@@ -59,11 +59,41 @@ function zipVersion(z) {
   });
 }
 
+/* ── Telepítő (Setup.exe) a ZIP-ből, automatikusan (2026-11-08) ──
+   Ha a legújabb ZIP verziójához még nincs Padlizsan-Studio-Setup-<v>.exe, a háttérben
+   megépítjük (NSIS, a studio-repó gui/installer/build-installer.sh-ja). A letöltés
+   alapból a telepítőt adja (asztali ikon, Start menü, eltávolító), a ZIP ?type=zip-pel. */
+const INSTALLER_SCRIPT = process.env.STUDIO_INSTALLER_SCRIPT || "/opt/padlizsan-studio-src/gui/installer/build-installer.sh";
+const setupName = v => `Padlizsan-Studio-Setup-${v}.exe`;
+let building = null;
+function installerFor(version) {
+  const f = path.join(DIST_DIR, setupName(version));
+  try { const st = fs.statSync(f); return { name: setupName(version), size: st.size, date: st.mtime }; } catch { return null; }
+}
+function ensureInstaller(z, version) {
+  if (building || installerFor(version) || !fs.existsSync(INSTALLER_SCRIPT)) return;
+  building = version;
+  console.log(`[STUDIO] telepítő építése: v${version} (${z.name})`);
+  execFile(INSTALLER_SCRIPT, [path.join(DIST_DIR, z.name), DIST_DIR], { timeout: 15 * 60_000, maxBuffer: 1 << 20 }, (err, out, errOut) => {
+    building = null;
+    if (err) { console.error(`[STUDIO] telepítő építése sikertelen: ${err.message} ${String(errOut).slice(-300)}`); return; }
+    console.log(`[STUDIO] ${String(out).trim().split("\n").pop()}`);
+    // a régi telepítők közül a legutóbbi 3 marad
+    try {
+      fs.readdirSync(DIST_DIR).filter(f => /^Padlizsan-Studio-Setup-.*\.exe$/.test(f))
+        .map(f => ({ f, t: fs.statSync(path.join(DIST_DIR, f)).mtimeMs })).sort((a, b) => b.t - a.t)
+        .slice(3).forEach(x => fs.unlinkSync(path.join(DIST_DIR, x.f)));
+    } catch { /* takarítás nem kritikus */ }
+  });
+}
+
 async function latestInfo() {
   const z = latestZip();
   if (!z) return null;
   const v = await zipVersion(z);
-  return { name: z.name, size: z.stat.size, date: z.stat.mtime, version: v.version, notes: v.notes || "" };
+  ensureInstaller(z, v.version);
+  return { name: z.name, size: z.stat.size, date: z.stat.mtime, version: v.version, notes: v.notes || "",
+           installer: installerFor(v.version), installerBuilding: building === v.version };
 }
 
 router.get("/info", requireLogin, async (req, res) => {
@@ -87,11 +117,13 @@ router.get("/download", async (req, res) => {
     if (wantsHtml) return res.redirect(302, "/profile.html#studio");
     return res.status(req.session?.user ? 404 : 401).json({ error: req.session?.user ? "Nem található" : "Login required" });
   }
-  const z = latestZip();
-  if (!z) return wantsHtml ? res.redirect(302, "/profile.html#studio") : res.status(404).json({ error: "Még nincs feltöltött csomag" });
-  console.log(`[STUDIO] letöltés: ${req.session.user.username} → ${z.name}`);
+  const info = await latestInfo();
+  if (!info) return wantsHtml ? res.redirect(302, "/profile.html#studio") : res.status(404).json({ error: "Még nincs feltöltött csomag" });
+  // alapból a telepítő; ?type=zip vagy ha még nincs kész telepítő: a ZIP
+  const file = req.query.type !== "zip" && info.installer ? info.installer.name : info.name;
+  console.log(`[STUDIO] letöltés: ${req.session.user.username} → ${file}`);
   res.setHeader("Cache-Control", "no-store");
-  res.download(path.join(DIST_DIR, z.name), z.name);
+  res.download(path.join(DIST_DIR, file), file);
 });
 
 /* ── Statisztika ─────────────────────────────────────────────── */

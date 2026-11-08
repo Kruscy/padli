@@ -47,6 +47,7 @@
         <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
           <div><div style="color:#94a3b8;font-size:.8rem">Legújabb csomag</div>
             <div style="color:#e2e8f0;font-weight:700">${L ? `v${esc(L.version)} · ${esc(L.name)} · ${(L.size / 1048576).toFixed(0)} MB · ${new Date(L.date).toLocaleString("hu-HU")}` : "nincs feltöltve"}</div>
+            <div style="color:#94a3b8;font-size:.8rem">Telepítő: ${L?.installer ? `${esc(L.installer.name)} · ${(L.installer.size / 1048576).toFixed(0)} MB` : L?.installerBuilding ? "épp készül…" : "nincs (a ZIP feltöltése után magától elkészül)"}</div>
             <div style="color:#64748b;font-size:.75rem">Állandó letöltési link (mindig a legújabb): <code>https://padlizsanfansub.hu/api/studio/download</code> · a ZIP helye: /opt/padli/studio-dist/</div></div>
           <label style="display:flex;align-items:center;gap:8px;color:#e2e8f0;cursor:pointer">
             <input type="checkbox" id="sdPublic" ${d.publicDownload ? "checked" : ""} style="width:18px;height:18px">

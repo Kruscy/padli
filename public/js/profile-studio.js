@@ -56,10 +56,17 @@
     }
     if (!info.file) { el.innerHTML = `<p class="st-muted">Még nincs feltöltött csomag.</p>`; return; }
     const f = info.file;
-    el.innerHTML = `<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-        <a class="st-btn primary" href="/api/studio/download">⬇ Letöltés (Windows) · v${esc(f.version)}</a>
-        <span class="st-muted">${(f.size / 1048576).toFixed(0)} MB · ${new Date(f.date).toLocaleDateString("hu-HU")}</span></div>
-      <p class="st-muted" style="margin:8px 0 0">Csomagold ki egy mappába, és indítsd a „Padlizsan Studio.exe”-t. Ez a link mindig a legújabb változatot adja; a program maga is szól, ha van frissebb.</p>`;
+    const inst = f.installer;
+    el.innerHTML = inst ? `<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <a class="st-btn primary" href="/api/studio/download">⬇ Telepítő letöltése (Windows) · v${esc(f.version)}</a>
+        <span class="st-muted">${(inst.size / 1048576).toFixed(0)} MB · ${new Date(f.date).toLocaleDateString("hu-HU")}</span></div>
+      <p class="st-muted" style="margin:8px 0 0">Futtasd a letöltött telepítőt: rendszergazdai jog nélkül feltelepül, és az asztalra kitesz egy „Padlizsan Studio” ikont. Frissítésnél ugyanígy – a beállításaid megmaradnak. A program maga is szól, ha van újabb verzió.
+        <br>Telepítés nélkül: <a href="/api/studio/download?type=zip" style="color:#a78bfa">ZIP-csomag</a> (${(f.size / 1048576).toFixed(0)} MB).
+        <br><span style="color:#64748b">A Windows első indításkor figyelmeztethet („A Windows megvédte a számítógépet”): Kattints a „További információ” → „Futtatás mindenképp” gombra.</span></p>`
+      : `<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <a class="st-btn primary" href="/api/studio/download?type=zip">⬇ Letöltés (Windows, ZIP) · v${esc(f.version)}</a>
+        <span class="st-muted">${(f.size / 1048576).toFixed(0)} MB${f.installerBuilding ? " · a telepítő épp készül, pár perc múlva frissítsd az oldalt" : ""}</span></div>
+      <p class="st-muted" style="margin:8px 0 0">Csomagold ki egy mappába, és indítsd a „Padlizsan Studio.exe”-t.</p>`;
   }
 
   /* ── API-kulcsok ── */
