@@ -20,6 +20,8 @@ import { getBalance, spendPoints, refundPoints } from "../lib/points-ledger.js";
 import { safeFetch } from "../lib/safe-fetch.js";
 import { keyFromRequest, authenticateApiKey } from "../lib/api-keys.js";
 import { validateInput, billablePages, translateBubbles, TEXT_MODEL } from "../lib/text-translate.js";
+import { chatCompletions, listModels } from "../lib/llm-proxy.js";
+import { availablePoints } from "../lib/llm-meter.js";
 import { getClientIp } from "../lib/client-ip.js";
 import { isAdultVerified, ADULT_GENRE_EXISTS_SQL } from "../lib/age.js";
 
@@ -129,7 +131,7 @@ router.use((req, res, next) => {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "GET,POST,DELETE,PATCH,OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-API-Key, Authorization");
-    res.setHeader("Access-Control-Expose-Headers", "X-Points-Remaining");
+    res.setHeader("Access-Control-Expose-Headers", "X-Points-Remaining, X-Points-Used, X-Context");
     res.setHeader("Access-Control-Max-Age", "600");
     if (req.method === "OPTIONS") return res.sendStatus(204);
   }
@@ -175,18 +177,39 @@ async function downloadImage(url, refererOverride, { trusted = false } = {}) {
 }
 
 /* ── TORII TRANSLATE (Gemini-alapú, felhő API) ───────────── */
-async function translateViaTorii(imageBuffer, filename) {
+/* opts (2026-11-08, Padlizsan Studio): a felhasználó beállításai, ellenőrzött
+   értékekkel. A modell (translator) SZÁNDÉKOSAN rögzített: a gemini-3.1-flash-lite
+   ~0,5 Ft/oldal; a drágább Torii-modellek (4+ kredit) mellett az 1 pont/oldal
+   ár nem hozna hasznot. Visszaad: { image: Buffer, context?: string } */
+const TORII_ALIGN = new Set(["auto", "left", "center", "right"]);
+function toriiOptions(src = {}) {
+  const o = {};
+  if (typeof src.target_lang === "string" && /^[a-z]{2}(-[a-z]{2})?$/i.test(src.target_lang)) o.target_lang = src.target_lang.toLowerCase();
+  if (typeof src.font === "string" && /^[A-Za-z][A-Za-z ]{1,29}$/.test(src.font)) o.font = src.font;
+  if (TORII_ALIGN.has(src.text_align)) o.text_align = src.text_align;
+  const mf = parseInt(src.min_font_size, 10);
+  if (mf >= 1 && mf <= 60) o.min_font_size = String(mf);
+  if (src.bubbles_only === "true" || src.bubbles_only === true) o.bubbles_only = "true";
+  if (src.stroke_disabled === "true" || src.stroke_disabled === true) o.stroke_disabled = "true";
+  if (typeof src.custom_prompt === "string" && src.custom_prompt.trim()) o.custom_prompt = src.custom_prompt.slice(0, 1000);
+  if (typeof src.context === "string" && src.context.trim()) o.context = src.context.slice(0, 10000);
+  return o;
+}
+
+async function translateViaToriiFull(imageBuffer, filename, opts = {}) {
   if (!TORII_API_KEY) throw new Error("Nincs beállítva TORII_API_KEY a szerveren");
 
   const form = new FormData();
   form.append("file", imageBuffer, { filename, contentType: "image/jpeg" });
-  form.append("target_lang", "hu");
+  form.append("target_lang", opts.target_lang || "hu");
   form.append("translator", "gemini-3.1-flash-lite");
-  form.append("font", "wildwords");
-  form.append("text_align", "auto");
-  form.append("stroke_disabled", "false");
-  form.append("min_font_size", "6");
-  form.append("bubbles_only", "false");
+  form.append("font", opts.font || "wildwords");
+  form.append("text_align", opts.text_align || "auto");
+  form.append("stroke_disabled", opts.stroke_disabled || "false");
+  form.append("min_font_size", opts.min_font_size || "6");
+  form.append("bubbles_only", opts.bubbles_only || "false");
+  if (opts.custom_prompt) form.append("custom_prompt", opts.custom_prompt);
+  if (opts.context) form.append("context", opts.context);
 
   const resp = await fetch(TORII_API_URL, {
     method: "POST",
@@ -203,7 +226,19 @@ async function translateViaTorii(imageBuffer, filename) {
   const data = await resp.json();
   const imageBase64 = (data.image || "").split(",")[1];
   if (!imageBase64) throw new Error("Torii API: hiányzó kép a válaszban");
-  return Buffer.from(imageBase64, "base64");
+  return { image: Buffer.from(imageBase64, "base64"), context: typeof data.context === "string" ? data.context : null };
+}
+
+async function translateViaTorii(imageBuffer, filename, opts) {
+  return (await translateViaToriiFull(imageBuffer, filename, opts)).image;
+}
+
+// A kép valódi formátuma a bájtok alapján (a Torii JPEG-et is adhat)
+function sniffImageType(buf) {
+  if (buf[0] === 0xff && buf[1] === 0xd8) return "image/jpeg";
+  if (buf[0] === 0x89 && buf[1] === 0x50) return "image/png";
+  if (buf.slice(0, 4).toString("latin1") === "RIFF" && buf.slice(8, 12).toString("latin1") === "WEBP") return "image/webp";
+  return "application/octet-stream";
 }
 
 /* ── CHAPTER SCRAPER ─────────────────────────────────────── */
@@ -355,7 +390,11 @@ router.get("/me", requireAuth, async (req, res) => {
       pool.query("SELECT role FROM users WHERE id = $1", [req.authUser.id]),
     ]);
     const role = roleRes.rows[0]?.role || "user";
-    res.json({ username: req.authUser.username, points, subscriber, role });
+    // a helyi motor GPT-hívásainak még le nem vont töredéke (lib/llm-meter.js)
+    const acc = await availablePoints(req.authUser.id).catch(() => null);
+    res.json({ username: req.authUser.username, points, subscriber, role,
+               points_pending: acc ? +acc.pending.toFixed(3) : 0,
+               points_available: acc ? +acc.available.toFixed(3) : points });
   } catch (err) {
     res.status(500).json({ error: "Szerver hiba" });
   }
@@ -791,6 +830,10 @@ router.post("/translate-text", requireAuth, async (req, res) => {
   }
 });
 
+/* ── Helyi motor szövegfordítója (OpenAI-kompatibilis, lib/llm-proxy.js) ── */
+router.get("/llm/v1/models", requireAuth, listModels);
+router.post("/llm/v1/chat/completions", requireAuth, chatCompletions);
+
 /* ── POST /merge - összefűzés (előfizető, min 2, max 25) ──
    A kijelölt képeket sorrendben csoportokba osztja úgy, hogy egyik
    csoport se lépje túl a MAX_IMG_HEIGHT magasságot (amit a fordító
@@ -943,9 +986,15 @@ router.post("/translate", requireAuth, upload.single("image"), async (req, res) 
   if (!spend.ok) return res.status(402).json({ error: "Nincs elég pont" });
 
   try {
-    const imageData = await translateViaTorii(imageBuffer, "image.jpg");
-    res.setHeader("Content-Type", "image/png");
+    const { image: imageData, context } = await translateViaToriiFull(imageBuffer, "image.jpg", toriiOptions(req.body));
+    res.setHeader("Content-Type", sniffImageType(imageData));
     res.setHeader("X-Points-Remaining", spend.balance);
+    res.setHeader("X-Points-Used", "1");
+    // context chain (Padlizsan Studio): URL-kódolva, ha elfér egy fejlécben
+    if (context) {
+      const enc = encodeURIComponent(context);
+      if (enc.length <= 7000) res.setHeader("X-Context", enc);
+    }
     res.send(imageData);
   } catch (err) {
     await refundPoints(spend.entryId).catch(e => console.error("[PADLICROME] pont-visszaadás hiba:", e.message));
