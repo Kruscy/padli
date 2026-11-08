@@ -154,8 +154,39 @@
           <th style="${th}">Modell</th><th style="${th};text-align:right">Költés</th><th style="${th};text-align:right">Kérés</th>
           <th style="${th};text-align:right">Ft / kérés</th><th style="${th};text-align:right">Ft / 1000 token</th>
         </tr></thead><tbody>${modelRows}</tbody></table></div>
+      <div style="${card};overflow-x:auto" id="oaTotals"><div style="color:#e2e8f0;font-weight:600;margin-bottom:8px">Összesen – ki mennyit fogyasztott</div>
+        <p style="color:#888;font-size:.85rem">Betöltés (az elmúlt 12 hónap, első alkalommal ~15 mp)…</p></div>
       <p style="color:#64748b;font-size:.75rem">A végösszeg az OpenAI valódi számlatételeiből jön. A kulcsonkénti bontás a tételek tokenarányos szétosztása. Frissítve: ${new Date(d.cachedAt).toLocaleString("hu-HU")} (az aktuális hónap 10 percenként frissül).</p>`;
     bindNav();
+    loadTotals();
+  }
+
+  async function loadTotals() {
+    const el = document.getElementById("oaTotals");
+    if (!el) return;
+    let t;
+    try {
+      const r = await fetch(`/api/admin/openai-costs/totals?month=${month}`, { credentials: "include" });
+      t = await r.json();
+      if (!r.ok) throw new Error(t.error || r.status);
+    } catch (e) { el.querySelector("p").textContent = "Hiba: " + e.message; el.querySelector("p").style.color = "#ef4444"; return; }
+    if (!document.body.contains(el)) return;
+    const max = Math.max(1, ...t.rows.map(r => r.huf));
+    el.innerHTML = `<div style="color:#e2e8f0;font-weight:600;margin-bottom:8px">Összesen – ki mennyit fogyasztott</div>
+      <table style="width:100%;border-collapse:collapse"><thead><tr>
+        <th style="${th}">Ki</th><th style="${th};text-align:right">${esc(label(t.month))}</th>
+        <th style="${th};text-align:right">Kérés (12 hó)</th><th style="${th}">Elmúlt 12 hónap (${esc(label(t.since))} óta)</th>
+      </tr></thead><tbody>${t.rows.map(r => `<tr>
+        <td style="${td}"><strong>${esc(r.name)}</strong></td>
+        <td style="${tdr}">${r.monthHuf ? ft(r.monthHuf) : '<span style="color:#475569">–</span>'}</td>
+        <td style="${tdr}">${num(r.requests)}</td>
+        <td style="${td};min-width:180px"><div style="display:flex;align-items:center;gap:8px">
+          <div style="flex:1;background:#1e293b;border-radius:5px;height:8px;overflow:hidden"><div style="background:#f59e0b;height:100%;width:${Math.round(100 * r.huf / max)}%"></div></div>
+          <strong style="white-space:nowrap">${ft(r.huf)}</strong></div></td></tr>`).join("")}
+        <tr><td style="${td};font-weight:700">Összesen</td><td style="${tdr};font-weight:700">${ft(t.monthTotal)}</td><td style="${td}"></td>
+          <td style="${td};font-weight:700">${ft(t.allTotal)}</td></tr>
+      </tbody></table>
+      <p style="color:#64748b;font-size:.75rem;margin-top:8px">Az OpenAI csak az elmúlt egy év adatait adja ki. Ahol a kulcs egy fiókhoz van rendelve, ott a felhasználónév látszik.</p>`;
   }
 
   function nav() {

@@ -75,7 +75,14 @@ const cache = new Map(); // month → { at, data }
 
 async function build(month) {
   const [y, m] = month.split("-").map(Number);
-  const start = Math.floor(Date.UTC(y, m - 1, 1) / 1000);
+  // az OpenAI csak az elmúlt 1 év adatait adja (régebbire 400-at) → levágjuk
+  const earliest = Math.floor(Date.now() / 1000) - 364 * 86400;
+  if (Math.floor(Date.UTC(y, m, 1) / 1000) <= earliest) {
+    const e = new Error("Az OpenAI csak az elmúlt egy év költségadatait adja ki.");
+    e.tooOld = true;
+    throw e;
+  }
+  const start = Math.max(Math.floor(Date.UTC(y, m - 1, 1) / 1000), earliest);
   const endFull = Math.floor(Date.UTC(y, m, 1) / 1000);
   const end = Math.min(endFull, Math.floor(Date.now() / 1000));
   if (end <= start) return { month, rate: USD_HUF, projectsShown: REPORT_PROJECTS, totalHuf: 0, persons: [], keys: [], models: [], days: [], projects: [] };
@@ -211,7 +218,8 @@ async function build(month) {
   // személyenként (egy ember több kulcsa egy sorban)
   const people = new Map();
   for (const k of keys) {
-    const p = people.get(k.person) || { name: personName.get(k.person) || k.name, huf: 0, requests: 0, keys: [] };
+    const p = people.get(k.person) || { id: k.person, keyIds: [], name: personName.get(k.person) || k.name, huf: 0, requests: 0, keys: [] };
+    p.keyIds.push(k.id);
     p.huf += k.huf; p.requests += k.requests; p.keys.push(k.name + (k.last4 ? ` …${k.last4}` : ""));
     people.set(k.person, p);
   }
@@ -234,7 +242,7 @@ const parseMonth = q => /^\d{4}-(0[1-9]|1[0-2])$/.test(q || "") ? q : curMonth()
 // Gyorsítótárazott havi kimutatás (az admin fül és a profilok közösen használják)
 const inflight = new Map();
 async function getReport(month, refresh = false) {
-  const ttl = month === curMonth() ? 10 * 60_000 : 6 * 3600_000;
+  const ttl = month === curMonth() ? 10 * 60_000 : 24 * 3600_000;
   const hit = cache.get(month);
   if (hit && Date.now() - hit.at < ttl && !refresh) return { ...hit.data, cachedAt: new Date(hit.at).toISOString() };
   // egyszerre több kérés ne indítson párhuzamos OpenAI-lekérdezést ugyanarra a hónapra
@@ -244,6 +252,66 @@ async function getReport(month, refresh = false) {
   return { ...data, cachedAt: new Date().toISOString() };
 }
 
+// Az elérhető hónapok (az elmúlt 1 év), a legrégebbitől
+function availableMonths() {
+  const out = [];
+  const first = new Date(Date.now() - 364 * 86400_000);
+  let y = first.getUTCFullYear(), m = first.getUTCMonth() + 1;
+  const cur = curMonth();
+  for (;;) {
+    const k = `${y}-${String(m).padStart(2, "0")}`;
+    out.push(k);
+    if (k >= cur) break;
+    m++; if (m > 12) { m = 1; y++; }
+  }
+  return out;
+}
+
+// Személyenkénti összesítés: a választott hónap és az elmúlt 12 hónap együtt.
+// A személyhez az oldal felhasználóneve tartozik, ha a kulcsa hozzá van rendelve.
+async function totals(month) {
+  const months = availableMonths();
+  const reports = [];
+  for (let i = 0; i < months.length; i += 3) {   // egyszerre legfeljebb 3 hónap az OpenAI felé
+    reports.push(...await Promise.all(months.slice(i, i + 3).map(m => getReport(m).catch(() => null))));
+  }
+  let owners = new Map();
+  try {
+    const { rows } = await pool.query("SELECT k.key_id, u.username FROM openai_key_users k JOIN users u ON u.id = k.user_id");
+    owners = new Map(rows.map(r => [r.key_id, r.username]));
+  } catch { /* hozzárendelés nélkül a kulcsnév marad */ }
+  const nameOf = p => p.keyIds.map(id => owners.get(id)).find(Boolean)
+    || (/^Ismeretlen/.test(p.name) ? "Törölt / ismeretlen kulcsok" : p.name);
+  const all = new Map();
+  let monthRows = [];
+  reports.forEach((d, i) => {
+    if (!d) return;
+    for (const p of d.persons || []) {
+      if (p.id === "_project") continue;
+      const name = nameOf(p);
+      const e = all.get(name) || { name, huf: 0, requests: 0, monthHuf: 0, monthRequests: 0 };
+      e.huf += p.huf; e.requests += p.requests;
+      if (months[i] === month) { e.monthHuf += p.huf; e.monthRequests += p.requests; }
+      all.set(name, e);
+    }
+    if (months[i] === month) monthRows = d.persons;
+  });
+  const rows = [...all.values()].filter(r => r.huf > 0).sort((a, b) => b.monthHuf - a.monthHuf || b.huf - a.huf);
+  return {
+    month, since: months[0],
+    monthTotal: rows.reduce((a, r) => a + r.monthHuf, 0),
+    allTotal: rows.reduce((a, r) => a + r.huf, 0),
+    rows,
+    unassignedMonth: monthRows.filter(p => p.id === "_project").reduce((a, p) => a + p.huf, 0),
+  };
+}
+
+router.get("/totals", async (req, res) => {
+  if (!process.env.OPENAI_ADMIN_KEY) return res.status(503).json({ error: "Nincs beállítva OPENAI_ADMIN_KEY a szerveren." });
+  try { res.json(await totals(parseMonth(req.query.month))); }
+  catch (err) { console.error("[openai-costs] totals:", err.message); res.status(502).json({ error: err.message }); }
+});
+
 router.get("/", async (req, res) => {
   if (!process.env.OPENAI_ADMIN_KEY) return res.status(503).json({ error: "Nincs beállítva OPENAI_ADMIN_KEY a szerveren." });
   const month = parseMonth(req.query.month);
@@ -251,8 +319,8 @@ router.get("/", async (req, res) => {
   try {
     res.json(await getReport(month, req.query.refresh === "1"));
   } catch (err) {
-    console.error("[openai-costs]", err.message);
-    res.status(502).json({ error: err.message });
+    if (!err.tooOld) console.error("[openai-costs]", err.message);
+    res.status(err.tooOld ? 400 : 502).json({ error: err.message });
   }
 });
 
@@ -260,6 +328,19 @@ router.get("/", async (req, res) => {
    A feltöltő a profilján csak a SAJÁT kulcsainak (openai_key_users)
    költését látja. Akinek nincs hozzárendelt kulcsa: { hasKeys: false }. */
 export const userRouter = express.Router();
+userRouter.get("/totals", async (req, res) => {
+  if (!req.session.user) return res.status(401).json({ error: "Login required" });
+  const { rows } = await pool.query("SELECT 1 FROM openai_key_users WHERE user_id = $1 LIMIT 1", [req.session.user.id]).catch(() => ({ rows: [] }));
+  if (!rows.length) return res.status(403).json({ error: "Forbidden" });   // csak kulccsal rendelkező feltöltő
+  try {
+    const t = await totals(parseMonth(req.query.month));
+    res.json({ month: t.month, since: t.since, monthTotal: t.monthTotal, allTotal: t.allTotal,
+               rows: t.rows.map(r => ({ name: r.name, monthHuf: r.monthHuf, huf: r.huf, me: r.name === req.session.user.username })) });
+  } catch (err) {
+    res.status(502).json({ error: "Az összesítő most nem érhető el." });
+  }
+});
+
 userRouter.get("/", async (req, res) => {
   if (!req.session.user) return res.status(401).json({ error: "Login required" });
   let ids;
@@ -288,6 +369,7 @@ userRouter.get("/", async (req, res) => {
       keys, cachedAt: d.cachedAt,
     });
   } catch (err) {
+    if (err.tooOld) return res.status(400).json({ error: err.message });
     console.error("[gpt-usage]", err.message);
     res.status(502).json({ error: "A költségadatok most nem érhetők el, próbáld később." });
   }

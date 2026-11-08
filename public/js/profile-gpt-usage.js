@@ -70,9 +70,33 @@
       <div class="gu-sub">${num(d.requests)} kérés · átlagosan ${ft(d.hufPerRequest)} / kérés (≈ oldal)</div>
       ${d.days.length ? `<div class="gu-days">${bars}</div>` : '<p style="color:#64748b;font-size:.85rem;margin:12px 0">Ebben a hónapban nem volt fogyasztás.</p>'}
       ${[...models].sort((a, b) => b[1] - a[1]).map(([m, huf]) => `<div class="gu-row"><span>${esc(m)}</span><strong>${ft(huf)}</strong></div>`).join("")}
-      <div style="margin-top:10px;color:#64748b;font-size:.75rem">Kulcs: ${d.keys.map(k => esc(k.name) + (k.last4 ? " …" + esc(k.last4) : "")).join(", ") || "–"} · ${d.rate} Ft/$ · az OpenAI adatai néhány órás késéssel frissülnek.</div>`;
+      <div style="margin-top:10px;color:#64748b;font-size:.75rem">Kulcs: ${d.keys.map(k => esc(k.name) + (k.last4 ? " …" + esc(k.last4) : "")).join(", ") || "–"} · ${d.rate} Ft/$ · az OpenAI adatai néhány órás késéssel frissülnek.</div>
+      <div id="guTotals" style="margin-top:18px;padding-top:14px;border-top:1px solid rgba(255,255,255,.1)">
+        <div style="font-weight:700;margin-bottom:6px">👥 Összesen ki mennyit fogyasztott</div>
+        <p style="color:#888;font-size:.82rem">Betöltés…</p></div>`;
     bind();
+    loadTotals();
   }
+  async function loadTotals() {
+    const el = document.getElementById("guTotals");
+    if (!el) return;
+    let t;
+    try {
+      const r = await fetch(`/api/user/gpt-usage/totals?month=${month}`, { credentials: "include" });
+      t = await r.json();
+      if (!r.ok) throw new Error(t.error || r.status);
+    } catch { el.querySelector("p").textContent = "Az összesítő most nem érhető el."; return; }
+    if (!document.body.contains(el)) return;
+    el.innerHTML = `<div style="font-weight:700;margin-bottom:6px">👥 Összesen ki mennyit fogyasztott</div>
+      <div class="gu-row" style="border-top:0;color:#64748b;font-size:.75rem"><span style="flex:1">Ki</span><span style="width:90px;text-align:right">${esc(label(t.month))}</span><span style="width:100px;text-align:right">12 hónap</span></div>
+      ${t.rows.map(r => `<div class="gu-row"${r.me ? ' style="background:rgba(124,58,237,.15);border-radius:6px;padding-left:6px;padding-right:6px"' : ""}>
+        <span style="flex:1;color:${r.me ? "#e9d5ff" : "#cbd5e1"};font-weight:${r.me ? 700 : 400}">${esc(r.name)}${r.me ? " (te)" : ""}</span>
+        <span style="width:90px;text-align:right;color:#e2e8f0">${r.monthHuf ? ft(r.monthHuf) : "–"}</span>
+        <strong style="width:100px;text-align:right">${ft(r.huf)}</strong></div>`).join("")}
+      <div class="gu-row" style="font-weight:700"><span style="flex:1;color:#e2e8f0">Összesen</span><span style="width:90px;text-align:right;color:#e2e8f0">${ft(t.monthTotal)}</span><strong style="width:100px;text-align:right">${ft(t.allTotal)}</strong></div>
+      <div style="color:#64748b;font-size:.72rem;margin-top:6px">A 12 hónap ${esc(label(t.since))} óta (az OpenAI csak az elmúlt egy évet adja ki).</div>`;
+  }
+
   function nav() {
     return `<div class="gu-nav"><button class="gu-btn" id="guPrev">‹</button><span class="gu-month">${esc(label(month))}</span>
       <button class="gu-btn" id="guNext" ${month >= curMonth ? "disabled" : ""}>›</button></div>`;
