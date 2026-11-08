@@ -1,0 +1,202 @@
+/* ── OpenAI-költségek kulcsonként (admin → GPT-API fül, 2026-11-08) ──
+   GET /api/admin/openai-costs?month=YYYY-MM — csak a tulajdonos (Ascyra).
+   Forrás: az OpenAI Admin API (OPENAI_ADMIN_KEY, .env):
+   • /organization/costs — a VALÓDI számlatételek projekt + tétel szerint
+     („gpt-5.6-terra, output” stb.), ezek összege egyezik a számlával;
+   • /organization/usage/completions — kulcsonkénti tokenek modellenként.
+   A számlatételeket a kulcsok között a megfelelő tokenfajta arányában
+   osztjuk szét (bemenet / gyorsítótárazott bemenet / kimenet); így a
+   kulcsonkénti forint arányos, az összesen pedig pontosan a számla.
+   Amit nem lehet kulcshoz kötni (pl. ha nincs hozzá használati adat),
+   „projektszintű” sorba kerül. ── */
+import express from "express";
+import { SCAN_OWNER_USER_ID } from "../lib/scan-runner.js";
+
+const router = express.Router();
+const API = "https://api.openai.com/v1";
+const USD_HUF = Number(process.env.PC_REPORT_USD_HUF) || 326;
+
+router.use((req, res, next) => {
+  if (!req.session.user || req.session.user.role !== "admin" || req.session.user.id !== SCAN_OWNER_USER_ID) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+  next();
+});
+
+async function oa(path) {
+  const r = await fetch(API + path, {
+    headers: { Authorization: `Bearer ${process.env.OPENAI_ADMIN_KEY}` },
+    signal: AbortSignal.timeout(30000),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(`OpenAI ${r.status}: ${j.error?.message || j.error || "ismeretlen hiba"}`);
+  return j;
+}
+
+// Lapozott bucket-lista (napi bontás, egy hónap ≤ 31 bucket)
+async function buckets(path) {
+  const out = [];
+  let page = null;
+  for (let i = 0; i < 20; i++) {
+    const j = await oa(path + (page ? `&page=${encodeURIComponent(page)}` : ""));
+    out.push(...(j.data || []));
+    if (!j.has_more || !j.next_page) break;
+    page = j.next_page;
+  }
+  return out;
+}
+
+// „gpt-5.6-terra, output” → { model: "gpt-5.6-terra", kind: "output" }
+function parseLineItem(li) {
+  const s = String(li || "");
+  const i = s.lastIndexOf(", ");
+  return i < 0 ? { model: s, kind: "" } : { model: s.slice(0, i), kind: s.slice(i + 2) };
+}
+// A számlatétel modellneve dátumos lehet („gpt-5.4-2026-03-05”, „gpt-image-2-2026-04-21 image”)
+const sameModel = (billModel, usageModel) => {
+  const a = billModel.replace(/ (image|text|audio)$/, ""), b = String(usageModel || "");
+  return a === b || a.startsWith(b + "-") || b.startsWith(a + "-");
+};
+// melyik tokenfajta arányában osszuk szét a tételt
+function weightOf(kind, u) {
+  const cached = u.cached || 0;
+  if (/cached input/.test(kind)) return cached;
+  if (/cache write/.test(kind)) return u.input;
+  if (/input/.test(kind)) return Math.max(0, u.input - cached);
+  if (/output/.test(kind)) return u.output;
+  return u.requests;
+}
+
+const cache = new Map(); // month → { at, data }
+
+async function build(month) {
+  const [y, m] = month.split("-").map(Number);
+  const start = Math.floor(Date.UTC(y, m - 1, 1) / 1000);
+  const endFull = Math.floor(Date.UTC(y, m, 1) / 1000);
+  const end = Math.min(endFull, Math.floor(Date.now() / 1000));
+  if (end <= start) return { month, rate: USD_HUF, totalHuf: 0, keys: [], models: [], days: [], projects: [] };
+  const q = `start_time=${start}&end_time=${end}&bucket_width=1d&limit=31`;
+
+  const [costB, useB] = await Promise.all([
+    buckets(`/organization/costs?${q}&group_by=project_id&group_by=line_item`),
+    buckets(`/organization/usage/completions?${q}&group_by=project_id&group_by=api_key_id&group_by=model`),
+  ]);
+
+  // használat: projekt → kulcs → modell
+  const usage = []; // { project, key, model, input, cached, output, requests }
+  const uIdx = new Map();
+  for (const b of useB) for (const r of b.results || []) {
+    const k = `${r.project_id}|${r.api_key_id}|${r.model}`;
+    let u = uIdx.get(k);
+    if (!u) { u = { project: r.project_id, key: r.api_key_id, model: r.model, input: 0, cached: 0, output: 0, requests: 0 }; uIdx.set(k, u); usage.push(u); }
+    u.input += r.input_tokens || 0;
+    u.cached += r.input_cached_tokens || 0;
+    u.output += r.output_tokens || 0;
+    u.requests += r.num_model_requests || 0;
+  }
+
+  // számlatételek szétosztása
+  const keyCost = new Map();   // `${project}|${key}` → { usd, models: Map(model → usd) }
+  const dayUsd = new Map();
+  const modelUsd = new Map();
+  const projUsd = new Map();
+  const addKey = (project, key, model, usd) => {
+    const id = `${project}|${key}`;
+    const e = keyCost.get(id) || { usd: 0, models: new Map() };
+    e.usd += usd;
+    e.models.set(model, (e.models.get(model) || 0) + usd);
+    keyCost.set(id, e);
+  };
+  for (const b of costB) {
+    const day = new Date(b.start_time * 1000).toISOString().slice(0, 10);
+    for (const r of b.results || []) {
+      const usd = Number(r.amount?.value || 0);
+      if (!usd) continue;
+      dayUsd.set(day, (dayUsd.get(day) || 0) + usd);
+      projUsd.set(r.project_id || "?", (projUsd.get(r.project_id || "?") || 0) + usd);
+      const { model, kind } = parseLineItem(r.line_item);
+      const base = model.replace(/ (image|text|audio)$/, "").replace(/-\d{4}-\d{2}-\d{2}$/, "");
+      modelUsd.set(base, (modelUsd.get(base) || 0) + usd);
+      const cands = usage.filter(u => u.project === r.project_id && sameModel(model, u.model));
+      const ws = cands.map(u => weightOf(kind, u));
+      const sum = ws.reduce((a, b) => a + b, 0);
+      if (!sum) { addKey(r.project_id || "?", "_project", base, usd); continue; }
+      cands.forEach((u, i) => ws[i] && addKey(u.project, u.key, base, usd * ws[i] / sum));
+    }
+  }
+
+  // kulcsok és projektek adatai
+  const projects = [...new Set([...usage.map(u => u.project), ...projUsd.keys()])].filter(p => p && p !== "?");
+  const projName = new Map(), keyInfo = new Map();
+  await Promise.all(projects.map(async p => {
+    try { projName.set(p, (await oa(`/organization/projects/${p}`)).name); } catch { projName.set(p, p); }
+    try {
+      const list = await oa(`/organization/projects/${p}/api_keys?limit=100`);
+      for (const k of list.data || []) keyInfo.set(k.id, {
+        name: k.name || "(név nélkül)",
+        last4: String(k.redacted_value || "").slice(-4),
+        owner: k.owner?.user?.name || k.owner?.user?.email || k.owner?.service_account?.name || k.owner?.type || "",
+        ownerEmail: k.owner?.user?.email || "",
+        lastUsed: k.last_used_at ? new Date(k.last_used_at * 1000).toISOString() : null,
+      });
+    } catch { /* nincs joga a kulcslistához: csak azonosító lesz */ }
+  }));
+
+  const keys = [...keyCost].map(([id, e]) => {
+    const [project, key] = id.split("|");
+    const us = usage.filter(u => u.project === project && u.key === key);
+    const requests = us.reduce((a, u) => a + u.requests, 0);
+    const input = us.reduce((a, u) => a + u.input, 0), output = us.reduce((a, u) => a + u.output, 0);
+    const info = key === "_project" ? { name: "Projektszintű (kulcshoz nem köthető)", last4: "", owner: "" }
+      : keyInfo.get(key) || { name: `Ismeretlen / törölt kulcs (${key})`, last4: "", owner: "" };
+    const huf = e.usd * USD_HUF;
+    return {
+      id: key, project: projName.get(project) || project, ...info,
+      requests, input, output,
+      huf: +huf.toFixed(0),
+      hufPerRequest: requests ? +(huf / requests).toFixed(2) : null,
+      hufPer1kTokens: input + output ? +(huf / ((input + output) / 1000)).toFixed(2) : null,
+      models: [...e.models].map(([model, usd]) => ({ model, huf: +(usd * USD_HUF).toFixed(0) })).sort((a, b) => b.huf - a.huf),
+    };
+  }).filter(k => k.huf > 0 || k.requests > 0).sort((a, b) => b.huf - a.huf);
+
+  // modellenként: mennyibe kerül egy kérés és 1000 token (ár-érték)
+  const models = [...modelUsd].map(([model, usd]) => {
+    const us = usage.filter(u => sameModel(model, u.model));
+    const requests = us.reduce((a, u) => a + u.requests, 0);
+    const tokens = us.reduce((a, u) => a + u.input + u.output, 0);
+    const huf = usd * USD_HUF;
+    return { model, huf: +huf.toFixed(0), requests, hufPerRequest: requests ? +(huf / requests).toFixed(2) : null, hufPer1kTokens: tokens ? +(huf / (tokens / 1000)).toFixed(3) : null };
+  }).filter(x => x.huf > 0).sort((a, b) => b.huf - a.huf);
+
+  const totalUsd = [...dayUsd.values()].reduce((a, b) => a + b, 0);
+  return {
+    month, rate: USD_HUF,
+    totalHuf: +(totalUsd * USD_HUF).toFixed(0), totalUsd: +totalUsd.toFixed(2),
+    projects: [...projUsd].map(([p, usd]) => ({ name: projName.get(p) || p, huf: +(usd * USD_HUF).toFixed(0) })).sort((a, b) => b.huf - a.huf),
+    days: [...dayUsd].sort().map(([day, usd]) => ({ day, huf: +(usd * USD_HUF).toFixed(0) })),
+    keys, models,
+  };
+}
+
+router.get("/", async (req, res) => {
+  if (!process.env.OPENAI_ADMIN_KEY) return res.status(503).json({ error: "Nincs beállítva OPENAI_ADMIN_KEY a szerveren." });
+  const now = new Date();
+  const cur = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+  const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(req.query.month || "") ? req.query.month : cur;
+  if (month > cur) return res.status(400).json({ error: "Jövőbeli hónap" });
+  const ttl = month === cur ? 10 * 60_000 : 6 * 3600_000;
+  const hit = cache.get(month);
+  if (hit && Date.now() - hit.at < ttl && req.query.refresh !== "1") return res.json({ ...hit.data, cachedAt: new Date(hit.at).toISOString() });
+  try {
+    const data = await build(month);
+    cache.set(month, { at: Date.now(), data });
+    res.json({ ...data, cachedAt: new Date().toISOString() });
+  } catch (err) {
+    console.error("[openai-costs]", err.message);
+    res.status(502).json({ error: err.message });
+  }
+});
+
+export default router;
+export { build as buildOpenAiCostReport };

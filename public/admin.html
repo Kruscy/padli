@@ -26,6 +26,7 @@
   <button class="tab-btn" data-tab="tab-blog">✍️ Blog</button>
   <button class="tab-btn" data-tab="tab-padli">🤖 Padli AI</button>
   <button class="tab-btn" data-tab="tab-api-usage">🔑 API kulcsok</button>
+  <button class="tab-btn" data-tab="tab-openai" style="display:none">💸 GPT-API</button>
   <button class="tab-btn" data-tab="tab-remote-usage">🖥️ 192.168.0.90</button>
   <button class="tab-btn" data-tab="tab-subtitle-requests">🎬 Felirat-kérések</button>
   <button class="tab-btn" data-tab="tab-anime-catalog">📼 Anime katalógus</button>
@@ -386,6 +387,14 @@
   <div id="apiUsageList">Betöltés...</div>
 </div>
 
+<div id="tab-openai" class="tab-panel">
+  <h2 style="margin-bottom:6px">💸 GPT-API költségek</h2>
+  <p style="color:#888;font-size:.88rem;margin-bottom:20px">
+    Az OpenAI-szervezet összes kulcsa: ki mennyit költött a hónapban, és melyik modell mennyibe kerül kérésenként (≈ oldalanként). Csak a tulajdonos látja.
+  </p>
+  <div id="openaiCosts"></div>
+</div>
+
 <div id="tab-remote-usage" class="tab-panel">
   <h2 style="margin-bottom:6px">🖥️ 192.168.0.8 (CT108) használat</h2>
   <p style="color:#888;font-size:.88rem;margin-bottom:20px">
@@ -539,6 +548,7 @@
 <script src="/js/admin-blog.js?v=20260427"></script>
 <script src="/js/admin-padli.js?v=20260427"></script>
 <script src="/js/admin-patreon-invoice.js?v=20260629"></script>
+<script src="/js/admin-openai.js?v=20261108"></script>
 
 </body>
 </html>
