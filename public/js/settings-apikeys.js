@@ -63,4 +63,18 @@
   });
 
   load();
+
+  // Padlizsan Studio letöltés – csak tesztelőknek (a szerver dönt)
+  fetch("/api/studio/info", { credentials: "include" }).then(r => r.ok ? r.json() : null).then(info => {
+    if (!info?.allowed) return;
+    document.getElementById("studioBox").classList.remove("hidden");
+    const fileEl = document.getElementById("studioFile");
+    if (info.file) {
+      const mb = (info.file.size / 1048576).toFixed(0);
+      fileEl.textContent = `${info.file.name} · ${mb} MB · ${new Date(info.file.date).toLocaleString("hu-HU", { dateStyle: "short", timeStyle: "short" })}`;
+      document.getElementById("studioDownload").classList.remove("hidden");
+    } else {
+      fileEl.textContent = "Még nincs feltöltött csomag a szerveren.";
+    }
+  }).catch(() => {});
 })();

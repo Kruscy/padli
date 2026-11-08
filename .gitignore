@@ -28,3 +28,4 @@ server/cache/*.tmp
 *.swo
 # Helyi kódmentések élesítés előtt
 backups/
+/studio-dist/
