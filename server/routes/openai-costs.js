@@ -169,6 +169,8 @@ async function build(month) {
   const personOf = (keyId, info) => {
     const lab = labels.get(keyId);
     if (lab?.owner_key_id && keyInfo.get(lab.owner_key_id)) return baseName(keyInfo.get(lab.owner_key_id).name).toLowerCase();
+    // név nélküli / ismeretlen kulcs: mindegyik külön személy (különben egybemosódnának)
+    if (!keyInfo.get(keyId) && !lab) return keyId;
     return baseName(info.name).toLowerCase() || keyId;
   };
   const personName = new Map(); // személy-azonosító → megjelenített név (a legelső ismert kulcs neve)
@@ -183,7 +185,7 @@ async function build(month) {
         || (labels.get(key) && { name: labels.get(key).name, last4: "", owner: keyInfo.get(labels.get(key).owner_key_id)?.owner || "", note: "kézi címke" })
         || { name: `Ismeretlen / törölt kulcs (${key})`, last4: "", owner: "" };
     const person = key === "_project" ? "_project" : personOf(key, info);
-    if (!personName.has(person) || keyInfo.get(key)) personName.set(person, key === "_project" ? info.name : baseName(keyInfo.get(key)?.name || info.name));
+    if (!personName.has(person) || keyInfo.get(key)) personName.set(person, key === "_project" || person === key ? info.name : baseName(keyInfo.get(key)?.name || info.name));
     const huf = e.usd * USD_HUF;
     return {
       id: key, person, project: projName.get(project) || project, ...info,
