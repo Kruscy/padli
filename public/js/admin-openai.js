@@ -2,6 +2,41 @@
    Csak a tulajdonos látja (a szerver is ellenőrzi). */
 (() => {
   const btn = document.querySelector('.tab-btn[data-tab="tab-openai"]');
+
+  // A fül saját stílusai (gombok, azonnali súgó a napi oszlopokon)
+  const css = `
+    .oa-nav { display:flex; align-items:center; gap:10px; margin-bottom:16px; flex-wrap:wrap; }
+    .oa-btn { display:inline-flex; align-items:center; gap:6px; padding:8px 16px; border-radius:999px;
+      background:#1e1b2e; color:#e2e8f0; border:1px solid #3b3561; font-size:.86rem; font-weight:600;
+      cursor:pointer; transition:background .15s, border-color .15s, transform .1s, box-shadow .15s; }
+    .oa-btn:hover:not(:disabled) { background:#2a2350; border-color:#8b5cf6; box-shadow:0 0 0 3px rgba(139,92,246,.18); }
+    .oa-btn:active:not(:disabled) { transform:translateY(1px); }
+    .oa-btn:disabled { opacity:.35; cursor:default; }
+    .oa-btn.primary { background:linear-gradient(135deg,#7c3aed,#a855f7); border-color:transparent; color:#fff; }
+    .oa-btn.primary:hover:not(:disabled) { background:linear-gradient(135deg,#6d28d9,#9333ea); }
+    .oa-btn.spin .oa-ico { display:inline-block; animation:oa-spin .8s linear infinite; }
+    @keyframes oa-spin { to { transform:rotate(360deg); } }
+    .oa-month { min-width:170px; text-align:center; color:#e2e8f0; font-weight:700; font-size:1.05rem;
+      padding:7px 14px; border-radius:999px; background:#0f172a; border:1px solid #1e293b; }
+    .oa-days { display:flex; gap:3px; align-items:flex-end; height:130px; padding-top:34px; }
+    .oa-day { position:relative; flex:1; min-width:8px; display:flex; flex-direction:column; justify-content:flex-end; align-items:center; height:100%; cursor:default; }
+    .oa-day .oa-bar { width:100%; background:#7c3aed; border-radius:3px 3px 0 0; transition:background .1s; }
+    .oa-day:hover .oa-bar { background:#c084fc; }
+    .oa-day .oa-num { font-size:.6rem; color:#64748b; margin-top:3px; }
+    .oa-day .oa-tip { position:absolute; bottom:calc(var(--h) + 20px); left:50%; transform:translateX(-50%);
+      background:#f8fafc; color:#0f172a; font-size:.78rem; font-weight:700; white-space:nowrap; padding:4px 9px;
+      border-radius:7px; box-shadow:0 4px 14px rgba(0,0,0,.35); pointer-events:none; opacity:0; transition:opacity .08s; z-index:2; }
+    .oa-day .oa-tip small { display:block; font-weight:500; color:#475569; font-size:.7rem; }
+    .oa-day:hover .oa-tip { opacity:1; }
+    .oa-day.edge-l .oa-tip { left:0; transform:none; }
+    .oa-day.edge-r .oa-tip { left:auto; right:0; transform:none; }`;
+  try {
+    const sheet = new CSSStyleSheet();
+    sheet.replaceSync(css);
+    document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
+  } catch {
+    const st = document.createElement("style"); st.textContent = css; document.head.appendChild(st);
+  }
   const box = document.getElementById("openaiCosts");
   if (!btn || !box) return;
 
@@ -37,6 +72,8 @@
     loadedOnce = true;
     box.innerHTML = `${nav()}<p style="color:#888">Betöltés az OpenAI-tól…</p>`;
     bindNav();
+    const rb0 = document.getElementById("oaRefresh");
+    rb0.classList.add("spin"); rb0.disabled = true;
     let d;
     try {
       const r = await fetch(`/api/admin/openai-costs?month=${month}${refresh ? "&refresh=1" : ""}`, { credentials: "include" });
@@ -73,9 +110,16 @@
         <td style="${tdr}">${ft(m.hufPer1kTokens)}</td>
       </tr>`).join("");
 
-    const dayBars = d.days.map(x => `<div title="${esc(x.day)}: ${ft(x.huf)}" style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;min-width:8px">
-        <div style="width:100%;background:#7c3aed;border-radius:3px 3px 0 0;height:${Math.max(2, Math.round(100 * x.huf / maxDay))}px"></div>
-        <div style="font-size:.6rem;color:#64748b;margin-top:3px">${Number(x.day.slice(8))}</div></div>`).join("");
+    const DAYS_HU = ["vasárnap", "hétfő", "kedd", "szerda", "csütörtök", "péntek", "szombat"];
+    const dayBars = d.days.map((x, i) => {
+      const h = Math.max(2, Math.round(90 * x.huf / maxDay));
+      const dt = new Date(x.day + "T12:00:00");
+      const edge = i < 3 ? " edge-l" : i >= d.days.length - 3 ? " edge-r" : "";
+      return `<div class="oa-day${edge}" style="--h:${h}px">
+        <div class="oa-tip">${ft(x.huf)}<small>${dt.toLocaleDateString("hu-HU", { month: "short", day: "numeric" })}, ${DAYS_HU[dt.getDay()]}</small></div>
+        <div class="oa-bar" style="height:${h}px"></div>
+        <div class="oa-num">${Number(x.day.slice(8))}</div></div>`;
+    }).join("");
 
     box.innerHTML = `${nav()}
       <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px">
@@ -86,7 +130,7 @@
           <div style="font-size:1.2rem;font-weight:700;color:#e2e8f0">${ft(p.huf)}</div></div>`).join("")}
       </div>
       <div style="${card}"><div style="color:#94a3b8;font-size:.8rem;margin-bottom:8px">Napi költés</div>
-        <div style="display:flex;gap:3px;align-items:flex-end;height:120px">${dayBars || '<span style="color:#64748b">Nincs adat.</span>'}</div></div>
+        <div class="oa-days">${dayBars || '<span style="color:#64748b">Nincs adat.</span>'}</div></div>
       <div style="${card};overflow-x:auto"><div style="color:#e2e8f0;font-weight:600;margin-bottom:8px">Személyenként – ki hány forintot költött</div>
         <table style="width:100%;border-collapse:collapse"><thead><tr>
           <th style="${th}">Személy</th><th style="${th}">Kulcsai</th><th style="${th};text-align:right">Kérés</th>
@@ -115,16 +159,20 @@
   }
 
   function nav() {
-    return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
-      <button id="oaPrev" class="btn-secondary" style="padding:6px 12px;cursor:pointer">‹ Előző hónap</button>
-      <strong style="min-width:150px;text-align:center;color:#e2e8f0">${esc(label(month))}</strong>
-      <button id="oaNext" class="btn-secondary" style="padding:6px 12px;cursor:pointer" ${month >= curMonth ? "disabled" : ""}>Következő hónap ›</button>
-      <button id="oaRefresh" class="btn-secondary" style="padding:6px 12px;cursor:pointer;margin-left:auto" title="Friss adat az OpenAI-tól">↻ Frissítés</button>
+    return `<div class="oa-nav">
+      <button id="oaPrev" class="oa-btn" title="Előző hónap">‹ Előző hónap</button>
+      <span class="oa-month">📅 ${esc(label(month))}</span>
+      <button id="oaNext" class="oa-btn" title="Következő hónap" ${month >= curMonth ? "disabled" : ""}>Következő hónap ›</button>
+      ${month !== curMonth ? `<button id="oaNow" class="oa-btn" title="Vissza az aktuális hónapra">Aktuális hónap</button>` : ""}
+      <button id="oaRefresh" class="oa-btn primary" style="margin-left:auto" title="Friss adat az OpenAI-tól"><span class="oa-ico">↻</span> Frissítés</button>
     </div>`;
   }
   function bindNav() {
     document.getElementById("oaPrev").onclick = () => { month = shift(month, -1); load(); };
     document.getElementById("oaNext").onclick = () => { if (month < curMonth) { month = shift(month, 1); load(); } };
-    document.getElementById("oaRefresh").onclick = () => load(true);
+    const now = document.getElementById("oaNow");
+    if (now) now.onclick = () => { month = curMonth; load(); };
+    const rb = document.getElementById("oaRefresh");
+    rb.onclick = () => { rb.classList.add("spin"); rb.disabled = true; load(true); };
   }
 })();
