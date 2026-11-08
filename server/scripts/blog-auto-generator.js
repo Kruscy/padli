@@ -10,6 +10,7 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import { config } from "dotenv";
+import { storeBlogCover } from "../lib/cover-image.js";
 import { pickTimelyTopic, insertPremierTable, markCovered, seasonTopic } from "../lib/blog-anime-seasons.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -766,7 +767,8 @@ export async function makeCover(openai, topic, content, imageStyle) {
       const imgBuffer = imgData.b64_json
         ? Buffer.from(imgData.b64_json, "base64")
         : Buffer.from(await (await fetch(imgData.url)).arrayBuffer());
-      const url = saveCoverLocally(topic.slug, imgBuffer);
+      // JPEG 1200 px → R2 (a nyers PNG ~3 MB volt)
+      const { url } = await storeBlogCover(imgBuffer, topic.slug);
       console.log(`[BlogGen] Borítókép kész (${model}): ${url}`);
       return url;
     } catch (err) {

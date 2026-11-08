@@ -13,6 +13,7 @@ import { compressPageImage } from "../lib/image-compress.js";
 import { updateMangaCore } from "../lib/manga-meta.js";
 import { purgeChapterImages } from "../lib/cf-purge.js";
 import { trackUploadRequest, handleClientUploadReport } from "../lib/upload-log.js";
+import { processUploadedCover } from "../lib/cover-image.js";
 
 const r2 = new S3Client({
   region: "auto",
@@ -692,7 +693,12 @@ const coverUpload = multer({ storage: coverStorage, limits: { fileSize: 5 * 1024
 
 router.post("/manga/:slug/cover", requireUploader, loadEditableManga, coverUpload.single("cover"), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "Nincs fájl" });
-  const filePath = `/uploads/${req.file.filename}`;
+  let filePath;
+  try {
+    filePath = (await processUploadedCover(req.file, req.params.slug)).url; // WebP → R2
+  } catch (err) {
+    return res.status(400).json({ error: "A kép nem dolgozható fel (sérült vagy nem kép?)" });
+  }
   try {
     await pool.query(`UPDATE manga SET cover_url = $1 WHERE id = $2`, [filePath, req.editableMangaId]);
     res.json({ ok: true, cover_url: filePath });

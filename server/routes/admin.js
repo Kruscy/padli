@@ -13,6 +13,7 @@ import { buildUploaderRoots, matchUploaderRoot, assignUploaderIfEmpty } from "..
 import { updateMangaCore } from "../lib/manga-meta.js";
 import fs from "fs";
 import path from "path";
+import { processUploadedCover } from "../lib/cover-image.js";
 
 const router = express.Router();
 /* ================= ADMIN GUARD ================= */
@@ -328,7 +329,12 @@ const coverUpload = multer({ storage: coverStorage, limits: { fileSize: 5 * 1024
 router.post("/manga/:slug/cover", coverUpload.single("cover"), async (req, res) => {
   const { slug } = req.params;
   if (!req.file) return res.status(400).json({ error: "Nincs fájl" });
-  const filePath = `/uploads/${req.file.filename}`;
+  let filePath;
+  try {
+    filePath = (await processUploadedCover(req.file, slug)).url; // WebP → R2
+  } catch (err) {
+    return res.status(400).json({ error: "A kép nem dolgozható fel (sérült vagy nem kép?)" });
+  }
   try {
     await pool.query(`UPDATE manga SET cover_url = $1 WHERE slug = $2`, [filePath, slug]);
     res.json({ ok: true, cover_url: filePath });
