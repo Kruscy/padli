@@ -228,6 +228,13 @@ bot.on("messageCreate", async msg => {
   // korábbi üzenetére, azt úgy kezeljük, mintha közvetlenül megszólította
   // volna ("padli"-t tartalmazna) — nem kell újra kimondania a nevét.
   let aiContent = msg.content;
+  // A botra mutató Discord-@megjelölés („<@id>”) is megszólítás: a felismerő
+  // csak a „padli” szót keresi, így a @Padli-val írt üzenetekre eddig nem
+  // válaszolt (2026-11-08: „@Padli Ülj le 1-es”).
+  if (bot.user && msg.mentions.users.has(bot.user.id)) {
+    aiContent = aiContent.replace(new RegExp(`<@!?${bot.user.id}>`, "g"), "Padli").trim();
+    if (!/padli/i.test(aiContent)) aiContent = "Padli " + aiContent;
+  }
   if (msg.reference) {
     try {
       const refMsg = await msg.fetchReference();
