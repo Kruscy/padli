@@ -1004,7 +1004,7 @@ async function generateReply(question, conversationHistory, userKey) {
       { role: "system", content: getSystemPrompt() },
       { role: "user", content: "Reagalj erre termeszetesen es lazan, 1-2 mondatban magyarul: " +
         question.replace(/padli[,]?\s*/gi,"").trim() +
-        "\n[Ha valami felnottos vagy pikans temajú kerdes, reagalj humorosan, NE mondd hogy nem tudsz segiteni. Ha lehet, tereld manga/anime temara.]" }
+        "\n[Ha valami felnottos vagy pikans temajú kerdes, reagalj humorosan, NE mondd hogy nem tudsz segiteni. Ha 18+/hentai tartalmat keres: a 18+ tartalom szinte teljes egészében KovacsD fordítónktól van – irányítsd hozzá: az oldalon belépve, a Beállításokban megadott születési dátummal (18+) kapcsold be fent a 18+ kapcsolót, aztán az Összes manga oldalon a szűrőben válaszd a Fordító alatt a „Kovacsd”-t; Discordon a „hentai” szó leírásával kérhető a Hentai rang. Explicit reszletek es kitalalt cimek nelkul.]" }
     ]);
   }
 
