@@ -21,6 +21,7 @@ import { safeFetch } from "../lib/safe-fetch.js";
 import { keyFromRequest, authenticateApiKey } from "../lib/api-keys.js";
 import { validateInput, billablePages, translateBubbles, TEXT_MODEL } from "../lib/text-translate.js";
 import { chatCompletions, listModels } from "../lib/llm-proxy.js";
+import { userStudioStats } from "./studio.js";
 import { availablePoints, chargeMilli } from "../lib/llm-meter.js";
 import { TORII_MODELS, DEFAULT_TORII_MODEL, costFtOf, ftToPoints, estPointsPerPage, byokOpenAiFt, toriiPriceList } from "../lib/torii-pricing.js";
 import { getClientIp } from "../lib/client-ip.js";
@@ -844,6 +845,12 @@ router.post("/translate-text", requireAuth, async (req, res) => {
     console.error("[PADLICROME] translate-text:", err.message);
     res.status(502).json({ error: "A fordítás nem sikerült, a pontot visszaadtuk. Próbáld újra." });
   }
+});
+
+/* ── GET /stats?month=YYYY-MM – a saját fordítások havonta (Padlizsan Studio) ── */
+router.get("/stats", requireAuth, async (req, res) => {
+  try { res.json(await userStudioStats(req.authUser.id, req.query.month)); }
+  catch (err) { console.error("[PADLICROME] stats:", err.message); res.status(500).json({ error: "Szerver hiba" }); }
 });
 
 /* ── Felhős (Torii) mód modelljei árakkal (lib/torii-pricing.js) ── */

@@ -1,17 +1,39 @@
-/* ── Padlizsan Studio letöltés (2026-11-08) ─────────────────────
-   Tesztfázis: csak a STUDIO_TESTERS (.env, vesszővel elválasztott
-   felhasználó-azonosítók; alap: 5 = Ascyra) látja és töltheti le.
-   A kész ZIP-et a Windowson épített csomagból kézzel kell a
-   /opt/padli/studio-dist mappába tenni; mindig a legújabb .zip megy ki.
-   A mappa nincs a public/ alatt, így közvetlen URL-lel nem érhető el. ── */
+/* ── Padlizsan Studio: letöltés, verzió, statisztika (2026-11-08) ──────
+   • GET /api/studio/info       – (session) letölthet-e, a legújabb csomag adatai
+   • GET /api/studio/download   – (session) MINDIG a legújabb ZIP; böngészőből
+                                  belépés/jogosultság nélkül a profilra irányít
+   • GET /api/studio/latest     – (nyilvános) a legújabb verzió – a program ebből
+                                  látja, hogy van-e frissítés
+   • GET /api/studio/my-stats   – (session) a saját Studio-fordítások havonta
+   • GET /api/studio/admin/*    – (csak tulajdonos) használat, haszon, beállítás
+   Letölthet: a STUDIO_TESTERS (alap: 5 = Ascyra), vagy mindenki, ha az admin
+   fülön a „nyilvános letöltés” be van kapcsolva (studio_settings).
+   A ZIP a /opt/padli/studio-dist mappában van (nem public/, nincs gitben);
+   a verziót a csomagban lévő app/version.json adja (régi csomag: 2.0.0). ── */
 import express from "express";
 import fs from "fs";
 import path from "path";
+import { execFile } from "child_process";
+import { pool } from "../db.js";
 import { requireLogin } from "../middleware/auth.js";
+import { SCAN_OWNER_USER_ID } from "../lib/scan-runner.js";
+import { POINT_FT, USD_HUF } from "../lib/llm-pricing.js";
 
 const router = express.Router();
 const DIST_DIR = process.env.STUDIO_DIST_DIR || "/opt/padli/studio-dist";
+const SITE = (process.env.SITE_URL || "https://padlizsanfansub.hu").replace(/\/$/, "");
 const testers = () => new Set(String(process.env.STUDIO_TESTERS || "5").split(",").map(s => parseInt(s, 10)).filter(Boolean));
+
+async function publicDownload() {
+  try {
+    const { rows } = await pool.query("SELECT value FROM studio_settings WHERE key = 'public_download'");
+    return rows[0]?.value === "true";
+  } catch { return false; }
+}
+async function canDownload(user) {
+  if (!user) return false;
+  return testers().has(user.id) || await publicDownload();
+}
 
 function latestZip() {
   try {
@@ -19,27 +41,185 @@ function latestZip() {
       .filter(f => /\.zip$/i.test(f))
       .map(f => ({ name: f, stat: fs.statSync(path.join(DIST_DIR, f)) }))
       .sort((a, b) => b.stat.mtimeMs - a.stat.mtimeMs)[0] || null;
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
-router.get("/info", requireLogin, (req, res) => {
-  if (!testers().has(req.session.user.id)) return res.json({ allowed: false });
-  const z = latestZip();
-  res.json({
-    allowed: true,
-    file: z ? { name: z.name, size: z.stat.size, date: z.stat.mtime } : null,
+// a csomag verziója (app/version.json a ZIP-ben), mtime szerint gyorsítótárazva
+const verCache = new Map();
+function zipVersion(z) {
+  const key = `${z.name}|${z.stat.mtimeMs}`;
+  if (verCache.has(key)) return Promise.resolve(verCache.get(key));
+  return new Promise(resolve => {
+    execFile("unzip", ["-p", path.join(DIST_DIR, z.name), "*/app/version.json"], { timeout: 15000, maxBuffer: 1 << 16 }, (err, out) => {
+      let v = { version: "2.0.0", notes: "" };
+      try { if (!err && out) v = { ...v, ...JSON.parse(String(out)) }; } catch { /* régi csomag */ }
+      verCache.set(key, v);
+      resolve(v);
+    });
   });
+}
+
+async function latestInfo() {
+  const z = latestZip();
+  if (!z) return null;
+  const v = await zipVersion(z);
+  return { name: z.name, size: z.stat.size, date: z.stat.mtime, version: v.version, notes: v.notes || "" };
+}
+
+router.get("/info", requireLogin, async (req, res) => {
+  const allowed = await canDownload(req.session.user);
+  if (!allowed) return res.json({ allowed: false });
+  res.json({ allowed: true, file: await latestInfo(), url: `${SITE}/api/studio/download` });
 });
 
-router.get("/download", requireLogin, (req, res) => {
-  if (!testers().has(req.session.user.id)) return res.status(404).json({ error: "Nem található" });
+// Nyilvános: a program ebből látja, van-e újabb verzió (a letöltéshez belépés kell)
+router.get("/latest", async (req, res) => {
+  const info = await latestInfo();
+  res.setHeader("Cache-Control", "public, max-age=300");
+  if (!info) return res.status(404).json({ error: "Még nincs kiadott csomag" });
+  res.json({ version: info.version, notes: info.notes, date: info.date, size: info.size, url: `${SITE}/api/studio/download` });
+});
+
+// Mindig a legújabb. Böngészőből (nincs belépve / nincs joga) a profilra irányít.
+router.get("/download", async (req, res) => {
+  const wantsHtml = /text\/html/.test(req.headers.accept || "");
+  if (!(await canDownload(req.session?.user))) {
+    if (wantsHtml) return res.redirect(302, "/profile.html#studio");
+    return res.status(req.session?.user ? 404 : 401).json({ error: req.session?.user ? "Nem található" : "Login required" });
+  }
   const z = latestZip();
-  if (!z) return res.status(404).json({ error: "Még nincs feltöltött csomag" });
+  if (!z) return wantsHtml ? res.redirect(302, "/profile.html#studio") : res.status(404).json({ error: "Még nincs feltöltött csomag" });
   console.log(`[STUDIO] letöltés: ${req.session.user.username} → ${z.name}`);
   res.setHeader("Cache-Control", "no-store");
   res.download(path.join(DIST_DIR, z.name), z.name);
 });
+
+/* ── Statisztika ─────────────────────────────────────────────── */
+const monthRange = (q) => {
+  const now = new Date();
+  const m = /^\d{4}-(0[1-9]|1[0-2])$/.test(q || "") ? q : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  return { month: m, start: `${m}-01`, end: `${m}-01` };
+};
+
+// Egy hónap Studio-használata soronként (felhőben Torii, helyi motor GPT, szövegfordító)
+async function usageRows(month, userId = null) {
+  const params = [`${month}-01`];
+  let userCond = "";
+  if (userId) { params.push(userId); userCond = "AND user_id = $2"; }
+  const { rows } = await pool.query(`
+    SELECT user_id, 'felhő' AS mode, translator AS model, to_char(created_at AT TIME ZONE 'Europe/Budapest', 'YYYY-MM-DD') AS day,
+           1 AS pages, points_milli / 1000.0 AS points,
+           CASE WHEN cost_ft > 0 THEN cost_ft ELSE credits * 0.465 END AS cost_ft
+      FROM pc_torii_usage
+     WHERE created_at >= $1::date AND created_at < ($1::date + interval '1 month') ${userCond}
+    UNION ALL
+    SELECT user_id, 'helyi', model, to_char(created_at AT TIME ZONE 'Europe/Budapest', 'YYYY-MM-DD'), 1, points_milli / 1000.0, cost_usd * ${USD_HUF}
+      FROM pc_llm_usage
+     WHERE ok AND created_at >= $1::date AND created_at < ($1::date + interval '1 month') ${userCond}
+    UNION ALL
+    SELECT user_id, 'szövegfordító', model, to_char(created_at AT TIME ZONE 'Europe/Budapest', 'YYYY-MM-DD'), pages, points, cost_usd * ${USD_HUF}
+      FROM pc_text_usage
+     WHERE ok AND created_at >= $1::date AND created_at < ($1::date + interval '1 month') ${userCond}`, params);
+  return rows.map(r => ({ ...r, points: Number(r.points), cost_ft: Number(r.cost_ft), day: r.day }));
+}
+
+function summarize(rows) {
+  const by = (keyFn) => {
+    const m = new Map();
+    for (const r of rows) {
+      const k = keyFn(r);
+      const e = m.get(k) || { key: k, pages: 0, points: 0, cost_ft: 0 };
+      e.pages += r.pages; e.points += r.points; e.cost_ft += r.cost_ft;
+      m.set(k, e);
+    }
+    return [...m.values()].map(e => ({ ...e, points: +e.points.toFixed(3), cost_ft: +e.cost_ft.toFixed(2) }));
+  };
+  return {
+    pages: rows.reduce((a, r) => a + r.pages, 0),
+    points: +rows.reduce((a, r) => a + r.points, 0).toFixed(3),
+    cost_ft: +rows.reduce((a, r) => a + r.cost_ft, 0).toFixed(2),
+    byModel: by(r => `${r.mode} · ${r.model}`).sort((a, b) => b.points - a.points),
+    byDay: by(r => r.day).sort((a, b) => a.key.localeCompare(b.key)),
+  };
+}
+
+// Saját statisztika: oldalak, pontok, modellek, napok (a mi költségünk nélkül).
+// A program is ezt kapja az API-kulcsával (/api/pc/v1/stats).
+export async function userStudioStats(userId, monthQuery) {
+  const { month } = monthRange(monthQuery);
+  const s = summarize(await usageRows(month, userId));
+  return {
+    month, pages: s.pages, points: s.points,
+    byModel: s.byModel.map(({ cost_ft, ...x }) => x),
+    byDay: s.byDay.map(({ cost_ft, ...x }) => x),
+  };
+}
+
+router.get("/my-stats", requireLogin, async (req, res) => {
+  try {
+    res.json(await userStudioStats(req.session.user.id, req.query.month));
+  } catch (err) {
+    console.error("[STUDIO] my-stats:", err.message);
+    res.status(500).json({ error: "Szerver hiba" });
+  }
+});
+
+/* ── Admin (csak tulajdonos) ─────────────────────────────────── */
+const admin = express.Router();
+admin.use((req, res, next) => {
+  if (!req.session.user || req.session.user.role !== "admin" || req.session.user.id !== SCAN_OWNER_USER_ID) return res.status(403).json({ error: "Forbidden" });
+  next();
+});
+
+admin.get("/overview", async (req, res) => {
+  try {
+    const { month } = monthRange(req.query.month);
+    const rows = await usageRows(month);
+    const s = summarize(rows);
+    const userIds = [...new Set(rows.map(r => r.user_id).filter(Boolean))];
+    const names = new Map();
+    if (userIds.length) {
+      const { rows: u } = await pool.query("SELECT id, username FROM users WHERE id = ANY($1)", [userIds]);
+      for (const x of u) names.set(x.id, x.username);
+    }
+    const perUser = new Map();
+    for (const r of rows) {
+      const e = perUser.get(r.user_id) || { user: names.get(r.user_id) || `#${r.user_id}`, pages: 0, points: 0, cost_ft: 0, modes: new Set() };
+      e.pages += r.pages; e.points += r.points; e.cost_ft += r.cost_ft; e.modes.add(r.mode);
+      perUser.set(r.user_id, e);
+    }
+    const users = [...perUser.values()].map(e => ({
+      user: e.user, pages: e.pages, points: +e.points.toFixed(2), modes: [...e.modes],
+      revenue_ft: +(e.points * POINT_FT).toFixed(0), cost_ft: +e.cost_ft.toFixed(0),
+      profit_ft: +(e.points * POINT_FT - e.cost_ft).toFixed(0),
+    })).sort((a, b) => b.pages - a.pages);
+    const { rows: keys } = await pool.query(`
+      SELECT u.username, count(*)::int AS keys, max(k.last_used_at) AS last_used
+        FROM api_keys k JOIN users u ON u.id = k.user_id
+       WHERE k.revoked_at IS NULL GROUP BY u.username ORDER BY max(k.last_used_at) DESC NULLS LAST`);
+    res.json({
+      month, latest: await latestInfo(), publicDownload: await publicDownload(),
+      testers: [...testers()], pointFt: POINT_FT,
+      total: { pages: s.pages, points: s.points, revenue_ft: +(s.points * POINT_FT).toFixed(0), cost_ft: +s.cost_ft.toFixed(0), profit_ft: +(s.points * POINT_FT - s.cost_ft).toFixed(0) },
+      users,
+      byModel: s.byModel.map(m => ({ ...m, revenue_ft: +(m.points * POINT_FT).toFixed(0), cost_ft: +m.cost_ft.toFixed(0) })),
+      byDay: s.byDay,
+      keyHolders: keys,
+    });
+  } catch (err) {
+    console.error("[STUDIO] admin overview:", err.message);
+    res.status(500).json({ error: "Szerver hiba" });
+  }
+});
+
+admin.post("/settings", async (req, res) => {
+  const v = req.body?.publicDownload === true ? "true" : "false";
+  await pool.query(`INSERT INTO studio_settings (key, value, updated_at) VALUES ('public_download', $1, now())
+                    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`, [v]);
+  console.log(`[STUDIO] nyilvános letöltés: ${v} (${req.session.user.username})`);
+  res.json({ ok: true, publicDownload: v === "true" });
+});
+
+router.use("/admin", admin);
 
 export default router;
