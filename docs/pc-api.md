@@ -116,6 +116,7 @@ A régi bővítmény-belépés (`POST /api/padlicrome/login`, JWT) 2026-11-08 ó
 - **Figyelembe veszi** a következő mezőket: `target_lang`, `font`, `text_align`, `min_font_size`, `bubbles_only`, `stroke_disabled`, `custom_prompt` (legfeljebb 1000 karakter), `context`.
 - **Modell:** `translator` = a `GET /torii/models` lista egyike (alap: `gemini-3.1-flash-lite`).
 - **Ár:** a Torii valós fogyasztása (`credits_used`) szerint: pont = max(1, kredit × 0,465 Ft × 2 / 2,5 Ft). Napló: `pc_torii_usage`.
+- **BYOK (2026-11-08):** a drága OpenAI-modellek (`gpt-5.6-terra`, `gpt-6.1-sol`) a mi OpenAI-kulcsunkkal futnak a Torii-n (`x-byok-openai`): fix 1 kredit + az OpenAI tokendíja (a Torii által visszaadott tokenekből). Mérve kb. 40%-kal olcsóbb, mint a Torii saját futtatása. A költség = kredit × 0,465 Ft + OpenAI-díj; pont = max(1, költség × 2 / 2,5). Visszaesés a Torii saját modelljére nincs: ha a kulcsunk hibázik, a kérés hibás, és a pont visszajár.
 - **A válaszban:**
   - valódi `Content-Type`;
   - `X-Points-Used` (a valós levonás);

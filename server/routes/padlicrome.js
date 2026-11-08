@@ -22,7 +22,7 @@ import { keyFromRequest, authenticateApiKey } from "../lib/api-keys.js";
 import { validateInput, billablePages, translateBubbles, TEXT_MODEL } from "../lib/text-translate.js";
 import { chatCompletions, listModels } from "../lib/llm-proxy.js";
 import { availablePoints, chargeMilli } from "../lib/llm-meter.js";
-import { TORII_MODELS, DEFAULT_TORII_MODEL, creditsToPoints, toriiPriceList } from "../lib/torii-pricing.js";
+import { TORII_MODELS, DEFAULT_TORII_MODEL, costFtOf, ftToPoints, estPointsPerPage, byokOpenAiFt, toriiPriceList } from "../lib/torii-pricing.js";
 import { getClientIp } from "../lib/client-ip.js";
 import { isAdultVerified, ADULT_GENRE_EXISTS_SQL } from "../lib/age.js";
 
@@ -217,9 +217,14 @@ async function translateViaToriiFull(imageBuffer, filename, opts = {}) {
   if (opts.custom_prompt) form.append("custom_prompt", opts.custom_prompt);
   if (opts.context) form.append("context", opts.context);
 
+  // BYOK: a drága OpenAI-modellek a mi kulcsunkkal futnak (lib/torii-pricing.js).
+  // Tartalékmodellre NEM esünk vissza (x-byok-fallback alapból false): ha a
+  // kulcsunk hibázik, a kérés hibás lesz, és a pontot visszaadjuk.
+  const byok = TORII_MODELS[opts.translator]?.byok === "openai" && process.env.OPENAI_API_KEY
+    ? { "x-byok-openai": process.env.OPENAI_API_KEY } : {};
   const resp = await fetch(TORII_API_URL, {
     method: "POST",
-    headers: { "Authorization": `Bearer ${TORII_API_KEY}`, ...form.getHeaders() },
+    headers: { "Authorization": `Bearer ${TORII_API_KEY}`, ...byok, ...form.getHeaders() },
     body: form,
     signal: AbortSignal.timeout(180000),
   });
@@ -236,6 +241,7 @@ async function translateViaToriiFull(imageBuffer, filename, opts = {}) {
     image: Buffer.from(imageBase64, "base64"),
     context: typeof data.context === "string" ? data.context : null,
     credits: Number(data.metadata?.credits_used) || 0,
+    meta: data.metadata || {},
   };
 }
 
@@ -998,7 +1004,7 @@ router.post("/translate", requireAuth, upload.single("image"), async (req, res) 
   // A választott modell becsült ára legyen fedezve (a tört tartozással együtt)
   const opts = toriiOptions(req.body);
   const translator = opts.translator || DEFAULT_TORII_MODEL;
-  const est = creditsToPoints(TORII_MODELS[translator].baseCredits * 1.4);
+  const est = estPointsPerPage(translator);
   const acc = await availablePoints(userId);
   if (acc.available < est) return res.status(402).json({ error: `Nincs elég pont (elérhető: ${acc.available.toFixed(2)}, ehhez kb. ${est.toFixed(2)} kell)` });
 
@@ -1007,14 +1013,18 @@ router.post("/translate", requireAuth, upload.single("image"), async (req, res) 
   if (!spend.ok) return res.status(402).json({ error: "Nincs elég pont" });
 
   try {
-    const { image: imageData, context, credits } = await translateViaToriiFull(imageBuffer, "image.jpg", opts);
-    const points = creditsToPoints(credits);
+    const { image: imageData, context, credits, meta } = await translateViaToriiFull(imageBuffer, "image.jpg", opts);
+    // valós költség: Torii-kredit + BYOK-nál a mi OpenAI-díjunk (a Torii által visszaadott tokenekből)
+    const costFt = costFtOf(translator, credits, meta);
+    const points = ftToPoints(costFt);
     const extraMilli = Math.max(0, Math.ceil((points - 1) * 1000));
     let after = null;
     try { after = await chargeMilli(userId, extraMilli); }
     catch (e) { console.error("[PADLICROME] torii többlet-levonás:", e.message); }
-    pool.query("INSERT INTO pc_torii_usage (user_id, api_key_id, translator, credits, points_milli) VALUES ($1,$2,$3,$4,$5)",
-      [userId, req.authUser.keyId || null, translator, credits, 1000 + extraMilli]).catch(() => {});
+    pool.query(`INSERT INTO pc_torii_usage (user_id, api_key_id, translator, credits, points_milli, byok, openai_ft, cost_ft)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [userId, req.authUser.keyId || null, translator, credits, 1000 + extraMilli,
+       !!TORII_MODELS[translator]?.byok, +byokOpenAiFt(translator, meta).toFixed(4), +costFt.toFixed(4)]).catch(e => console.error("[PADLICROME] torii napló:", e.message));
     const used = (1 + extraMilli / 1000);
     res.setHeader("X-Points-Remaining", after ? after.available.toFixed(3) : String(spend.balance));
     res.setHeader("X-Points-Used", used.toFixed(3));
@@ -1356,3 +1366,4 @@ router.get("/fix-status", requireAuth, async (req, res) => {
 });
 
 export default router;
+export { translateViaToriiFull, toriiOptions };
