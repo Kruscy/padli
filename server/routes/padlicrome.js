@@ -3,8 +3,6 @@
    ============================================================ */
 
 import express  from "express";
-import bcrypt   from "bcrypt";
-import jwt      from "jsonwebtoken";
 import multer   from "multer";
 import FormData from "form-data";
 import fetch    from "node-fetch";
@@ -12,23 +10,21 @@ import rateLimit from "express-rate-limit";
 import sharp    from "sharp";
 import fs       from "fs";
 import path     from "path";
-import { createHash } from "crypto";
 import { pool } from "../db.js";
 import { logSecurityEvent } from "../lib/security-log.js";
-import { comparePasswordSafe, findUserByLogin, loginLockRemaining,
-         registerLoginFailure, clearLoginFailures } from "../lib/auth-security.js";
 import { localPathToR2Key, listFiles, getPresignedUrl } from "../r2.js";
 import { callGemini } from "../lib/gemini-client.js";
 import { BUGFIX_STAGING_DIR, findChapter, isSafeName, resolveInside } from "../lib/safe-path.js";
-import { denyReason, getChapterFlags } from "../lib/chapter-access.js";
+import { denyReason, getChapterFlags, flagsFromRows } from "../lib/chapter-access.js";
 import { getBalance, spendPoints, refundPoints } from "../lib/points-ledger.js";
 import { safeFetch } from "../lib/safe-fetch.js";
+import { keyFromRequest, authenticateApiKey } from "../lib/api-keys.js";
+import { getClientIp } from "../lib/client-ip.js";
+import { isAdultVerified, ADULT_GENRE_EXISTS_SQL } from "../lib/age.js";
 
 const router = express.Router();
 
 /* ── KONFIG ──────────────────────────────────────────────── */
-const JWT_SECRET     = process.env.MANGA_JWT_SECRET;
-if (!JWT_SECRET) console.warn("⚠️  MANGA_JWT_SECRET nincs beállítva — a PadliCrome-bővítmény belépése nem fog működni.");
 const TORII_API_KEY  = process.env.TORII_API_KEY;
 const TORII_API_URL  = "https://api.toriitranslate.com/api/v2/upload";
 const PROJECT_ROOT   = process.env.PADLICROME_DIR || "/mnt/manga2/padlicrome";
@@ -74,7 +70,7 @@ const getPoints = getBalance;
 // Ugyanaz a zárolás/korhatár-döntés, mint az olvasóban: importálni csak
 // olyan fejezetet lehet, amit a user amúgy is olvashat (korábban bármely
 // zárolt vagy 18+ fejezet képei importálhatók és letölthetők voltak).
-// A JWT-ben nincs szerepkör, ezért azt a DB-ből olvassuk.
+// A szerepkört a DB-ből olvassuk (az authUser-ben nincs benne).
 async function chapterDenyReason(userId, slug, chapter) {
   const { rows } = await pool.query("SELECT role FROM users WHERE id = $1", [userId]);
   if (!rows.length) return "login";
@@ -89,55 +85,53 @@ async function isSubscriber(userId) {
   return r.rows.length > 0;
 }
 
-/* ── AUTH: session VAGY JWT ──────────────────────────────────
-   A JWT a jelszó-hash ujjlenyomatát (pwv) is tartalmazza, és minden
-   kérésnél összevetjük a DB-vel: jelszócsere/-visszaállítás után, vagy
-   törölt fióknál a korábban kiadott tokenek azonnal érvénytelenek
-   (eddig 7 napig minden körülmények között működtek). ── */
-const JWT_OPTIONS = { algorithms: ["HS256"] };
-const pwFingerprint = hash => createHash("sha256").update(String(hash || "")).digest("hex").slice(0, 16);
-
-function signToken(user) {
-  return jwt.sign({ id: user.id, username: user.username, pwv: pwFingerprint(user.password_hash) },
-                  JWT_SECRET, { expiresIn: "7d", algorithm: "HS256" });
-}
+/* ── AUTH ─────────────────────────────────────────────────────
+   2026-11-08: két bejárat, egymástól elválasztva:
+   • /api/padlicrome  – a weboldal saját PadliCrome-oldala, CSAK session.
+   • /api/pc/v1       – a külső PadliCrome, CSAK felhasználónkénti API-kulcs
+                        (X-API-Key fejléc vagy Authorization: Bearer pdl_…).
+   A böngészőbővítmény JWT-s belépése (POST /login) megszűnt.
+   A kulcsos bejárat nem éri el a hibajegy-javítási végpontokat. ── */
+const isKeyGateway = req => req.baseUrl.startsWith("/api/pc/");
+const KEY_BLOCKED = /^\/(import-bug-image|submit-bug-fix|fix-status)\b/;
 
 async function requireAuth(req, res, next) {
-  if (req.session?.user?.id) {
+  if (!isKeyGateway(req)) {
+    if (!req.session?.user?.id) return res.status(401).json({ error: "Nem vagy bejelentkezve" });
     req.authUser = { id: req.session.user.id, username: req.session.user.username };
     return next();
   }
-  const auth = req.headers.authorization || "";
-  const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
-  if (!token) return res.status(401).json({ error: "Nem vagy bejelentkezve" });
-  let payload;
   try {
-    payload = jwt.verify(token, JWT_SECRET, JWT_OPTIONS);
-  } catch {
-    return res.status(401).json({ error: "Érvénytelen token" });
+    const key = keyFromRequest(req);
+    if (!key) return res.status(401).json({ error: "Hiányzó API-kulcs (X-API-Key fejléc)" });
+    const user = await authenticateApiKey(key, getClientIp(req));
+    if (!user) {
+      logSecurityEvent({ req, type: "api_key_invalid", severity: "warn",
+                         dedupeKey: key.slice(0, 10), details: { prefix: key.slice(0, 10) } });
+      return res.status(401).json({ error: "Érvénytelen vagy visszavont API-kulcs" });
+    }
+    if (KEY_BLOCKED.test(req.path)) return res.status(403).json({ error: "Ez a funkció API-kulccsal nem érhető el" });
+    req.authUser = { id: user.id, username: user.username, keyId: user.keyId };
+    next();
+  } catch (err) {
+    console.error("[PADLICROME] api-kulcs:", err.message);
+    res.status(500).json({ error: "Szerver hiba" });
   }
-  const { rows } = await pool.query("SELECT id, username, password_hash FROM users WHERE id = $1", [payload.id]);
-  if (!rows.length || !payload.pwv || payload.pwv !== pwFingerprint(rows[0].password_hash)) {
-    return res.status(401).json({ error: "Érvénytelen token" });
-  }
-  req.authUser = { id: rows[0].id, username: rows[0].username };
-  next();
 }
 
-/* ── CORS (addon) ─────────────────────────────────────────── */
+/* ── CORS ─────────────────────────────────────────────────────
+   A kulcsos bejárat bármely eredetről hívható: nem sütivel, hanem
+   kulccsal hitelesít, így a CSRF nem értelmezhető rá. A session-ös
+   bejárat csak a saját oldalunkról (nincs CORS-fejléc). ── */
 router.use((req, res, next) => {
-  const origin = req.headers.origin || "";
-  if (
-    origin.startsWith("chrome-extension://") ||
-    origin.startsWith("http://localhost") ||
-    origin.startsWith("http://127.0.0.1")
-  ) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
+  if (isKeyGateway(req)) {
+    res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "GET,POST,DELETE,PATCH,OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-API-Key, Authorization");
     res.setHeader("Access-Control-Expose-Headers", "X-Points-Remaining");
+    res.setHeader("Access-Control-Max-Age", "600");
+    if (req.method === "OPTIONS") return res.sendStatus(204);
   }
-  if (req.method === "OPTIONS") return res.sendStatus(204);
   next();
 });
 
@@ -343,43 +337,12 @@ function isCdnUrl(imgUrl, pageUrl) {
   } catch { return false; }
 }
 
-/* ── POST /login (addon visszakompatibilitás) ────────────── */
-router.post("/login", async (req, res) => {
-  const { username, password } = req.body || {};
-  if (!username || !password) return res.status(400).json({ error: "Hiányzó adatok" });
-  try {
-    const found = await findUserByLogin(username, "id, username, password_hash");
-    const rows = found ? [found] : [];
-    // Ugyanazokkal a fiókokkal működik, mint a fő belépés — ezért ugyanúgy
-    // naplózzuk, és a kérésszám-korlát is rajta van (server/index.js).
-    const loginKey = String(username).slice(0, 120);
-    // Ugyanaz a fiókszintű zárolás, mint a fő belépésnél (közös számláló)
-    const throttleKey = rows.length ? `user:${rows[0].id}` : `name:${loginKey}`;
-    const lockedFor = loginLockRemaining(throttleKey);
-    if (lockedFor) {
-      res.setHeader("Retry-After", String(lockedFor));
-      return res.status(429).json({ error: "Túl sok sikertelen próbálkozás ezzel a fiókkal, próbáld újra később." });
-    }
-    const ok = await comparePasswordSafe(password, rows[0]?.password_hash);
-    if (!ok) {
-      registerLoginFailure(throttleKey);
-      logSecurityEvent({ req, type: "login_failed", severity: "info",
-                         dedupeKey: `${loginKey}|${rows.length ? "badpw" : "nouser"}`,
-                         userId: rows[0]?.id ?? null, username: rows[0]?.username ?? null,
-                         details: { login: loginKey, reason: rows.length ? "bad_password" : "no_such_user", source: "padlicrome" } });
-      return res.status(401).json({ error: "Hibás felhasználónév vagy jelszó" });
-    }
-    const user = rows[0];
-    clearLoginFailures(throttleKey);
-    logSecurityEvent({ req, type: "login_success", userId: user.id, username: user.username,
-                       dedupeKey: `ok|${user.id}|pc`, details: { source: "padlicrome" } });
-    const points = await getPoints(user.id);
-    const token = signToken(user);
-    res.json({ token, username: user.username, points });
-  } catch (err) {
-    console.error("[PADLICROME] login:", err);
-    res.status(500).json({ error: "Szerver hiba" });
-  }
+/* ── POST /login – MEGSZŰNT (2026-11-08) ─────────────────────
+   A böngészőbővítmény jelszavas/JWT-s belépése helyett a külső
+   PadliCrome felhasználónkénti API-kulcsot használ (Beállítások →
+   API-kulcsok). ── */
+router.post("/login", (req, res) => {
+  res.status(410).json({ error: "Ez a belépési mód megszűnt. Hozz létre API-kulcsot: Beállítások → API-kulcsok." });
 });
 
 /* ── GET /me ─────────────────────────────────────────────── */
@@ -393,6 +356,83 @@ router.get("/me", requireAuth, async (req, res) => {
     const role = roleRes.rows[0]?.role || "user";
     res.json({ username: req.authUser.username, points, subscriber, role });
   } catch (err) {
+    res.status(500).json({ error: "Szerver hiba" });
+  }
+});
+
+/* ── GET /library/manga – sorozatok listája (2026-11-08) ─────
+   ?q=keresés (cím vagy alternatív cím), ?limit=1..100, ?offset=
+   18+ sorozat csak igazoltan nagykorú felhasználónak jelenik meg. ── */
+async function userAccessInfo(userId) {
+  const { rows } = await pool.query("SELECT role, birth_date FROM users WHERE id = $1", [userId]);
+  return { role: rows[0]?.role || "user", adultOk: rows[0]?.role === "admin" || isAdultVerified(rows[0]?.birth_date) };
+}
+
+router.get("/library/manga", requireAuth, async (req, res) => {
+  try {
+    const q = String(req.query.q || "").trim().slice(0, 100);
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 100);
+    const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+    const { adultOk } = await userAccessInfo(req.authUser.id);
+    const like = q ? "%" + q.replace(/[\\%_]/g, c => "\\" + c) + "%" : "";
+    const { rows } = await pool.query(`
+      SELECT m.slug, min(m.title) AS title, max(m.cover_url) AS cover_url,
+             max(m.status) AS status, bool_or(${ADULT_GENRE_EXISTS_SQL}) AS adult,
+             count(DISTINCT c.folder)::int AS chapters, max(c.scanned_at) AS updated_at,
+             count(*) OVER()::int AS total
+        FROM manga m JOIN chapter c ON c.manga_id = m.id
+       WHERE ($1 = '' OR m.title ILIKE $1 OR array_to_string(m.alt_titles, ' ') ILIKE $1)
+       GROUP BY m.slug
+      HAVING $2 OR NOT bool_or(${ADULT_GENRE_EXISTS_SQL})
+       ORDER BY max(c.scanned_at) DESC NULLS LAST
+       LIMIT $3 OFFSET $4`, [like, adultOk, limit, offset]);
+    res.json({
+      total: rows[0]?.total ?? 0, limit, offset,
+      items: rows.map(({ total, ...r }) => r),
+    });
+  } catch (err) {
+    console.error("[PADLICROME] library/manga:", err.message);
+    res.status(500).json({ error: "Szerver hiba" });
+  }
+});
+
+/* ── GET /library/manga/:slug/chapters – fejezetek + hozzáférés ──
+   accessible=false: zárolt (támogatói) vagy korhatáros a felhasználónak;
+   ilyenkor az /import-chapter is 403-at ad. ── */
+router.get("/library/manga/:slug/chapters", requireAuth, async (req, res) => {
+  try {
+    const slug = req.params.slug;
+    if (!isSafeName(slug)) return res.status(400).json({ error: "Hibás slug" });
+    const access = await userAccessInfo(req.authUser.id);
+    const { rows } = await pool.query(`
+      SELECT c.folder, c.title, c.unlocks_at, c.scanned_at, ${ADULT_GENRE_EXISTS_SQL} AS is_adult
+        FROM chapter c JOIN manga m ON m.id = c.manga_id
+       WHERE m.slug = $1`, [slug]);
+    if (!rows.length) return res.status(404).json({ error: "Nincs ilyen sorozat" });
+    if (rows.some(r => r.is_adult) && !access.adultOk) return res.status(404).json({ error: "Nincs ilyen sorozat" });
+    const byFolder = new Map();
+    for (const r of rows) {
+      if (!byFolder.has(r.folder)) byFolder.set(r.folder, []);
+      byFolder.get(r.folder).push(r);
+    }
+    const user = { id: req.authUser.id, role: access.role };
+    const chapters = [];
+    for (const [folder, list] of byFolder) {
+      const flags = flagsFromRows(list);
+      const unlocks = list.map(r => r.unlocks_at).filter(Boolean).sort((a, b) => a - b)[0] || null;
+      chapters.push({
+        chapter: folder,
+        title: list.find(r => r.title)?.title || null,
+        locked: flags.locked,
+        unlocks_at: flags.locked ? unlocks : null,
+        accessible: !(await denyReason(user, flags)),
+        updated_at: list.reduce((a, r) => (r.scanned_at > a ? r.scanned_at : a), list[0].scanned_at),
+      });
+    }
+    chapters.sort((a, b) => a.chapter.localeCompare(b.chapter, undefined, { numeric: true }));
+    res.json({ slug, chapters });
+  } catch (err) {
+    console.error("[PADLICROME] library/chapters:", err.message);
     res.status(500).json({ error: "Szerver hiba" });
   }
 });

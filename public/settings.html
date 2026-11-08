@@ -29,6 +29,7 @@
       <button data-tab="account">👤 Fiók</button>
       <button data-tab="discord">🎮 Discord</button>
       <button data-tab="anilist">📚 AniList</button>
+      <button data-tab="apikeys">🔑 API-kulcsok</button>
       <button data-tab="gdpr">🔒 Adataim</button>
     </aside>
 
@@ -218,6 +219,28 @@
   </div>
 </section>
 
+<section id="tab-apikeys" class="tab">
+  <h2>🔑 API-kulcsok</h2>
+  <p style="color:#a0a0b0;font-size:0.9rem;line-height:1.6">
+    A külső PadliCrome programmal ezzel a kulccsal éred el a fiókodat: a fordítás a te pontjaidból megy,
+    és csak azokat a fejezeteket importálhatod, amelyeket az oldalon is olvashatsz.
+    A kulcsot <b>csak egyszer</b> mutatjuk meg — ne oszd meg senkivel. Ha kiszivárgott, vond vissza.
+  </p>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin:14px 0">
+    <input id="apiKeyLabel" maxlength="60" placeholder="Megnevezés (pl. otthoni gép)" style="flex:1;min-width:200px">
+    <button id="apiKeyCreateBtn" class="save-btn" type="button">Új kulcs létrehozása</button>
+  </div>
+  <div id="apiKeyNew" class="hidden" style="background:#10261a;border:1px solid #22c55e;border-radius:10px;padding:12px 14px;margin-bottom:14px">
+    <div style="font-size:0.85rem;color:#86efac;margin-bottom:6px">Az új kulcsod (most másold ki, később nem látható):</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <code id="apiKeyNewValue" style="word-break:break-all;flex:1;user-select:all"></code>
+      <button id="apiKeyCopyBtn" class="disconnect-btn" type="button">Másolás</button>
+    </div>
+  </div>
+  <div id="apiKeyList"></div>
+  <div id="apiKeyStatus" class="status"></div>
+</section>
+
 <section id="tab-anilist" class="tab">
   <h2>📚 AniList</h2>
 
@@ -243,6 +266,7 @@
 <div id="footer"></div>
 <script src="/js/footer.js?v=20260619"></script>
 <script src="/js/anilist-settings.js?v=20260325"></script>
+<script src="/js/settings-apikeys.js?v=20261108"></script>
 <script src="/js/patreon-settings.js?v=20260619"></script>
 <script src="/js/stripe-settings.js?v=20260619"></script>
 <script src="/js/discord-settings.js?v=20261004"></script>

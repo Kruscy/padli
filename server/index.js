@@ -121,9 +121,42 @@ const authLimiter = rateLimit({
 app.use("/api/auth/login", authLimiter);
 app.use("/api/auth/register", authLimiter);
 app.use("/api/auth/forgot-password", authLimiter);
-// A PadliCrome-bővítmény saját belépése ugyanazokkal a fiókokkal működik —
-// korlát nélkül ezen át meg lehetett kerülni a fő belépés védelmét.
+// A PadliCrome-bővítmény jelszavas belépése 2026-11-08 óta megszűnt (410),
+// a korlát marad, ha valaki mégis próbálkozna vele.
 app.use("/api/padlicrome/login", authLimiter);
+
+// Külső PadliCrome (API-kulcsos bejárat, /api/pc/v1):
+// • általános korlát kulcsonként (kulcs nélkül IP-nként): 300 kérés/perc;
+// • hibás kulccsal 30 próbálkozás / 15 perc IP-nként, utána tiltás.
+const pcKeyOf = req => {
+  const k = req.headers["x-api-key"] || (req.headers.authorization || "").replace(/^Bearer /, "");
+  return typeof k === "string" && k.startsWith("pdl_") ? "k:" + k.slice(0, 24) : null;
+};
+const pcLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => pcKeyOf(req) || ipKeyGenerator(getClientIp(req)),
+  handler: (req, res, _next, options) => {
+    logSecurityEvent({ req, type: "rate_limited", severity: "warn", details: { endpoint: "pc-api" } });
+    res.status(options.statusCode).json({ error: "Túl sok kérés, lassíts egy kicsit." });
+  },
+});
+const pcBadKeyLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  requestWasSuccessful: (req, res) => res.statusCode !== 401,
+  skipSuccessfulRequests: true,
+  keyGenerator: (req) => ipKeyGenerator(getClientIp(req)),
+  handler: (req, res, _next, options) => {
+    logSecurityEvent({ req, type: "auth_rate_limited", severity: "warn", details: { endpoint: "pc-api" } });
+    res.status(options.statusCode).json({ error: "Túl sok hibás API-kulcs, próbáld újra 15 perc múlva." });
+  },
+});
+app.use("/api/pc/v1", pcBadKeyLimiter, pcLimiter);
 
 // Megerősítő e-mail újraküldése: tetszőleges címre küld levelet, ezért
 // szigorúbb korlát (e-mail-bombázás és a levélküldő hírnevének védelme).

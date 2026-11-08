@@ -7,6 +7,8 @@ import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { requireLogin } from "../middleware/auth.js";
 import { validateHungarianAddress, validateRealName } from "../lib/address-validate.js";
 import { isAdultVerified } from "../lib/age.js";
+import { createApiKey, listApiKeys, revokeApiKey } from "../lib/api-keys.js";
+import { logSecurityEvent } from "../lib/security-log.js";
 
 const router = express.Router();
 
@@ -220,6 +222,40 @@ router.post("/billing-address", requireLogin, async (req, res) => {
   }
 
   res.json({ ok: true });
+});
+
+/* ── API-kulcsok a külső PadliCrome-hoz (2026-11-08) ──────────
+   A kulcs teljes értékét csak a létrehozáskor adjuk vissza. ── */
+router.get("/api-keys", requireLogin, async (req, res) => {
+  try { res.json({ keys: await listApiKeys(req.session.user.id) }); }
+  catch (err) { console.error("[api-keys] list:", err.message); res.status(500).json({ error: "Szerver hiba" }); }
+});
+
+router.post("/api-keys", requireLogin, async (req, res) => {
+  try {
+    const k = await createApiKey(req.session.user.id, req.body?.label);
+    logSecurityEvent({ req, type: "api_key_created", userId: req.session.user.id,
+                       username: req.session.user.username, details: { keyId: k.id, prefix: k.prefix } });
+    res.json(k);
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    console.error("[api-keys] create:", err.message);
+    res.status(500).json({ error: "Szerver hiba" });
+  }
+});
+
+router.delete("/api-keys/:id", requireLogin, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!id) return res.status(400).json({ error: "Hibás azonosító" });
+  try {
+    if (!await revokeApiKey(req.session.user.id, id)) return res.status(404).json({ error: "Nincs ilyen kulcs" });
+    logSecurityEvent({ req, type: "api_key_revoked", userId: req.session.user.id,
+                       username: req.session.user.username, details: { keyId: id } });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[api-keys] revoke:", err.message);
+    res.status(500).json({ error: "Szerver hiba" });
+  }
 });
 
 export default router;

@@ -631,6 +631,8 @@ router.use("/ocr", requireLogin, aiLimiter("ocr", 200), ocrRoutes);
 router.use("/gemini-proxy", geminiProxyRoutes);
 router.use("/points", pointsRoutes);
 router.use("/padlicrome", padlicromeRoutes);
+// Külső PadliCrome: ugyanaz a router, de itt CSAK API-kulccsal (lásd requireAuth)
+router.use("/pc/v1", padlicromeRoutes);
 router.use("/gdpr", gdprRoutes);
 router.use("/patreon-invoice", patreonInvoiceRoutes);
 
