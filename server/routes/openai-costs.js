@@ -16,6 +16,9 @@ import { pool } from "../db.js";
 const router = express.Router();
 const API = "https://api.openai.com/v1";
 const USD_HUF = Number(process.env.PC_REPORT_USD_HUF) || 326;
+// Csak ezek a projektek (név szerint) számítanak (2026-11-08, a user kérése:
+// csak a „Manga fordítás”, a többi — Kamrafy, Metin — nem tartozik ide)
+const REPORT_PROJECTS = (process.env.OPENAI_REPORT_PROJECTS || "Manga fordítás").split(",").map(x => x.trim()).filter(Boolean);
 
 router.use((req, res, next) => {
   if (!req.session.user || req.session.user.role !== "admin" || req.session.user.id !== SCAN_OWNER_USER_ID) {
@@ -75,7 +78,7 @@ async function build(month) {
   const start = Math.floor(Date.UTC(y, m - 1, 1) / 1000);
   const endFull = Math.floor(Date.UTC(y, m, 1) / 1000);
   const end = Math.min(endFull, Math.floor(Date.now() / 1000));
-  if (end <= start) return { month, rate: USD_HUF, totalHuf: 0, keys: [], models: [], days: [], projects: [] };
+  if (end <= start) return { month, rate: USD_HUF, projectsShown: REPORT_PROJECTS, totalHuf: 0, persons: [], keys: [], models: [], days: [], projects: [] };
   const q = `start_time=${start}&end_time=${end}&bucket_width=1d&limit=31`;
 
   const [costB, useB] = await Promise.all([
@@ -84,6 +87,15 @@ async function build(month) {
   ]);
 
   // használat: projekt → kulcs → modell
+  // projektnevek → csak a kért projektek azonosítói maradnak
+  const allProjects = [...new Set([...useB, ...costB].flatMap(b => (b.results || []).map(r => r.project_id)).filter(Boolean))];
+  const projName = new Map();
+  await Promise.all(allProjects.map(async p => {
+    try { projName.set(p, (await oa(`/organization/projects/${p}`)).name); } catch { projName.set(p, p); }
+  }));
+  const allowed = new Set(allProjects.filter(p => REPORT_PROJECTS.includes(projName.get(p))));
+  for (const b of [...useB, ...costB]) b.results = (b.results || []).filter(r => allowed.has(r.project_id));
+
   const usage = []; // { project, key, model, input, cached, output, requests }
   const uIdx = new Map();
   for (const b of useB) for (const r of b.results || []) {
@@ -127,10 +139,9 @@ async function build(month) {
   }
 
   // kulcsok és projektek adatai
-  const projects = [...new Set([...usage.map(u => u.project), ...projUsd.keys()])].filter(p => p && p !== "?");
-  const projName = new Map(), keyInfo = new Map();
+  const projects = [...allowed];
+  const keyInfo = new Map();
   await Promise.all(projects.map(async p => {
-    try { projName.set(p, (await oa(`/organization/projects/${p}`)).name); } catch { projName.set(p, p); }
     try {
       const list = await oa(`/organization/projects/${p}/api_keys?limit=100`);
       for (const k of list.data || []) keyInfo.set(k.id, {
@@ -205,7 +216,7 @@ async function build(month) {
 
   const totalUsd = [...dayUsd.values()].reduce((a, b) => a + b, 0);
   return {
-    month, rate: USD_HUF,
+    month, rate: USD_HUF, projectsShown: REPORT_PROJECTS,
     totalHuf: +(totalUsd * USD_HUF).toFixed(0), totalUsd: +totalUsd.toFixed(2),
     projects: [...projUsd].map(([p, usd]) => ({ name: projName.get(p) || p, huf: +(usd * USD_HUF).toFixed(0) })).sort((a, b) => b.huf - a.huf),
     days: [...dayUsd].sort().map(([day, usd]) => ({ day, huf: +(usd * USD_HUF).toFixed(0) })),
