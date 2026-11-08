@@ -21,7 +21,8 @@ import { safeFetch } from "../lib/safe-fetch.js";
 import { keyFromRequest, authenticateApiKey } from "../lib/api-keys.js";
 import { validateInput, billablePages, translateBubbles, TEXT_MODEL } from "../lib/text-translate.js";
 import { chatCompletions, listModels } from "../lib/llm-proxy.js";
-import { availablePoints } from "../lib/llm-meter.js";
+import { availablePoints, chargeMilli } from "../lib/llm-meter.js";
+import { TORII_MODELS, DEFAULT_TORII_MODEL, creditsToPoints, toriiPriceList } from "../lib/torii-pricing.js";
 import { getClientIp } from "../lib/client-ip.js";
 import { isAdultVerified, ADULT_GENRE_EXISTS_SQL } from "../lib/age.js";
 
@@ -193,6 +194,10 @@ function toriiOptions(src = {}) {
   if (src.stroke_disabled === "true" || src.stroke_disabled === true) o.stroke_disabled = "true";
   if (typeof src.custom_prompt === "string" && src.custom_prompt.trim()) o.custom_prompt = src.custom_prompt.slice(0, 1000);
   if (typeof src.context === "string" && src.context.trim()) o.context = src.context.slice(0, 10000);
+  // Modell (2026-11-08): csak a Torii saját, engedélyezett modelljei; a fogyasztás
+  // szerint árazunk (lib/torii-pricing.js). Ismeretlen név → alapmodell.
+  if (TORII_MODELS[src.translator]) o.translator = src.translator;
+  if (["none", "low", "medium", "high"].includes(src.reasoning_effort)) o.reasoning_effort = src.reasoning_effort;
   return o;
 }
 
@@ -202,7 +207,8 @@ async function translateViaToriiFull(imageBuffer, filename, opts = {}) {
   const form = new FormData();
   form.append("file", imageBuffer, { filename, contentType: "image/jpeg" });
   form.append("target_lang", opts.target_lang || "hu");
-  form.append("translator", "gemini-3.1-flash-lite");
+  form.append("translator", opts.translator || DEFAULT_TORII_MODEL);
+  if (opts.reasoning_effort) form.append("reasoning_effort", opts.reasoning_effort);
   form.append("font", opts.font || "wildwords");
   form.append("text_align", opts.text_align || "auto");
   form.append("stroke_disabled", opts.stroke_disabled || "false");
@@ -226,7 +232,11 @@ async function translateViaToriiFull(imageBuffer, filename, opts = {}) {
   const data = await resp.json();
   const imageBase64 = (data.image || "").split(",")[1];
   if (!imageBase64) throw new Error("Torii API: hiányzó kép a válaszban");
-  return { image: Buffer.from(imageBase64, "base64"), context: typeof data.context === "string" ? data.context : null };
+  return {
+    image: Buffer.from(imageBase64, "base64"),
+    context: typeof data.context === "string" ? data.context : null,
+    credits: Number(data.metadata?.credits_used) || 0,
+  };
 }
 
 async function translateViaTorii(imageBuffer, filename, opts) {
@@ -830,6 +840,9 @@ router.post("/translate-text", requireAuth, async (req, res) => {
   }
 });
 
+/* ── Felhős (Torii) mód modelljei árakkal (lib/torii-pricing.js) ── */
+router.get("/torii/models", requireAuth, (req, res) => res.json({ data: toriiPriceList() }));
+
 /* ── Helyi motor szövegfordítója (OpenAI-kompatibilis, lib/llm-proxy.js) ── */
 router.get("/llm/v1/models", requireAuth, listModels);
 router.post("/llm/v1/chat/completions", requireAuth, chatCompletions);
@@ -982,13 +995,29 @@ router.post("/translate", requireAuth, upload.single("image"), async (req, res) 
     return res.status(400).json({ error: "Hiányzó kép" });
   }
 
+  // A választott modell becsült ára legyen fedezve (a tört tartozással együtt)
+  const opts = toriiOptions(req.body);
+  const translator = opts.translator || DEFAULT_TORII_MODEL;
+  const est = creditsToPoints(TORII_MODELS[translator].baseCredits * 1.4);
+  const acc = await availablePoints(userId);
+  if (acc.available < est) return res.status(402).json({ error: `Nincs elég pont (elérhető: ${acc.available.toFixed(2)}, ehhez kb. ${est.toFixed(2)} kell)` });
+
+  // 1 pont előre (ez a minimum), a valós fogyasztás szerinti többlet utólag
   const spend = await spendPoints(userId, 1);
   if (!spend.ok) return res.status(402).json({ error: "Nincs elég pont" });
 
   try {
-    const { image: imageData, context } = await translateViaToriiFull(imageBuffer, "image.jpg", toriiOptions(req.body));
-    res.setHeader("X-Points-Remaining", spend.balance);
-    res.setHeader("X-Points-Used", "1");
+    const { image: imageData, context, credits } = await translateViaToriiFull(imageBuffer, "image.jpg", opts);
+    const points = creditsToPoints(credits);
+    const extraMilli = Math.max(0, Math.ceil((points - 1) * 1000));
+    let after = null;
+    try { after = await chargeMilli(userId, extraMilli); }
+    catch (e) { console.error("[PADLICROME] torii többlet-levonás:", e.message); }
+    pool.query("INSERT INTO pc_torii_usage (user_id, api_key_id, translator, credits, points_milli) VALUES ($1,$2,$3,$4,$5)",
+      [userId, req.authUser.keyId || null, translator, credits, 1000 + extraMilli]).catch(() => {});
+    const used = (1 + extraMilli / 1000);
+    res.setHeader("X-Points-Remaining", after ? after.available.toFixed(3) : String(spend.balance));
+    res.setHeader("X-Points-Used", used.toFixed(3));
     // Context chain (Padlizsan Studio): a context a TÖRZSBE kerül (Torii-stílusú
     // JSON), nem fejlécbe — 2026-11-08: a több KB-os X-Context fejlécet a
     // szerver előtti proxy 502-vel eldobta (szövegsűrű oldalaknál), miközben
@@ -998,7 +1027,7 @@ router.post("/translate", requireAuth, upload.single("image"), async (req, res) 
       return res.json({
         image: `data:${mime};base64,${imageData.toString("base64")}`,
         context: context || null,
-        metadata: { credits_used: 1 },
+        metadata: { credits_used: used, torii_credits: credits, model: translator },
       });
     }
     res.setHeader("Content-Type", sniffImageType(imageData));

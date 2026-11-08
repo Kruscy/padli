@@ -113,8 +113,9 @@ A régi bővítmény-belépés (`POST /api/padlicrome/login`, JWT) 2026-11-08 ó
 ## A felhős mód (`POST /translate`) 2026-11-08 óta
 
 - **Figyelembe veszi** a következő mezőket: `target_lang`, `font`, `text_align`, `min_font_size`, `bubbles_only`, `stroke_disabled`, `custom_prompt` (legfeljebb 1000 karakter), `context`.
-- **A modell rögzített:** Torii `gemini-3.1-flash-lite`. A `translator` mezőt a szerver figyelmen kívül hagyja, mert a drágább Torii-modellek mellett az 1 pont/oldal árból nem maradna haszon.
+- **Modell:** `translator` = a `GET /torii/models` lista egyike (alap: `gemini-3.1-flash-lite`).
+- **Ár:** a Torii valós fogyasztása (`credits_used`) szerint: pont = max(1, kredit × 0,465 Ft × 2 / 2,5 Ft). Napló: `pc_torii_usage`.
 - **A válaszban:**
   - valódi `Content-Type`;
-  - `X-Points-Used: 1`;
-  - `X-Context` (URL-kódolva), ha a Torii visszaadja és elfér a fejlécben.
+  - `X-Points-Used` (a valós levonás);
+  - context-láncolásnál (ha a kérésben volt `context`) Torii-stílusú JSON-válasz, fejlécben nem megy context.
