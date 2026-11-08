@@ -20,6 +20,16 @@ export async function getPresignedUrl(key, expiresInSeconds = 3600) {
   return getSignedUrl(r2, cmd, { expiresIn: expiresInSeconds });
 }
 
+/* Objektum lekérése HITELESÍTETTEN (rövid életű aláírt URL az S3-végponton),
+   nem a publikus R2-címen (2026-11-08). A fejezetképek így akkor is
+   elérhetők a szervernek, ha a publikus elérést a /manga/ útvonalra
+   letiltjuk — eddig egy zárolt fejezet képe is letölthető volt belépés
+   nélkül a publikus címről. A válasz egy szabványos fetch Response. */
+export async function r2Fetch(key, init) {
+  const url = await getPresignedUrl(key, 300);
+  return fetch(url, init);
+}
+
 export async function objectExists(key) {
   try {
     await r2.send(new HeadObjectCommand({ Bucket: BUCKET, Key: key }));

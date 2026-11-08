@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 import { pool } from "../db.js";
 import { requireLogin } from "../middleware/auth.js";
-import { getPresignedUrl, mangaImageToR2Key, objectExists, listFiles, localPathToR2Key, pipeFetchBody } from "../r2.js";
+import { getPresignedUrl, mangaImageToR2Key, objectExists, listFiles, localPathToR2Key, pipeFetchBody, r2Fetch } from "../r2.js";
 import { isAdultVerified, resolveAdultMode, ADULT_GENRE_EXISTS_SQL } from "../lib/age.js";
 import { denyReason, flagsFromRows, getChapterFlags } from "../lib/chapter-access.js";
 import { createTtlCache } from "../lib/ttl-cache.js";
@@ -409,7 +409,8 @@ router.get("/image/:library/:slug/:chapter/:file", requireLogin, async (req, res
   }
 
   async function proxyR2(r2Key) {
-    const url = `${R2_PUBLIC}/${r2Key}`;
+    // Hitelesített lekérés (nem a publikus címen) — a fejezetképek publikus
+    // elérése letiltható, így a zárolt fejezetek nem tölthetők le közvetlenül
     // 20 mp a fejlécig, utána 2 perc a letöltésre (egy 10 MB-os oldal lassú
     // vonalon tovább tart 20 mp-nél); ha a látogató közben elnavigál, az
     // R2-letöltést is leállítjuk.
@@ -418,7 +419,7 @@ router.get("/image/:library/:slug/:chapter/:file", requireLogin, async (req, res
     res.on("close", () => { clearTimeout(timer); ctrl.abort(); });
     let r2Res;
     try {
-      r2Res = await fetch(url, { signal: ctrl.signal });
+      r2Res = await r2Fetch(r2Key, { signal: ctrl.signal });
     } finally {
       clearTimeout(timer);
     }

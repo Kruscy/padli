@@ -17,7 +17,7 @@ import { pool } from "../db.js";
 import { logSecurityEvent } from "../lib/security-log.js";
 import { comparePasswordSafe, findUserByLogin, loginLockRemaining,
          registerLoginFailure, clearLoginFailures } from "../lib/auth-security.js";
-import { localPathToR2Key, listFiles } from "../r2.js";
+import { localPathToR2Key, listFiles, getPresignedUrl } from "../r2.js";
 import { callGemini } from "../lib/gemini-client.js";
 import { BUGFIX_STAGING_DIR, findChapter, isSafeName, resolveInside } from "../lib/safe-path.js";
 import { denyReason, getChapterFlags } from "../lib/chapter-access.js";
@@ -918,8 +918,8 @@ router.post("/import-bug-image", requireAuth, async (req, res) => {
       } else {
         // Nincs lokálisan → R2-ről töltjük le
         const r2Key = localPathToR2Key(imgPath);
-        const R2_PUBLIC = process.env.R2_PUBLIC_URL;
-        buf = await downloadImage(`${R2_PUBLIC}/${r2Key}`, undefined, { trusted: true });
+        // hitelesített (aláírt) URL — a publikus cím a fejezetképekre le lesz tiltva
+        buf = await downloadImage(await getPresignedUrl(r2Key, 300), undefined, { trusted: true });
       }
       jpgBuf = await sharp(buf).jpeg({ quality: 92 }).toBuffer();
     } else {
@@ -1025,7 +1025,7 @@ router.post("/import-chapter", requireAuth, async (req, res) => {
       let buf;
       if (useR2) {
         const r2Key = localPathToR2Key(path.join(chapterDir, file));
-        buf = await downloadImage(`${R2_PUBLIC}/${r2Key}`, undefined, { trusted: true });
+        buf = await downloadImage(await getPresignedUrl(r2Key, 300), undefined, { trusted: true });
       } else {
         buf = fs.readFileSync(path.join(chapterDir, file));
       }

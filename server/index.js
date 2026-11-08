@@ -6,7 +6,7 @@ import { sessionMiddleware, sessionRenewal } from "./session.js";
 import helmet from "helmet";
 import { rateLimit, ipKeyGenerator } from "express-rate-limit";
 import routes from "./routes.js";
-import { pipeFetchBody } from "./r2.js";
+import { pipeFetchBody, r2Fetch } from "./r2.js";
 import { securityMonitor } from "./middleware/security-monitor.js";
 import { getClientIp, isInternalIp } from "./lib/client-ip.js";
 import { logSecurityEvent } from "./lib/security-log.js";
@@ -229,7 +229,7 @@ app.get("/uploads/*", async (req, res) => {
   const R2_PUBLIC = process.env.R2_PUBLIC_URL;
   const key = `uploads/${rel}`;
   try {
-    const r2Res = await fetch(`${R2_PUBLIC}/${key}`);
+    const r2Res = await r2Fetch(key); // hitelesítve, nem a publikus címen
     if (!r2Res.ok) return res.status(404).end();
     res.setHeader("Content-Type", r2Res.headers.get("content-type") || "application/octet-stream");
     res.setHeader("Cache-Control", "public, max-age=86400");
