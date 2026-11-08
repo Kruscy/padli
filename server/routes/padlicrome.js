@@ -19,6 +19,7 @@ import { denyReason, getChapterFlags, flagsFromRows } from "../lib/chapter-acces
 import { getBalance, spendPoints, refundPoints } from "../lib/points-ledger.js";
 import { safeFetch } from "../lib/safe-fetch.js";
 import { keyFromRequest, authenticateApiKey } from "../lib/api-keys.js";
+import { validateInput, billablePages, translateBubbles, TEXT_MODEL } from "../lib/text-translate.js";
 import { getClientIp } from "../lib/client-ip.js";
 import { isAdultVerified, ADULT_GENRE_EXISTS_SQL } from "../lib/age.js";
 
@@ -737,6 +738,56 @@ Ha nincs szöveg a képen, üres tömböt ([]) adj vissza.`;
   } catch (err) {
     console.error("[PADLICROME] translate-gemini:", err);
     res.status(500).json({ error: "Szerver hiba" });
+  }
+});
+
+/* ── POST /translate-text – buborékszövegek fordítása (2026-11-08) ──
+   A külső PadliCrome-ban a Torii olvassa ki és írja vissza a szöveget,
+   a fordítást mi adjuk (gpt-5.4-mini). Body:
+     { pages: [["buborék1","buborék2"], …], mangaSlug?, glossary?, notes? }
+   Ár: oldalanként PC_TEXT_POINTS_PER_PAGE pont (alap: 1); üres oldal ingyenes.
+   A pontot előre levonjuk, hiba esetén visszaadjuk. A valós költséget a
+   pc_text_usage táblába naplózzuk (haszon-ellenőrzéshez). ── */
+const TEXT_POINTS_PER_PAGE = Math.max(0, parseInt(process.env.PC_TEXT_POINTS_PER_PAGE ?? "1", 10) || 0);
+
+router.post("/translate-text", requireAuth, async (req, res) => {
+  const userId = req.authUser.id;
+  const input = validateInput(req.body);
+  if (typeof input === "string") return res.status(400).json({ error: input });
+
+  const mangaSlug = typeof req.body.mangaSlug === "string" && isSafeName(req.body.mangaSlug) ? req.body.mangaSlug : null;
+  let title = null;
+  if (mangaSlug) {
+    const { rows } = await pool.query("SELECT title FROM manga WHERE slug = $1 LIMIT 1", [mangaSlug]).catch(() => ({ rows: [] }));
+    title = rows[0]?.title || null;
+  }
+
+  const pages = billablePages(input.pages);
+  const bubbles = input.pages.reduce((n, p) => n + p.filter(t => t.trim()).length, 0);
+  const cost = pages * TEXT_POINTS_PER_PAGE;
+  if (!pages) return res.json({ ok: true, pages: input.pages.map(p => p.map(() => "")), pointsCharged: 0 });
+
+  const spend = cost ? await spendPoints(userId, cost) : { ok: true, entryId: null, balance: await getBalance(userId) };
+  if (!spend.ok) return res.status(402).json({ error: `Nincs elég pont (kell: ${cost}, van: ${spend.balance})`, needed: cost, balance: spend.balance });
+
+  const log = (ok, usage, error) => pool.query(
+    `INSERT INTO pc_text_usage (user_id, api_key_id, manga_slug, pages, bubbles, points, model,
+                                prompt_tokens, cached_tokens, completion_tokens, cost_usd, ok, error)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+    [userId, req.authUser.keyId || null, mangaSlug, pages, bubbles, ok ? cost : 0, TEXT_MODEL,
+     usage?.prompt || 0, usage?.cached || 0, usage?.completion || 0, usage?.costUsd || 0, ok, error ? String(error).slice(0, 500) : null]
+  ).catch(e => console.error("[PADLICROME] translate-text napló:", e.message));
+
+  try {
+    const { pages: translated, usage } = await translateBubbles({ ...input, title });
+    log(true, usage);
+    res.setHeader("X-Points-Remaining", spend.balance);
+    res.json({ ok: true, pages: translated, pointsCharged: cost, pointsRemaining: spend.balance, model: TEXT_MODEL });
+  } catch (err) {
+    if (spend.entryId) await refundPoints(spend.entryId).catch(e => console.error("[PADLICROME] pont-visszaadás hiba:", e.message));
+    log(false, null, err.message);
+    console.error("[PADLICROME] translate-text:", err.message);
+    res.status(502).json({ error: "A fordítás nem sikerült, a pontot visszaadtuk. Próbáld újra." });
   }
 });
 
