@@ -987,14 +987,21 @@ router.post("/translate", requireAuth, upload.single("image"), async (req, res) 
 
   try {
     const { image: imageData, context } = await translateViaToriiFull(imageBuffer, "image.jpg", toriiOptions(req.body));
-    res.setHeader("Content-Type", sniffImageType(imageData));
     res.setHeader("X-Points-Remaining", spend.balance);
     res.setHeader("X-Points-Used", "1");
-    // context chain (Padlizsan Studio): URL-kódolva, ha elfér egy fejlécben
-    if (context) {
-      const enc = encodeURIComponent(context);
-      if (enc.length <= 7000) res.setHeader("X-Context", enc);
+    // Context chain (Padlizsan Studio): a context a TÖRZSBE kerül (Torii-stílusú
+    // JSON), nem fejlécbe — 2026-11-08: a több KB-os X-Context fejlécet a
+    // szerver előtti proxy 502-vel eldobta (szövegsűrű oldalaknál), miközben
+    // a pont már le volt vonva. Csak akkor JSON, ha a kliens küldött contextet.
+    if (typeof req.body?.context === "string" && req.body.context.trim()) {
+      const mime = sniffImageType(imageData);
+      return res.json({
+        image: `data:${mime};base64,${imageData.toString("base64")}`,
+        context: context || null,
+        metadata: { credits_used: 1 },
+      });
     }
+    res.setHeader("Content-Type", sniffImageType(imageData));
     res.send(imageData);
   } catch (err) {
     await refundPoints(spend.entryId).catch(e => console.error("[PADLICROME] pont-visszaadás hiba:", e.message));
