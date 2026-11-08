@@ -19,7 +19,10 @@ export const POINT_FT = Number(process.env.PC_POINT_FT) || 2.5;
 // USD / 1M token: [bemenet, gyorsítótárazott bemenet, kimenet]
 // reasoning: ismeri-e a reasoning_effort-ot (a gpt-4.1 nem)
 export const LLM_MODELS = {
-  "gpt-5.4-nano": { label: "GPT-5.4 nano (leggyorsabb, legolcsóbb)", price: [0.20, 0.02, 1.25], reasoning: true },
+  // 2026-11-08: mérve jó minőség, ~9× olcsóbb a 5.4 mininél; alapból „gondolkodna”, de a proxy
+  // reasoning_effort nélkül none-t küld (különben ~3× drágább)
+  "gpt-6-luna":   { label: "GPT-6 Luna (legolcsóbb, jó)",            price: [0.10, 0.01, 0.50], reasoning: true },
+  "gpt-5.4-nano": { label: "GPT-5.4 nano (gyors, olcsó)",            price: [0.20, 0.02, 1.25], reasoning: true },
   "gpt-4.1-mini": { label: "GPT-4.1 mini (olcsó, jó)",                price: [0.40, 0.10, 1.60], reasoning: false },
   "gpt-5.4-mini": { label: "GPT-5.4 mini (ajánlott)",                 price: [0.75, 0.075, 4.50], reasoning: true },
   "gpt-4.1":      { label: "GPT-4.1 (nagyon jó)",                     price: [2.00, 0.50, 8.00], reasoning: false },
@@ -39,11 +42,12 @@ export function usageCostUsd(model, usage) {
 export const usdToPoints = usd => (usd * USD_HUF * MARKUP) / POINT_FT;
 
 // A felületnek: pont / 1M token, és becslés egy átlagos oldalra
-// (mérve: ~2000 bemeneti token a kontextussal együtt + ~400 kimeneti)
+// (2026-11-08 éles mérés a helyi motorral: ~3600–4200 bemeneti token a
+// korábbi oldalak kontextusával + ~350–420 kimeneti)
 export function modelPriceList() {
   return Object.entries(LLM_MODELS).map(([id, m]) => {
     const [pin, , pout] = m.price;
-    const perPage = usdToPoints((2000 * pin + 400 * pout) / 1e6);
+    const perPage = usdToPoints((4000 * pin + 400 * pout) / 1e6);
     return {
       id, label: m.label, default: id === DEFAULT_LLM_MODEL,
       points_per_1m_input: +usdToPoints(pin).toFixed(2),

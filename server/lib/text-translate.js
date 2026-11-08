@@ -12,6 +12,7 @@ export const TEXT_MODEL = process.env.PC_TEXT_MODEL || "gpt-5.4-mini";
 // USD / 1M token: bemenet, gyorsítótárazott bemenet, kimenet
 const PRICES = {
   "gpt-5.4-mini": [0.75, 0.075, 4.50],
+  "gpt-6-luna":   [0.10, 0.01, 0.50],
   "gpt-4.1-mini": [0.40, 0.10, 1.60],
   "gpt-5.4-nano": [0.20, 0.02, 1.25],
 };
