@@ -36,9 +36,28 @@
     .gu-day:hover .gu-tip { opacity:1; }
     .gu-day.l .gu-tip { left:0; transform:none; } .gu-day.r .gu-tip { left:auto; right:0; transform:none; }
     .gu-row { display:flex; justify-content:space-between; gap:10px; padding:6px 0; border-top:1px solid rgba(255,255,255,.07); font-size:.85rem; }
-    .gu-row span { color:#94a3b8; }`;
+    .gu-row span { color:#94a3b8; }
+    .gu-limit { margin-bottom:16px; }
+    .gu-limit-top { display:flex; justify-content:space-between; font-size:.8rem; color:#94a3b8; margin-bottom:5px; }
+    .gu-limit-top b { color:#e2e8f0; }
+    .gu-limit-bar { height:12px; border-radius:999px; background:#1e293b; overflow:hidden; }
+    .gu-limit-fill { height:100%; border-radius:999px; transition:width .4s; }
+    .gu-limit-note { font-size:.75rem; margin-top:5px; }`;
   try { const sh = new CSSStyleSheet(); sh.replaceSync(css); document.adoptedStyleSheets = [...document.adoptedStyleSheets, sh]; }
   catch { const st = document.createElement("style"); st.textContent = css; document.head.appendChild(st); }
+
+  // a közös havi keret csíkja: 80%-ig lila, 80%-tól narancs, 95%-tól piros
+  function limitBar(pct) {
+    if (pct == null) return "";
+    const w = Math.min(100, pct);
+    const color = pct >= 95 ? "#ef4444" : pct >= 80 ? "#f59e0b" : "#8b5cf6";
+    const note = pct >= 100 ? "Elérte a havi keretet – a fordítás leállhat a hónap végéig."
+      : pct >= 95 ? "Majdnem elfogyott a havi keret, fordíts takarékosan!"
+      : pct >= 80 ? "A havi keret nagy része elfogyott." : "";
+    return `<div class="gu-limit"><div class="gu-limit-top"><span>A csapat közös havi kerete</span><b>${Math.round(pct)}%</b></div>
+      <div class="gu-limit-bar"><div class="gu-limit-fill" style="width:${w}%;background:${color}"></div></div>
+      ${note ? `<div class="gu-limit-note" style="color:${color}">${note}</div>` : ""}</div>`;
+  }
 
   async function load() {
     box.innerHTML = nav() + '<p style="color:#888;font-size:.85rem">Betöltés…</p>';
@@ -65,14 +84,14 @@
     }).join("");
     const models = new Map();
     for (const k of d.keys) for (const m of k.models) models.set(m.model, (models.get(m.model) || 0) + m.huf);
-    box.innerHTML = nav() + `
+    box.innerHTML = limitBar(d.limitPct) + nav() + `
       <div class="gu-total">${ft(d.totalHuf)}</div>
       <div class="gu-sub">${num(d.requests)} kérés · átlagosan ${ft(d.hufPerRequest)} / kérés (≈ oldal)</div>
       ${d.days.length ? `<div class="gu-days">${bars}</div>` : '<p style="color:#64748b;font-size:.85rem;margin:12px 0">Ebben a hónapban nem volt fogyasztás.</p>'}
       ${[...models].sort((a, b) => b[1] - a[1]).map(([m, huf]) => `<div class="gu-row"><span>${esc(m)}</span><strong>${ft(huf)}</strong></div>`).join("")}
       <div style="margin-top:10px;color:#64748b;font-size:.75rem">Kulcs: ${d.keys.map(k => esc(k.name) + (k.last4 ? " …" + esc(k.last4) : "")).join(", ") || "–"} · ${d.rate} Ft/$ · az OpenAI adatai néhány órás késéssel frissülnek.</div>
       <div id="guTotals" style="margin-top:18px;padding-top:14px;border-top:1px solid rgba(255,255,255,.1)">
-        <div style="font-weight:700;margin-bottom:6px">👥 Összesen ki mennyit fogyasztott</div>
+        <div style="font-weight:700;margin-bottom:6px">Összesen</div>
         <p style="color:#888;font-size:.82rem">Betöltés…</p></div>`;
     bind();
     loadTotals();
@@ -87,14 +106,10 @@
       if (!r.ok) throw new Error(t.error || r.status);
     } catch { el.querySelector("p").textContent = "Az összesítő most nem érhető el."; return; }
     if (!document.body.contains(el)) return;
-    el.innerHTML = `<div style="font-weight:700;margin-bottom:6px">👥 Összesen ki mennyit fogyasztott</div>
-      <div class="gu-row" style="border-top:0;color:#64748b;font-size:.75rem"><span style="flex:1">Ki</span><span style="width:90px;text-align:right">${esc(label(t.month))}</span><span style="width:100px;text-align:right">12 hónap</span></div>
-      ${t.rows.map(r => `<div class="gu-row"${r.me ? ' style="background:rgba(124,58,237,.15);border-radius:6px;padding-left:6px;padding-right:6px"' : ""}>
-        <span style="flex:1;color:${r.me ? "#e9d5ff" : "#cbd5e1"};font-weight:${r.me ? 700 : 400}">${esc(r.name)}${r.me ? " (te)" : ""}</span>
-        <span style="width:90px;text-align:right;color:#e2e8f0">${r.monthHuf ? ft(r.monthHuf) : "–"}</span>
-        <strong style="width:100px;text-align:right">${ft(r.huf)}</strong></div>`).join("")}
-      <div class="gu-row" style="font-weight:700"><span style="flex:1;color:#e2e8f0">Összesen</span><span style="width:90px;text-align:right;color:#e2e8f0">${ft(t.monthTotal)}</span><strong style="width:100px;text-align:right">${ft(t.allTotal)}</strong></div>
-      <div style="color:#64748b;font-size:.72rem;margin-top:6px">A 12 hónap ${esc(label(t.since))} óta (az OpenAI csak az elmúlt egy évet adja ki).</div>`;
+    el.innerHTML = `<div style="font-weight:700;margin-bottom:6px">Összesen</div>
+      <div class="gu-row"><span>${esc(label(t.month))}</span><strong>${ft(t.monthHuf)}</strong></div>
+      <div class="gu-row"><span>Elmúlt 12 hónap (${esc(label(t.since))} óta)</span><strong>${ft(t.huf)}</strong></div>
+      <div class="gu-row"><span>Kérések (12 hónap)</span><strong>${num(t.requests)}</strong></div>`;
   }
 
   function nav() {

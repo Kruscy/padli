@@ -18,6 +18,8 @@ const API = "https://api.openai.com/v1";
 const USD_HUF = Number(process.env.PC_REPORT_USD_HUF) || 326;
 // Csak ezek a projektek (név szerint) számítanak (2026-11-08, a user kérése:
 // csak a „Manga fordítás”, a többi — Kamrafy, Metin — nem tartozik ide)
+// Havi költési keret (az OpenAI-szervezeté), a csíkhoz: 80%-tól narancs, 95%-tól piros
+const SPEND_LIMIT_USD = Number(process.env.OPENAI_SPEND_LIMIT_USD) || 200;
 const REPORT_PROJECTS = (process.env.OPENAI_REPORT_PROJECTS || "Manga fordítás").split(",").map(x => x.trim()).filter(Boolean);
 
 router.use((req, res, next) => {
@@ -85,7 +87,7 @@ async function build(month) {
   const start = Math.max(Math.floor(Date.UTC(y, m - 1, 1) / 1000), earliest);
   const endFull = Math.floor(Date.UTC(y, m, 1) / 1000);
   const end = Math.min(endFull, Math.floor(Date.now() / 1000));
-  if (end <= start) return { month, rate: USD_HUF, projectsShown: REPORT_PROJECTS, totalHuf: 0, persons: [], keys: [], models: [], days: [], projects: [] };
+  if (end <= start) return { month, rate: USD_HUF, projectsShown: REPORT_PROJECTS, orgTotalUsd: 0, spendLimitUsd: SPEND_LIMIT_USD, limitPct: 0, totalHuf: 0, persons: [], keys: [], models: [], days: [], projects: [] };
   const q = `start_time=${start}&end_time=${end}&bucket_width=1d&limit=31`;
 
   const [costB, useB] = await Promise.all([
@@ -101,6 +103,7 @@ async function build(month) {
     try { projName.set(p, (await oa(`/organization/projects/${p}`)).name); } catch { projName.set(p, p); }
   }));
   const allowed = new Set(allProjects.filter(p => REPORT_PROJECTS.includes(projName.get(p))));
+  const orgTotalUsd = costB.reduce((a, b) => a + (b.results || []).reduce((x, r) => x + Number(r.amount?.value || 0), 0), 0);
   for (const b of [...useB, ...costB]) b.results = (b.results || []).filter(r => allowed.has(r.project_id));
 
   const usage = []; // { project, key, model, input, cached, output, requests }
@@ -229,6 +232,8 @@ async function build(month) {
   const totalUsd = [...dayUsd.values()].reduce((a, b) => a + b, 0);
   return {
     month, rate: USD_HUF, projectsShown: REPORT_PROJECTS,
+    orgTotalUsd: +orgTotalUsd.toFixed(2), spendLimitUsd: SPEND_LIMIT_USD,
+    limitPct: +(100 * orgTotalUsd / SPEND_LIMIT_USD).toFixed(1),
     totalHuf: +(totalUsd * USD_HUF).toFixed(0), totalUsd: +totalUsd.toFixed(2),
     projects: [...projUsd].map(([p, usd]) => ({ name: projName.get(p) || p, huf: +(usd * USD_HUF).toFixed(0) })).sort((a, b) => b.huf - a.huf),
     days: [...dayUsd].sort().map(([day, usd]) => ({ day, huf: +(usd * USD_HUF).toFixed(0) })),
@@ -334,8 +339,9 @@ userRouter.get("/totals", async (req, res) => {
   if (!rows.length) return res.status(403).json({ error: "Forbidden" });   // csak kulccsal rendelkező feltöltő
   try {
     const t = await totals(parseMonth(req.query.month));
-    res.json({ month: t.month, since: t.since, monthTotal: t.monthTotal, allTotal: t.allTotal,
-               rows: t.rows.map(r => ({ name: r.name, monthHuf: r.monthHuf, huf: r.huf, me: r.name === req.session.user.username })) });
+    // CSAK a saját sor: a többi feltöltő költése nem látszik a profilon
+    const mine = t.rows.find(r => r.name === req.session.user.username);
+    res.json({ month: t.month, since: t.since, monthHuf: mine?.monthHuf || 0, huf: mine?.huf || 0, requests: mine?.requests || 0 });
   } catch (err) {
     res.status(502).json({ error: "Az összesítő most nem érhető el." });
   }
@@ -364,6 +370,8 @@ userRouter.get("/", async (req, res) => {
     const requests = keys.reduce((a, k) => a + k.requests, 0);
     res.json({
       hasKeys: true, month, rate: d.rate, totalHuf, requests,
+      // a közös havi keret kihasználtsága (mindig az aktuális hónap), összeg nélkül
+      limitPct: month === curMonth() ? d.limitPct : (await getReport(curMonth()).catch(() => null))?.limitPct ?? null,
       hufPerRequest: requests ? +(totalHuf / requests).toFixed(2) : null,
       days: [...dayMap].sort().map(([day, huf]) => ({ day, huf })),
       keys, cachedAt: d.cachedAt,

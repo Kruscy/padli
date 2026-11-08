@@ -129,6 +129,13 @@
         ${d.projects.map(p => `<div style="${card};margin:0;min-width:160px"><div style="color:#94a3b8;font-size:.8rem">Projekt: ${esc(p.name)}</div>
           <div style="font-size:1.2rem;font-weight:700;color:#e2e8f0">${ft(p.huf)}</div></div>`).join("")}
       </div>
+      ${(() => {
+        const pct = d.limitPct ?? 0, color = pct >= 95 ? "#ef4444" : pct >= 80 ? "#f59e0b" : "#8b5cf6";
+        return `<div style="${card}"><div style="display:flex;justify-content:space-between;color:#94a3b8;font-size:.8rem;margin-bottom:6px">
+          <span>Havi költési keret – a teljes OpenAI-szervezet (minden projekt)</span>
+          <strong style="color:#e2e8f0">${d.orgTotalUsd ?? 0} $ / ${d.spendLimitUsd ?? 200} $ · ${Math.round(pct)}%</strong></div>
+          <div style="height:12px;border-radius:999px;background:#1e293b;overflow:hidden"><div style="height:100%;width:${Math.min(100, pct)}%;background:${color};border-radius:999px"></div></div></div>`;
+      })()}
       <div style="${card}"><div style="color:#94a3b8;font-size:.8rem;margin-bottom:8px">Napi költés</div>
         <div class="oa-days">${dayBars || '<span style="color:#64748b">Nincs adat.</span>'}</div></div>
       <div style="${card};overflow-x:auto"><div style="color:#e2e8f0;font-weight:600;margin-bottom:8px">Személyenként – ki hány forintot költött</div>
