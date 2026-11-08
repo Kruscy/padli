@@ -313,6 +313,8 @@ function buildScrollPages() {
 }
 
 function buildBookPages() {
+  if (scrollLoader) { scrollLoader.stop(); scrollLoader = null; } // görgetős mód betöltője leáll
+  pagesEl.style.overflowAnchor = "";
   pagesEl.innerHTML = "";
   pagesEl.className = "mode-book";
 
@@ -345,39 +347,118 @@ function priorityOrder(total, pivot) {
   return order;
 }
 
+/* ── Ablakos képbetöltés (2026-11-08) ─────────────────────────
+   Korábban a fejezet ÖSSZES képe letöltődött (2–3 párhuzamosan), akkor is,
+   ha az olvasó a 3. oldalnál abbahagyta — a képek a szerveren keresztül
+   jönnek (paywall-proxy), ez feleslegesen terhelte a szervert és a
+   mobilnetet. Ráadásul a kezdőoldal FÖLÖTTI képek is betöltődtek, és a
+   magasságuk változása ugráltatta az oldalt.
+   Most csak az aktuális oldal körüli ablak töltődik: 1 oldallal előtte,
+   AHEAD oldallal utána; görgetéskor az ablak vándorol. A még nem betöltött
+   helyőrzők az első betöltött kép arányát veszik fel (kisebb ugrás), a
+   látómező fölött megnőtt képek miatt pedig korrigáljuk a görgetést. */
+const LOAD_AHEAD = isMobile ? 4 : 6;
+const LOAD_BEHIND = 1;
+const LOAD_PARALLEL = isMobile ? 2 : 3;
+let scrollLoader = null;
+
 function loadImagesInOrder(order, imgEls, scrollTarget) {
-  let i = 0;
-  let scrollDone = false;
+  if (scrollLoader) scrollLoader.stop();
+  const targetIdx = scrollTarget > 0 ? scrollTarget - 1 : 0;
+  const state = imgEls.map(() => "idle"); // idle | loading | done | error
+  let inFlight = 0;
+  let scrollDone = targetIdx === 0;
+  let stopped = false;
+  let ratioSet = false;
+  pagesEl.style.overflowAnchor = "none"; // a korrekciót mi végezzük (Safari nem tud scroll-anchoringot)
 
-  function loadNext() {
-    if (i >= order.length) return;
-    const idx = order[i++];
-    const { img, ph } = imgEls[idx];
+  // Aktuális oldal: amíg a kezdőoldalra nem görgettünk, az a középpont
+  const currentIdx = () => scrollDone ? Math.max(0, getCurrentPage() - 1) : targetIdx;
 
+  function pickNext() {
+    const cur = currentIdx();
+    // előre haladva a legközelebbi, utána a mögötte lévő egy
+    for (let k = 0; k <= LOAD_AHEAD; k++) {
+      const i = cur + k;
+      if (i < imgEls.length && state[i] === "idle") return i;
+      if (k > 0 && k <= LOAD_BEHIND && cur - k >= 0 && state[cur - k] === "idle") return cur - k;
+    }
+    return -1;
+  }
+
+  function pump() {
+    while (!stopped && inFlight < LOAD_PARALLEL) {
+      const idx = pickNext();
+      if (idx < 0) return;
+      load(idx, 0);
+    }
+  }
+
+  function load(idx, attempt) {
+    const { img, ph, wrap } = imgEls[idx];
+    state[idx] = "loading";
+    inFlight++;
     const tmpImg = new Image();
+    tmpImg.decoding = "async";
     tmpImg.onload = () => {
+      inFlight--;
+      if (stopped) return;
+      state[idx] = "done";
+      // A látómező fölötti kép magasságváltozását görgetéssel kiegyenlítjük
+      const above = wrap.getBoundingClientRect().bottom <= 0;
+      const before = wrap.offsetHeight;
       img.src = tmpImg.src;
       img.style.display = "block";
       ph.remove();
+      if (above) window.scrollBy(0, wrap.offsetHeight - before);
 
-      // Scroll az első céloldalra
-      if (!scrollDone && idx === (scrollTarget > 0 ? scrollTarget - 1 : 0)) {
+      // A még üres helyőrzők az első kép arányát kapják (webtoon-csíkok ~egyformák)
+      if (!ratioSet && tmpImg.naturalWidth && tmpImg.naturalHeight) {
+        ratioSet = true;
+        const ratio = `${tmpImg.naturalWidth}/${tmpImg.naturalHeight}`;
+        imgEls.forEach((e, i) => { if (state[i] !== "done" && e.ph.isConnected) e.ph.style.aspectRatio = ratio; });
+      }
+
+      if (!scrollDone && idx === targetIdx) {
         scrollDone = true;
         setTimeout(() => img.scrollIntoView({ behavior: "auto", block: "start" }), 80);
       }
-
-      loadNext();
+      pump();
     };
     tmpImg.onerror = () => {
+      inFlight--;
+      if (stopped) return;
+      if (attempt < 2) {
+        // ingadozó netnél egy-két újrapróbálás, mielőtt feladjuk
+        state[idx] = "loading";
+        inFlight++;
+        setTimeout(() => { inFlight--; if (!stopped) load(idx, attempt + 1); }, 1500 * (attempt + 1));
+        return;
+      }
+      state[idx] = "error";
       ph.textContent = "Kép nem található";
-      loadNext();
+      pump();
     };
     tmpImg.src = img.dataset.src;
   }
 
-  // Párhuzamosan indítunk néhány betöltést
-  const parallel = isMobile ? 2 : 3;
-  for (let p = 0; p < parallel && p < order.length; p++) loadNext();
+  let ticking = false;
+  const onScroll = () => {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(() => { ticking = false; pump(); });
+  };
+  window.addEventListener("scroll", onScroll, { passive: true });
+  window.addEventListener("resize", onScroll, { passive: true });
+
+  scrollLoader = {
+    stop() {
+      stopped = true;
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+    },
+  };
+  pump();
 }
 
 /* ── KÖNYV MÓD RENDER ────────────────────────────────────── */
