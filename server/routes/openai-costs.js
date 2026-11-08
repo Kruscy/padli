@@ -113,11 +113,12 @@ async function build(month) {
   const dayUsd = new Map();
   const modelUsd = new Map();
   const projUsd = new Map();
-  const addKey = (project, key, model, usd) => {
+  const addKey = (project, key, model, usd, day) => {
     const id = `${project}|${key}`;
-    const e = keyCost.get(id) || { usd: 0, models: new Map() };
+    const e = keyCost.get(id) || { usd: 0, models: new Map(), days: new Map() };
     e.usd += usd;
     e.models.set(model, (e.models.get(model) || 0) + usd);
+    e.days.set(day, (e.days.get(day) || 0) + usd);
     keyCost.set(id, e);
   };
   for (const b of costB) {
@@ -133,8 +134,8 @@ async function build(month) {
       const cands = usage.filter(u => u.project === r.project_id && sameModel(model, u.model));
       const ws = cands.map(u => weightOf(kind, u));
       const sum = ws.reduce((a, b) => a + b, 0);
-      if (!sum) { addKey(r.project_id || "?", "_project", base, usd); continue; }
-      cands.forEach((u, i) => ws[i] && addKey(u.project, u.key, base, usd * ws[i] / sum));
+      if (!sum) { addKey(r.project_id || "?", "_project", base, usd, day); continue; }
+      cands.forEach((u, i) => ws[i] && addKey(u.project, u.key, base, usd * ws[i] / sum, day));
     }
   }
 
@@ -194,6 +195,7 @@ async function build(month) {
       hufPerRequest: requests ? +(huf / requests).toFixed(2) : null,
       hufPer1kTokens: input + output ? +(huf / ((input + output) / 1000)).toFixed(2) : null,
       models: [...e.models].map(([model, usd]) => ({ model, huf: +(usd * USD_HUF).toFixed(0) })).sort((a, b) => b.huf - a.huf),
+      days: [...e.days].sort().map(([day, usd]) => ({ day, huf: +(usd * USD_HUF).toFixed(0) })),
     };
   }).filter(k => k.huf > 0 || k.requests > 0).sort((a, b) => b.huf - a.huf);
 
@@ -226,22 +228,68 @@ async function build(month) {
   };
 }
 
+const curMonth = () => { const n = new Date(); return `${n.getUTCFullYear()}-${String(n.getUTCMonth() + 1).padStart(2, "0")}`; };
+const parseMonth = q => /^\d{4}-(0[1-9]|1[0-2])$/.test(q || "") ? q : curMonth();
+
+// Gyorsítótárazott havi kimutatás (az admin fül és a profilok közösen használják)
+const inflight = new Map();
+async function getReport(month, refresh = false) {
+  const ttl = month === curMonth() ? 10 * 60_000 : 6 * 3600_000;
+  const hit = cache.get(month);
+  if (hit && Date.now() - hit.at < ttl && !refresh) return { ...hit.data, cachedAt: new Date(hit.at).toISOString() };
+  // egyszerre több kérés ne indítson párhuzamos OpenAI-lekérdezést ugyanarra a hónapra
+  if (!inflight.has(month)) inflight.set(month, build(month).finally(() => inflight.delete(month)));
+  const data = await inflight.get(month);
+  cache.set(month, { at: Date.now(), data });
+  return { ...data, cachedAt: new Date().toISOString() };
+}
+
 router.get("/", async (req, res) => {
   if (!process.env.OPENAI_ADMIN_KEY) return res.status(503).json({ error: "Nincs beállítva OPENAI_ADMIN_KEY a szerveren." });
-  const now = new Date();
-  const cur = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
-  const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(req.query.month || "") ? req.query.month : cur;
-  if (month > cur) return res.status(400).json({ error: "Jövőbeli hónap" });
-  const ttl = month === cur ? 10 * 60_000 : 6 * 3600_000;
-  const hit = cache.get(month);
-  if (hit && Date.now() - hit.at < ttl && req.query.refresh !== "1") return res.json({ ...hit.data, cachedAt: new Date(hit.at).toISOString() });
+  const month = parseMonth(req.query.month);
+  if (month > curMonth()) return res.status(400).json({ error: "Jövőbeli hónap" });
   try {
-    const data = await build(month);
-    cache.set(month, { at: Date.now(), data });
-    res.json({ ...data, cachedAt: new Date().toISOString() });
+    res.json(await getReport(month, req.query.refresh === "1"));
   } catch (err) {
     console.error("[openai-costs]", err.message);
     res.status(502).json({ error: err.message });
+  }
+});
+
+/* ── Felhasználói nézet: GET /api/user/gpt-usage?month=YYYY-MM ──────
+   A feltöltő a profilján csak a SAJÁT kulcsainak (openai_key_users)
+   költését látja. Akinek nincs hozzárendelt kulcsa: { hasKeys: false }. */
+export const userRouter = express.Router();
+userRouter.get("/", async (req, res) => {
+  if (!req.session.user) return res.status(401).json({ error: "Login required" });
+  let ids;
+  try {
+    const { rows } = await pool.query("SELECT key_id FROM openai_key_users WHERE user_id = $1", [req.session.user.id]);
+    ids = new Set(rows.map(r => r.key_id));
+  } catch { ids = new Set(); }
+  if (!ids.size) return res.json({ hasKeys: false });
+  if (!process.env.OPENAI_ADMIN_KEY) return res.status(503).json({ error: "A költségadatok most nem érhetők el." });
+  const month = parseMonth(req.query.month);
+  if (month > curMonth()) return res.status(400).json({ error: "Jövőbeli hónap" });
+  try {
+    const d = await getReport(month);
+    const keys = d.keys.filter(k => ids.has(k.id)).map(k => ({
+      name: k.name, last4: k.last4, requests: k.requests, huf: k.huf,
+      hufPerRequest: k.hufPerRequest, models: k.models, days: k.days, lastUsed: k.lastUsed || null,
+    }));
+    const dayMap = new Map();
+    for (const k of keys) for (const x of k.days) dayMap.set(x.day, (dayMap.get(x.day) || 0) + x.huf);
+    const totalHuf = keys.reduce((a, k) => a + k.huf, 0);
+    const requests = keys.reduce((a, k) => a + k.requests, 0);
+    res.json({
+      hasKeys: true, month, rate: d.rate, totalHuf, requests,
+      hufPerRequest: requests ? +(totalHuf / requests).toFixed(2) : null,
+      days: [...dayMap].sort().map(([day, huf]) => ({ day, huf })),
+      keys, cachedAt: d.cachedAt,
+    });
+  } catch (err) {
+    console.error("[gpt-usage]", err.message);
+    res.status(502).json({ error: "A költségadatok most nem érhetők el, próbáld később." });
   }
 });
 

@@ -17,7 +17,7 @@ import settingsRoutes from "./routes/settings.js";
 import patreonRoutes from "./routes/patreon.js";
 import discordLinkRoutes from "./routes/discord-link.js";
 import securityAdminRoutes from "./routes/security-admin.js";
-import openaiCostsRoutes from "./routes/openai-costs.js";
+import openaiCostsRoutes, { userRouter as gptUsageRoutes } from "./routes/openai-costs.js";
 import { getNewReleasesCache, setNewReleasesCache, clearNewReleasesCache} from "./cache/new-releases.js";
 import { getNewMangaCache } from "./cache/new-manga.js";
 import { resolveAdultMode, ADULT_GENRE_EXISTS_SQL } from "./lib/age.js";
@@ -614,6 +614,8 @@ router.use("/discord", discordLinkRoutes);
 router.use("/admin/security", securityAdminRoutes);
 // OpenAI-költségek kulcsonként (admin → GPT-API fül, csak tulajdonos)
 router.use("/admin/openai-costs", openaiCostsRoutes);
+// a feltöltő a profilján a saját OpenAI-kulcsainak költését látja
+router.use("/user/gpt-usage", gptUsageRoutes);
 router.use("/polls", pollRoutes);
 router.use("/stats", statsRoutes);
 router.use("/announcements", announcementRoutes);
