@@ -8,7 +8,7 @@
    stream:true esetén a teljes választ egyetlen SSE-darabban küldjük vissza
    (a szabványos kliensek így is feldolgozzák). ── */
 import { pool } from "../db.js";
-import { LLM_MODELS, DEFAULT_LLM_MODEL, usageCostUsd, usdToPoints, modelPriceList } from "./llm-pricing.js";
+import { LLM_MODELS, DEFAULT_LLM_MODEL, usageCostUsd, usdToPoints, callPoints, modelPriceList } from "./llm-pricing.js";
 import { availablePoints, chargeMilli } from "./llm-meter.js";
 
 const MAX_COMPLETION_TOKENS = 16384;
@@ -52,7 +52,7 @@ export async function chatCompletions(req, res) {
 
   // Előzetes ellenőrzés: a hívás becsült legrosszabb ára is fedezve legyen
   const approxIn = Math.ceil(JSON.stringify(b.messages).length / 3);
-  const estPoints = usdToPoints(usageCostUsd(model, { prompt_tokens: approxIn, completion_tokens: Math.min(maxOut, PRECHECK_OUT_TOKENS) }));
+  const estPoints = callPoints(usageCostUsd(model, { prompt_tokens: approxIn, completion_tokens: Math.min(maxOut, PRECHECK_OUT_TOKENS) }), approxIn);
   const acc = await availablePoints(user.id);
   if (acc.available < Math.max(estPoints, 0.01)) {
     return oaiError(res, 402,
@@ -88,7 +88,8 @@ export async function chatCompletions(req, res) {
   }
 
   const costUsd = usageCostUsd(model, j.usage);
-  const milli = Math.ceil(usdToPoints(costUsd) * 1000);
+  // a valós költség × felár, de valódi fordításnál legalább 0,4 pont (llm-pricing.js)
+  const milli = Math.ceil(callPoints(costUsd, j.usage?.prompt_tokens || 0) * 1000);
   let after;
   try {
     after = await chargeMilli(user.id, milli);

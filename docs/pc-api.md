@@ -103,6 +103,7 @@ A régi bővítmény-belépés (`POST /api/padlicrome/login`, JWT) 2026-11-08 ó
 
   Más modellnévre a válasz `400 model_not_found`.
 - **Ár:** pont = valós OpenAI-költség × 340 Ft/USD × 2 / 2,5 Ft. A szorzó 2, vagyis a költségünk mellé ugyanannyi haszon jön.
+  - **Minimum:** valódi fordításnál (500 bemeneti tokentől) hívásonként legalább 0,4 pont (1 Ft), mert a helyi motor oldalanként egy hívást küld. A kapcsolatteszt kis hívására nincs minimum.
   - A tört pontok egy mérőben gyűlnek, és egész pontonként vonódnak le.
   - Hívás előtt a szerver ellenőrzi, hogy az elérhető pont fedezi-e a kérés becsült árát. Ha nem, a válasz `402 insufficient_points`.
 - **Visszajelzés:**

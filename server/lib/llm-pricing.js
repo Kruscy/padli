@@ -41,13 +41,22 @@ export function usageCostUsd(model, usage) {
 
 export const usdToPoints = usd => (usd * USD_HUF * MARKUP) / POINT_FT;
 
+// Minimum oldalanként (2026-11-08, a user döntése): 0,4 pont = 1 Ft. A helyi
+// motor oldalanként egy hívást küld (a korábbi oldalak kontextusával, ~4000
+// token), ezért hívásonként alkalmazzuk — de csak valódi fordításra: a
+// „Kapcsolat tesztelése” apró hívására (MIN_FROM_PROMPT_TOKENS alatt) nem.
+export const MIN_POINTS_PER_PAGE = Number(process.env.PC_LLM_MIN_POINTS) || 0.4;
+export const MIN_FROM_PROMPT_TOKENS = 500;
+export const callPoints = (usd, promptTokens) =>
+  promptTokens >= MIN_FROM_PROMPT_TOKENS ? Math.max(MIN_POINTS_PER_PAGE, usdToPoints(usd)) : usdToPoints(usd);
+
 // A felületnek: pont / 1M token, és becslés egy átlagos oldalra
 // (2026-11-08 éles mérés a helyi motorral: ~3600–4200 bemeneti token a
 // korábbi oldalak kontextusával + ~350–420 kimeneti)
 export function modelPriceList() {
   return Object.entries(LLM_MODELS).map(([id, m]) => {
     const [pin, , pout] = m.price;
-    const perPage = usdToPoints((4000 * pin + 400 * pout) / 1e6);
+    const perPage = Math.max(MIN_POINTS_PER_PAGE, usdToPoints((4000 * pin + 400 * pout) / 1e6));
     return {
       id, label: m.label, default: id === DEFAULT_LLM_MODEL,
       points_per_1m_input: +usdToPoints(pin).toFixed(2),
