@@ -744,13 +744,40 @@ async function searchShikimori(searchTerm) {
   } catch (err) { console.error(LOG + " Shikimori error: " + err.message); return null; }
 }
 
+/* ── VÁLTOZATOS NYITÁS (2026-11-08) ─────────────────────────
+   A válaszok nagy része „Na, …”/„Na végre, …” kezdettel jött, mert a
+   modell nem látta, hogyan kezdte az előzőket. A legutóbbi nyitásokat
+   (első 2 szó) megjegyezzük, a rendszerpromptban megtiltjuk, és ha a
+   válasz mégis tiltott nyitással kezdődik, egyszer újrakérjük. ── */
+const recentOpeners = [];
+const RECENT_OPENERS_MAX = 12;
+const BANNED_OPENER = /^(na|naná|nana|húha|jaj)\b/i;
+const openerOf = text => String(text || "").replace(/^[^\p{L}]+/u, "").split(/\s+/).slice(0, 2).join(" ")
+  .replace(/[^\p{L}\s]/gu, "").toLowerCase().trim();
+function rememberOpener(text) {
+  const o = openerOf(text);
+  if (!o) return;
+  recentOpeners.push(o);
+  if (recentOpeners.length > RECENT_OPENERS_MAX) recentOpeners.shift();
+}
+function isRepetitiveOpener(text) {
+  const t = String(text || "").replace(/^[^\p{L}]+/u, "");
+  return BANNED_OPENER.test(t) || recentOpeners.slice(-6).includes(openerOf(t));
+}
+function openerRule() {
+  const list = [...new Set(recentOpeners)].slice(-8);
+  return "\n\nVÁLTOZATOSSÁG: " + (list.length ? "a legutóbbi válaszaid így kezdődtek: " + list.map(o => "„" + o + "”").join(", ") + " – most egyikkel se kezdd, és " : "") +
+    "ne kezdd \"Na\", \"Naná\", \"Húha\" vagy \"Jaj\" szóval. Változtasd a mondatszerkezetet is.";
+}
+
 /* ── GEMINI ─────────────────────────────────────────────── */
-async function askLLM(messages) {
+async function askLLM(messages, _retry = false) {
   try {
     // Gemini nem ismeri a "system"/"assistant" role-t: a system üzenetek
     // külön systemInstruction-be kerülnek, az assistant pedig "model" role-ra
     // fordul. A messages mindig Ollama/OpenAI-stílusú {role, content} tömb.
-    const systemText = messages.filter(m => m.role === "system").map(m => m.content).join("\n\n");
+    const systemText = messages.filter(m => m.role === "system").map(m => m.content).join("\n\n") +
+      openerRule() + (_retry ? " FONTOS: az előző próbálkozásod ismétlődő nyitással kezdődött, most kezdd egészen másképp!" : "");
     const contents = messages
       .filter(m => m.role !== "system")
       .map(m => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] }));
@@ -773,6 +800,13 @@ async function askLLM(messages) {
     // kimerül – lásd server/lib/gemini-client.js.
     const data = await callGemini(config.general.geminiModel, body, config.general.geminiTimeoutMs, "padli-ai");
     const text = data?.candidates?.[0]?.content?.parts?.map(p => p.text).join("").trim();
+    // Ismétlődő nyitás: egyszer újrakérjük (ha az is az, marad a második)
+    if (text && !_retry && isRepetitiveOpener(text)) {
+      plog("NYITÁS", "ismétlődő kezdés, újrakérés: " + text.slice(0, 40));
+      const again = await askLLM(messages, true);
+      if (again && again !== config.fallback.message) return again;
+    }
+    if (text) rememberOpener(text);
     return applyLLMSafety(text || null);
   } catch (err) {
     console.error(LOG + " Gemini error: " + err.message);
