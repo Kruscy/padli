@@ -20,7 +20,8 @@ import { getBalance, spendPoints, refundPoints } from "../lib/points-ledger.js";
 import { safeFetch } from "../lib/safe-fetch.js";
 import { keyFromRequest, authenticateApiKey } from "../lib/api-keys.js";
 import { validateInput, billablePages, translateBubbles, TEXT_MODEL } from "../lib/text-translate.js";
-import { chatCompletions, listModels } from "../lib/llm-proxy.js";
+import { chatCompletions, listModels, NO_POINTS_HINT } from "../lib/llm-proxy.js";
+const NO_POINTS_LINKS = { buy_url: "https://padlizsanfansub.hu/shop.html", earn_url: "https://padlizsanfansub.hu/bug-reports.html" };
 import { userStudioStats } from "./studio.js";
 import { availablePoints, chargeMilli } from "../lib/llm-meter.js";
 import { TORII_MODELS, DEFAULT_TORII_MODEL, costFtOf, ftToPoints, estPointsPerPage, byokOpenAiFt, toriiPriceList } from "../lib/torii-pricing.js";
@@ -824,7 +825,7 @@ router.post("/translate-text", requireAuth, async (req, res) => {
   if (!pages) return res.json({ ok: true, pages: input.pages.map(p => p.map(() => "")), pointsCharged: 0 });
 
   const spend = cost ? await spendPoints(userId, cost) : { ok: true, entryId: null, balance: await getBalance(userId) };
-  if (!spend.ok) return res.status(402).json({ error: `Nincs elég pont (kell: ${cost}, van: ${spend.balance})`, needed: cost, balance: spend.balance });
+  if (!spend.ok) return res.status(402).json({ error: `Nincs elég pont (kell: ${cost}, van: ${spend.balance}). ${NO_POINTS_HINT}`, needed: cost, balance: spend.balance, ...NO_POINTS_LINKS });
 
   const log = (ok, usage, error) => pool.query(
     `INSERT INTO pc_text_usage (user_id, api_key_id, manga_slug, pages, bubbles, points, model,
@@ -1013,11 +1014,11 @@ router.post("/translate", requireAuth, upload.single("image"), async (req, res) 
   const translator = opts.translator || DEFAULT_TORII_MODEL;
   const est = estPointsPerPage(translator);
   const acc = await availablePoints(userId);
-  if (acc.available < est) return res.status(402).json({ error: `Nincs elég pont (elérhető: ${acc.available.toFixed(2)}, ehhez kb. ${est.toFixed(2)} kell)` });
+  if (acc.available < est) return res.status(402).json({ error: `Nincs elég pont (elérhető: ${acc.available.toFixed(2)}, ehhez kb. ${est.toFixed(2)} kell). ${NO_POINTS_HINT}`, ...NO_POINTS_LINKS });
 
   // 1 pont előre (ez a minimum), a valós fogyasztás szerinti többlet utólag
   const spend = await spendPoints(userId, 1);
-  if (!spend.ok) return res.status(402).json({ error: "Nincs elég pont" });
+  if (!spend.ok) return res.status(402).json({ error: `Nincs elég pont. ${NO_POINTS_HINT}`, ...NO_POINTS_LINKS });
 
   try {
     const t0 = Date.now(); // a fordítás ideje: ebből látszik, hány kép ment egyszerre (created_at − duration_ms = kezdés)

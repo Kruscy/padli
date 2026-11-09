@@ -16,6 +16,9 @@ const PRECHECK_OUT_TOKENS = 2000;     // a hívás előtti egyenleg-ellenőrzés
 const CALL_TIMEOUT_MS = 180000;
 const EFFORTS = new Set(["none", "minimal", "low", "medium", "high"]);
 
+// elfogyott pontnál: hol vehet, és hogy hibajavítással ingyen is szerezhet (2026-11-09)
+export const NO_POINTS_HINT = "Pontot vásárolhatsz: https://padlizsanfansub.hu/shop.html – vagy ingyen szerezhetsz, ha kijavítasz hibás részeket: https://padlizsanfansub.hu/bug-reports.html";
+
 const oaiError = (res, status, message, code) =>
   res.status(status).json({ error: { message, type: code || "invalid_request_error", code: code || null } });
 
@@ -56,7 +59,7 @@ export async function chatCompletions(req, res) {
   const acc = await availablePoints(user.id);
   if (acc.available < Math.max(estPoints, 0.01)) {
     return oaiError(res, 402,
-      `Nincs elég pont (elérhető: ${acc.available.toFixed(2)}, ehhez a kéréshez kb. ${estPoints.toFixed(2)} kell).`,
+      `Nincs elég pont (elérhető: ${acc.available.toFixed(2)}, ehhez a kéréshez kb. ${estPoints.toFixed(2)} kell). ${NO_POINTS_HINT}`,
       "insufficient_points");
   }
 
