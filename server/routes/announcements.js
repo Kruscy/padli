@@ -8,7 +8,7 @@ const router = express.Router();
 router.get("/", requireLogin, async (req, res) => {
   try {
     const { rows } = await pool.query(`
-      SELECT id, title, body, image_url, expires_at, click_count
+      SELECT id, title, body, image_url, expires_at, click_count, cta_label, cta_url
       FROM announcements
       WHERE expires_at > now()
       ORDER BY created_at DESC

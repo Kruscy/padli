@@ -24,7 +24,9 @@
       id: a.id,
       title: a.title,
       body: a.body,
-      image_url: a.image_url
+      image_url: a.image_url,
+      cta_label: a.cta_label,
+      cta_url: a.cta_url
     }));
 
     const pollRes = await fetch("/api/polls/active");
@@ -103,13 +105,17 @@
           <div class="hero-card-tag">Kiírás</div>
           <h2>${escHtml(item.title)}</h2>
           <div class="hero-card-text">${formatBody(item.body || "")}</div>
-          <button class="hero-btn" data-announcement="${Number(item.id)}">
-            Részletek →
-          </button>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+            ${safeCta(item.cta_url) ? `<a class="hero-btn hero-cta" href="${escHtml(item.cta_url)}" style="text-decoration:none;background:linear-gradient(135deg,#a855f7,#7c3aed);color:#fff">${escHtml(item.cta_label || "Megnyitás")}</a>` : ""}
+            <button class="hero-btn" data-announcement="${Number(item.id)}">
+              Részletek →
+            </button>
+          </div>
         </div>
       </div>
     `;
     trackAnnouncementLinks(heroInner.querySelector(".hero-card-text"), item.id);
+    trackAnnouncementLinks(heroInner.querySelector(".hero-cta")?.parentElement, item.id);
   }
 
   /* ===== NYEREMÉNYJÁTÉK ===== */
@@ -165,6 +171,9 @@
       });
     }
   }
+
+  // Kiírás saját gombja (pl. „⬇ Letöltés”): csak saját oldalra vagy https-re mutathat
+  function safeCta(u) { return typeof u === "string" && (/^\/(?![\/\\])/.test(u) || /^https:\/\//.test(u)); }
 
   /* ===== Kattintás-számláló a kiírásban lévő linkekre ===== */
   function trackAnnouncementLinks(container, id) {
