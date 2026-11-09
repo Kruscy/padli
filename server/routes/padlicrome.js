@@ -1020,7 +1020,9 @@ router.post("/translate", requireAuth, upload.single("image"), async (req, res) 
   if (!spend.ok) return res.status(402).json({ error: "Nincs elég pont" });
 
   try {
+    const t0 = Date.now(); // a fordítás ideje: ebből látszik, hány kép ment egyszerre (created_at − duration_ms = kezdés)
     const { image: imageData, context, credits, meta } = await translateViaToriiFull(imageBuffer, "image.jpg", opts);
+    const durationMs = Date.now() - t0;
     // valós költség: Torii-kredit + BYOK-nál a mi OpenAI-díjunk (a Torii által visszaadott tokenekből)
     const costFt = costFtOf(translator, credits, meta);
     const points = ftToPoints(costFt);
@@ -1028,10 +1030,10 @@ router.post("/translate", requireAuth, upload.single("image"), async (req, res) 
     let after = null;
     try { after = await chargeMilli(userId, extraMilli); }
     catch (e) { console.error("[PADLICROME] torii többlet-levonás:", e.message); }
-    pool.query(`INSERT INTO pc_torii_usage (user_id, api_key_id, translator, credits, points_milli, byok, openai_ft, cost_ft)
-                VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+    pool.query(`INSERT INTO pc_torii_usage (user_id, api_key_id, translator, credits, points_milli, byok, openai_ft, cost_ft, duration_ms)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
       [userId, req.authUser.keyId || null, translator, credits, 1000 + extraMilli,
-       !!TORII_MODELS[translator]?.byok, +byokOpenAiFt(translator, meta).toFixed(4), +costFt.toFixed(4)]).catch(e => console.error("[PADLICROME] torii napló:", e.message));
+       !!TORII_MODELS[translator]?.byok, +byokOpenAiFt(translator, meta).toFixed(4), +costFt.toFixed(4), durationMs]).catch(e => console.error("[PADLICROME] torii napló:", e.message));
     const used = (1 + extraMilli / 1000);
     res.setHeader("X-Points-Remaining", after ? after.available.toFixed(3) : String(spend.balance));
     res.setHeader("X-Points-Used", used.toFixed(3));
