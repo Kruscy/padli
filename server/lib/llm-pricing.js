@@ -25,8 +25,9 @@ export const LLM_MODELS = {
   "gpt-5.4-nano": { label: "GPT-5.4 nano (gyors, olcsó)",            price: [0.20, 0.02, 1.25], reasoning: true },
   "gpt-4.1-mini": { label: "GPT-4.1 mini (olcsó, jó)",                price: [0.40, 0.10, 1.60], reasoning: false },
   "gpt-5.4-mini": { label: "GPT-5.4 mini (ajánlott)",                 price: [0.75, 0.075, 4.50], reasoning: true },
-  "gpt-4.1":      { label: "GPT-4.1 (nagyon jó)",                     price: [2.00, 0.50, 8.00], reasoning: false },
-  "gpt-5.5":      { label: "GPT-5.5 (legjobb, drága)",                price: [5.00, 0.50, 30.00], reasoning: true },
+  // 2026-11-09: a GPT-4.1 és a GPT-5.5 kikerült (drága, nem jobb); az árak a számláinkból visszaszámolva
+  "gpt-5.4":       { label: "GPT-5.4 (nagyon jó)",                     price: [2.50, 0.25, 15.00], reasoning: true },
+  "gpt-5.6-terra": { label: "GPT-5.6 Terra (legjobb)",                 price: [2.00, 0.20, 12.00], reasoning: true },
 };
 export const DEFAULT_LLM_MODEL = "gpt-5.4-mini";
 
@@ -55,8 +56,10 @@ export const callPoints = (usd, promptTokens) =>
 // korábbi oldalak kontextusával + ~350–420 kimeneti)
 export function modelPriceList() {
   return Object.entries(LLM_MODELS).map(([id, m]) => {
-    const [pin, , pout] = m.price;
-    const perPage = Math.max(MIN_POINTS_PER_PAGE, usdToPoints((4000 * pin + 400 * pout) / 1e6));
+    // 2026-11-09: egy fejezet 2. oldalától az utasítás nagy része az OpenAI gyorsítótárából jön
+    // (mérve: 4203-ból 2688 token), ezért a becslés 1500 friss + 2500 gyorsítótáras + 400 kimeneti token
+    const [pin, pcached, pout] = m.price;
+    const perPage = Math.max(MIN_POINTS_PER_PAGE, usdToPoints((1500 * pin + 2500 * pcached + 400 * pout) / 1e6));
     return {
       id, label: m.label, default: id === DEFAULT_LLM_MODEL,
       points_per_1m_input: +usdToPoints(pin).toFixed(2),

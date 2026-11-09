@@ -95,11 +95,12 @@ A régi bővítmény-belépés (`POST /api/padlicrome/login`, JWT) 2026-11-08 ó
   - A `reasoning_effort` csak azoknál a modelleknél megy tovább, amelyek ismerik. Ismeretlen érték, például `auto` helyett `none` megy.
   - `stream: true` esetén a válasz egyetlen SSE-darabban jön.
 - **Modellek:**
+  - `gpt-6-luna` (legolcsóbb)
   - `gpt-5.4-nano`
   - `gpt-4.1-mini`
   - `gpt-5.4-mini` (ajánlott)
-  - `gpt-4.1`
-  - `gpt-5.5`
+  - `gpt-5.4`
+  - `gpt-5.6-terra` (legjobb)
 
   Más modellnévre a válasz `400 model_not_found`.
 - **Ár:** pont = valós OpenAI-költség × 340 Ft/USD × 2 / 2,5 Ft. A szorzó 2, vagyis a költségünk mellé ugyanannyi haszon jön.
