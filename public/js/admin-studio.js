@@ -54,6 +54,12 @@
             <span><b>Letöltés mindenkinek</b><br><small style="color:#94a3b8">${d.publicDownload ? "minden belépett felhasználó letöltheti" : `most csak a tesztelők (${d.testers.length} fő)`}</small></span></label>
         </div>
       </div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px">
+        ${stat("Letöltések összesen", d.downloads?.total ?? 0)}
+        ${stat("Letöltő felhasználó", d.downloads?.users ?? 0)}
+        ${stat("Ma", d.downloads?.today ?? 0)}
+        ${stat("Ajándékpontot kapott", `${d.downloads?.gifts ?? 0} fő · ${d.downloads?.gift_points ?? 0} pont`, "#fbbf24")}
+      </div>
       ${nav()}
       <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px">
         ${stat("Lefordított oldal", d.total.pages)}

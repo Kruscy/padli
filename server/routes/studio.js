@@ -67,6 +67,7 @@ const INSTALLER_SCRIPT = process.env.STUDIO_INSTALLER_SCRIPT || "/opt/padlizsan-
 const setupName = v => `Padlizsan-Studio-Setup-${v}.exe`;
 let building = null;
 function installerFor(version) {
+  if (building === version) return null; // épp íródik: félkész fájlt nem adunk ki
   const f = path.join(DIST_DIR, setupName(version));
   try { const st = fs.statSync(f); return { name: setupName(version), size: st.size, date: st.mtime }; } catch { return null; }
 }
@@ -74,7 +75,12 @@ function ensureInstaller(z, version) {
   if (building || installerFor(version) || !fs.existsSync(INSTALLER_SCRIPT)) return;
   building = version;
   console.log(`[STUDIO] telepítő építése: v${version} (${z.name})`);
-  execFile(INSTALLER_SCRIPT, [path.join(DIST_DIR, z.name), DIST_DIR], { timeout: 15 * 60_000, maxBuffer: 1 << 20 }, (err, out, errOut) => {
+  // ideiglenes mappába épül, és csak kész állapotban kerül a helyére (különben a félkész exe letölthető volt)
+  const tmpDir = fs.mkdtempSync(path.join(DIST_DIR, ".build-"));
+  execFile(INSTALLER_SCRIPT, [path.join(DIST_DIR, z.name), tmpDir], { timeout: 15 * 60_000, maxBuffer: 1 << 20 }, (err, out, errOut) => {
+    try { if (!err) fs.renameSync(path.join(tmpDir, setupName(version)), path.join(DIST_DIR, setupName(version))); }
+    catch (e) { err = e; }
+    fs.rmSync(tmpDir, { recursive: true, force: true });
     building = null;
     if (err) { console.error(`[STUDIO] telepítő építése sikertelen: ${err.message} ${String(errOut).slice(-300)}`); return; }
     console.log(`[STUDIO] ${String(out).trim().split("\n").pop()}`);
@@ -110,11 +116,45 @@ router.get("/latest", async (req, res) => {
   res.json({ version: info.version, notes: info.notes, date: info.date, size: info.size, url: `${SITE}/api/studio/download` });
 });
 
+/* ── Letöltésszámlálás + egyszeri ajándékpont (2026-11-09) ──
+   Minden letöltés bekerül a studio_downloads-ba. Az első letöltésért STUDIO_GIFT_POINTS
+   (alap 30) pont jár, felhasználónként EGYSZER (studio_gifts PK), csak megerősített
+   e-mail-címmel (a tömeges kamufiókos pontgyűjtés ellen), értesítéssel. */
+const GIFT_POINTS = Number(process.env.STUDIO_GIFT_POINTS) || 30;
+pool.query(`CREATE TABLE IF NOT EXISTS studio_downloads (
+  id serial PRIMARY KEY, user_id integer REFERENCES users(id) ON DELETE SET NULL,
+  version text, file text, ip text, created_at timestamptz NOT NULL DEFAULT now())`).catch(e => console.error("[STUDIO] tábla:", e.message));
+pool.query(`CREATE TABLE IF NOT EXISTS studio_gifts (
+  user_id integer PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  points integer NOT NULL, created_at timestamptz NOT NULL DEFAULT now())`).catch(e => console.error("[STUDIO] tábla:", e.message));
+
+async function recordDownload(req, info, file) {
+  const u = req.session.user;
+  await pool.query("INSERT INTO studio_downloads (user_id, version, file, ip) VALUES ($1,$2,$3,$4)",
+    [u.id, info.version, file, req.headers["cf-connecting-ip"] || req.ip || null]);
+  const { rows } = await pool.query("SELECT email_verified FROM users WHERE id = $1", [u.id]);
+  if (!rows[0]?.email_verified) return;
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const g = await client.query("INSERT INTO studio_gifts (user_id, points) VALUES ($1,$2) ON CONFLICT DO NOTHING", [u.id, GIFT_POINTS]);
+    if (!g.rowCount) { await client.query("ROLLBACK"); return; } // már kapott
+    await client.query(`INSERT INTO user_points (user_id, fix_id, points, approved_by, earned_at, spent) VALUES ($1, NULL, $2, NULL, NOW(), false)`, [u.id, GIFT_POINTS]);
+    await client.query(`INSERT INTO notifications (user_id, type, message, link) VALUES ($1, 'points', $2, '/profile.html#studio')`,
+      [u.id, `🎁 Köszönjük, hogy letöltötted a Padlizsan Studio-t! Ajándékba ${GIFT_POINTS} pontot írtunk jóvá a fiókodon. Az API-kulcsodat a profilodon hozhatod létre.`]);
+    await client.query("COMMIT");
+    console.log(`[STUDIO] ajándék: ${u.username} +${GIFT_POINTS} pont`);
+  } catch (e) {
+    await client.query("ROLLBACK").catch(() => {});
+    console.error("[STUDIO] ajándékpont:", e.message);
+  } finally { client.release(); }
+}
+
 // Mindig a legújabb. Böngészőből (nincs belépve / nincs joga) a profilra irányít.
 router.get("/download", async (req, res) => {
   const wantsHtml = /text\/html/.test(req.headers.accept || "");
   if (!(await canDownload(req.session?.user))) {
-    if (wantsHtml) return res.redirect(302, "/profile.html#studio");
+    if (wantsHtml) return res.redirect(302, req.session?.user ? "/profile.html#studio" : "/login.html?redirect=" + encodeURIComponent("/api/studio/download"));
     return res.status(req.session?.user ? 404 : 401).json({ error: req.session?.user ? "Nem található" : "Login required" });
   }
   const info = await latestInfo();
@@ -122,6 +162,7 @@ router.get("/download", async (req, res) => {
   // alapból a telepítő; ?type=zip vagy ha még nincs kész telepítő: a ZIP
   const file = req.query.type !== "zip" && info.installer ? info.installer.name : info.name;
   console.log(`[STUDIO] letöltés: ${req.session.user.username} → ${file}`);
+  recordDownload(req, info, file).catch(e => console.error("[STUDIO] letöltés-napló:", e.message));
   res.setHeader("Cache-Control", "no-store");
   res.download(path.join(DIST_DIR, file), file);
 });
@@ -237,6 +278,11 @@ admin.get("/overview", async (req, res) => {
       byModel: s.byModel.map(m => ({ ...m, revenue_ft: +(m.points * POINT_FT).toFixed(0), cost_ft: +m.cost_ft.toFixed(0) })),
       byDay: s.byDay,
       keyHolders: keys,
+      downloads: (await pool.query(`SELECT count(*)::int AS total, count(DISTINCT user_id)::int AS users,
+                   (SELECT count(*)::int FROM studio_gifts) AS gifts,
+                   (SELECT COALESCE(sum(points),0)::int FROM studio_gifts) AS gift_points,
+                   count(*) FILTER (WHERE created_at >= date_trunc('day', now()))::int AS today
+                   FROM studio_downloads`)).rows[0],
     });
   } catch (err) {
     console.error("[STUDIO] admin overview:", err.message);

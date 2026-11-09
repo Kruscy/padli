@@ -37,7 +37,9 @@ form.addEventListener("submit", async (e) => {
 
     // emailPending: be van jelentkezve, de az email még nincs megerősítve
     // A notification-badge.js a fejlécen megmutatja a bannert
-    location.href = "/";
+    // ?redirect=/... – csak saját oldalra (pl. a Studio letöltés belépés után folytatódik)
+    const back = new URLSearchParams(location.search).get("redirect") || "";
+    location.href = /^\/(?![\/\\])/.test(back) ? back : "/";
   } catch (err) {
     errorEl.textContent = "Server hiba";
   }
