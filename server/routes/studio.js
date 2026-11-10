@@ -134,9 +134,24 @@ async function recordDownload(req, info, file) {
     [u.id, info.version, file, req.headers["cf-connecting-ip"] || req.ip || null]);
   const { rows } = await pool.query("SELECT email_verified FROM users WHERE id = $1", [u.id]);
   if (!rows[0]?.email_verified) return;
+  const ip = req.headers["cf-connecting-ip"] || req.ip || null;
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    /* Egy hálózatról (IPv4: azonos cím, IPv6: azonos /64 – a háztartás) csak egy ajándék jár (2026-11-10):
+       ha erről a hálózatról már letöltött valaki, aki kapott ajándékot, ez a fiók nem kap. */
+    if (ip) {
+      const net = `network(set_masklen(X::inet, CASE WHEN family(X::inet) = 6 THEN 64 ELSE 32 END))`;
+      await client.query("SELECT pg_advisory_xact_lock(hashtext('studio-gift:' || " + net.replaceAll("X", "$1") + "::text))", [ip]);
+      const dup = await client.query(
+        `SELECT u.username FROM studio_downloads d JOIN studio_gifts g ON g.user_id = d.user_id JOIN users u ON u.id = d.user_id
+          WHERE d.user_id <> $2 AND d.ip IS NOT NULL AND ${net.replaceAll("X", "d.ip")} = ${net.replaceAll("X", "$1")} LIMIT 1`, [ip, u.id]);
+      if (dup.rowCount) {
+        await client.query("ROLLBACK");
+        console.log(`[STUDIO] ajándék kihagyva: ${u.username} – erről a hálózatról már kapott ${dup.rows[0].username}`);
+        return;
+      }
+    }
     const g = await client.query("INSERT INTO studio_gifts (user_id, points) VALUES ($1,$2) ON CONFLICT DO NOTHING", [u.id, GIFT_POINTS]);
     if (!g.rowCount) { await client.query("ROLLBACK"); return; } // már kapott
     await client.query(`INSERT INTO user_points (user_id, fix_id, points, approved_by, earned_at, spent) VALUES ($1, NULL, $2, NULL, NOW(), false)`, [u.id, GIFT_POINTS]);
