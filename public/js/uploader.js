@@ -215,7 +215,7 @@ function renderQueue() {
       if (error === 0) {
         doneMsg.classList.remove("hidden");
       }
-      if (!bugfixPromptShown && done > 0) {
+      if (!bugfixPromptShown && done > 0 && !uploadQueue.some(i => i.fixToken && !i.fixDone)) {
         bugfixPromptShown = true;
         checkBugfixAfterUpload();
       }
@@ -293,7 +293,9 @@ function showSeriesExistsModal(blocked) {
         mert ezzel a névvel a meglévő műhöz kerülne.</div>`;
     const rows = blocked.map((b, i) => {
       let action;
-      if (b.series.own && b.series.ownFolder) {
+      if (b.creditedFolder) {
+        action = `<div style="color:#86efac;margin-top:6px">→ Fordítóként meg vagy jelölve, ezért a „<b>${escAttr(b.creditedFolder)}</b>” néven kerül fel, a meglévő műhöz.</div>`;
+      } else if (b.series.own && b.series.ownFolder) {
         action = `<div style="color:#86efac;margin-top:6px">→ A saját „<b>${escAttr(b.series.ownFolder)}</b>” mappádba kerül.</div>`
           + (b.canOverride ? differentLabel(i) : "");
       } else {
@@ -320,7 +322,8 @@ function showSeriesExistsModal(blocked) {
     overlay.querySelector("#se-ok").onclick = () => {
       const decisions = {};
       blocked.forEach((b, i) => {
-        if (b.canOverride && overlay.querySelector(`[data-force="${i}"]`)?.checked) decisions[b.folder] = "force";
+        if (b.creditedFolder) decisions[b.folder] = "credited";
+        else if (b.canOverride && overlay.querySelector(`[data-force="${i}"]`)?.checked) decisions[b.folder] = "force";
         else if (b.series.own && b.series.ownFolder) decisions[b.folder] = "own";
         else decisions[b.folder] = "skip";
       });
@@ -416,6 +419,192 @@ async function checkBugfixAfterUpload() {
   };
 }
 
+/* ══════════════════════════════════════════════════════════
+   JAVÍTÁS MÁR FENT LÉVŐ RÉSZHEZ (2026-11-11)
+   Ha a feltöltött rész (manga-mappa + rész-mappa) már fent van az
+   oldalon, rákérdezünk, hogy javítás-e. Javításnál a képek átmeneti
+   helyre mennek, és amikor a rész minden képe felért, a szerver lecseréli
+   a fent lévő képeket — a más nevű régieket is törli, hogy ne keveredjenek.
+   ══════════════════════════════════════════════════════════ */
+function itemDestParts(i) {
+  const full = currentPath ? `${currentPath}/${i.relativePath}` : i.relativePath;
+  return full.split("/").filter(Boolean);
+}
+
+async function askFixChapters(pending) {
+  const groups = new Map();
+  for (const i of pending) {
+    if (i.fixToken || i.fixDecided) continue; // előző körből (újrapróbálás)
+    const p = itemDestParts(i);
+    if (p.length !== 3) continue; // manga / rész / kép
+    const key = `${p[0]}\n${p[1]}`;
+    if (!groups.has(key)) groups.set(key, { mangaFolder: p[0], chapterFolder: p[1], items: [] });
+    groups.get(key).items.push(i);
+  }
+  if (!groups.size) return true;
+
+  let existing = [];
+  try {
+    const r = await fetch("/api/uploader/fix-candidates", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pairs: [...groups.values()].map(g => ({ mangaFolder: g.mangaFolder, chapterFolder: g.chapterFolder })) }),
+    });
+    if (r.ok) existing = (await r.json()).existing || [];
+  } catch (err) {
+    console.warn("Javítás-ellenőrzés hiba:", err);
+  }
+  if (!existing.length) return true;
+
+  existing.forEach(e => { e.newCount = groups.get(`${e.mangaFolder}\n${e.chapterFolder}`).items.length; });
+  const decisions = await showFixModal(existing);
+  if (!decisions) return false;
+
+  for (const e of existing) {
+    const g = groups.get(`${e.mangaFolder}\n${e.chapterFolder}`);
+    const d = decisions[`${e.mangaFolder}\n${e.chapterFolder}`];
+    if (d === "full" || d === "pages") {
+      let data = {};
+      try {
+        const r = await fetch("/api/uploader/fix-start", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mangaFolder: e.mangaFolder, chapterFolder: e.chapterFolder, mode: d }),
+        });
+        data = await r.json().catch(() => ({}));
+        if (!r.ok) data.token = null;
+      } catch {}
+      if (!data.token) {
+        g.items.forEach(i => { i.status = "error"; i.blocked = true; i.errorMsg = data.error || "A javítás nem indítható"; });
+        continue;
+      }
+      g.items.forEach(i => { i.fixToken = data.token; i.fixLabel = `${e.title} – ${e.chapterFolder}`; });
+    } else if (d === "skip") {
+      g.items.forEach(i => { i.status = "skipped"; i.blocked = true; i.errorMsg = "Már fent van, kihagyva"; });
+    } else {
+      g.items.forEach(i => { i.fixDecided = true; }); // saját rész, sima feltöltés
+    }
+  }
+  return true;
+}
+
+function showFixModal(existing) {
+  return new Promise(resolve => {
+    const overlay = document.createElement("div");
+    overlay.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:99999;
+      display:flex;align-items:center;justify-content:center;padding:16px;`;
+    const opt = (i, value, checked, label, hint) => `
+      <label style="display:flex;gap:8px;align-items:flex-start;margin-top:6px;cursor:pointer;color:#e8e8f5">
+        <input type="radio" name="fx${i}" value="${value}" ${checked ? "checked" : ""} style="margin-top:4px">
+        <span>${label}${hint ? `<br><span style="color:#9ca3af;font-size:.8rem">${hint}</span>` : ""}</span>
+      </label>`;
+    const rows = existing.map((e, i) => {
+      const head = `<b>${escAttr(e.title)}</b> – ${escAttr(e.chapterFolder)}
+        <span style="color:#9ca3af">(fent: ${e.pages} kép${e.own ? "" : `, ${escAttr(e.library)} könyvtárában`}, most: ${e.newCount} kép)</span>`;
+      if (!e.allowed) {
+        return `<li style="margin-bottom:14px;line-height:1.5">${head}
+          <div style="color:#fca5a5;margin-top:6px">→ ${escAttr(e.reason || "Nem javíthatod")} Kimarad.</div></li>`;
+      }
+      // Kevés kép a fent lévőhöz képest → valószínűleg csak néhány oldal javítása
+      const fewPages = e.newCount < e.pages * 0.8;
+      return `<li style="margin-bottom:16px;line-height:1.5">${head}
+        ${opt(i, "full", !fewPages, "Javítás – <b>az egész rész cseréje</b>",
+              "A fent lévő képek mind törlődnek (a más nevűek is), és csak az újak maradnak.")}
+        ${opt(i, "pages", fewPages, "Javítás – <b>csak a feltöltött oldalak cseréje</b>",
+              "Az azonos nevű és az azonos oldalszámú (pl. 5. oldal: p005.jpg ↔ page_5.png) régi kép cserélődik, a többi oldal marad.")}
+        ${e.own
+          ? opt(i, "normal", false, "Nem javítás – sima feltöltés", "A képek a mappába kerülnek, a régiek mellé (azonos névnél felülírja).")
+          : opt(i, "skip", false, "Nem javítás – kihagyom", "")}
+      </li>`;
+    }).join("");
+    overlay.innerHTML = `
+      <div style="background:#13131f;border:1px solid rgba(255,255,255,.1);border-radius:16px;
+                  padding:28px 24px;max-width:600px;width:100%;max-height:90vh;overflow-y:auto;
+                  font-family:Poppins,sans-serif;color:#e8e8f5;">
+        <div style="font-size:2rem;margin-bottom:12px">🛠️</div>
+        <h3 style="margin-bottom:8px;font-size:1.1rem">Ezek a részek már fent vannak — javítást töltesz fel?</h3>
+        <p style="color:#9ca3af;font-size:.84rem;margin:0 0 14px">A csere csak akkor történik meg, ha a rész minden képe hibátlanul felért. A régi képekről mentés készül.</p>
+        <ul style="margin:0 0 16px 18px;padding:0;font-size:.88rem;color:#d1d5db">${rows}</ul>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <button id="fx-ok" style="background:#7c3aed;color:#fff;border:none;padding:11px 16px;
+                  border-radius:10px;font-weight:600;cursor:pointer;font-size:.9rem">Folytatás</button>
+          <button id="fx-cancel" style="background:none;color:#6b7280;border:none;
+                  padding:8px;cursor:pointer;font-size:.85rem">Mégse (semmit nem töltök fel)</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    overlay.querySelector("#fx-ok").onclick = () => {
+      const decisions = {};
+      existing.forEach((e, i) => {
+        const key = `${e.mangaFolder}\n${e.chapterFolder}`;
+        decisions[key] = e.allowed ? (overlay.querySelector(`input[name="fx${i}"]:checked`)?.value || "skip") : "skip";
+      });
+      document.body.removeChild(overlay);
+      resolve(decisions);
+    };
+    overlay.querySelector("#fx-cancel").onclick = () => { document.body.removeChild(overlay); resolve(null); };
+  });
+}
+
+// A feltöltés végén: azoknál a javításoknál, ahol a rész minden képe felért, csere
+async function commitFinishedFixes() {
+  const byToken = new Map();
+  for (const i of uploadQueue) {
+    if (!i.fixToken || i.fixDone) continue;
+    if (!byToken.has(i.fixToken)) byToken.set(i.fixToken, []);
+    byToken.get(i.fixToken).push(i);
+  }
+  if (!byToken.size) return;
+
+  uploadBtn.disabled = true;
+  clearBtn.disabled  = true;
+  const okLines = [], errLines = [];
+  for (const [token, items] of byToken) {
+    const label = items[0].fixLabel || "";
+    const notDone = items.filter(i => i.status !== "done").length;
+    if (notDone) {
+      errLines.push(`${label}: ${notDone} kép nem ért fel, a csere NEM történt meg — indítsd újra a feltöltést (a hibás képek újra mennek).`);
+      continue;
+    }
+    uploadBtn.textContent = `🛠️ Csere: ${label}...`;
+    let result = null, error = null;
+    for (let attempt = 0; attempt < 20; attempt++) {
+      try {
+        const r = await fetch("/api/uploader/fix-commit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token }),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (r.ok) { result = data; break; }
+        if (r.status === 423) { await sleep(30000); continue; } // R2-áthelyezés fut, várunk
+        error = data.error || `HTTP ${r.status}`;
+        break;
+      } catch (err) {
+        error = "Hálózati hiba";
+        await sleep(5000);
+      }
+    }
+    if (result) {
+      items.forEach(i => { i.fixDone = true; });
+      okLines.push(`${label}: ${result.mode === "pages" ? `${result.pages} oldal cserélve` : "a rész lecserélve"} ` +
+        `(${result.oldPages} → ${result.pagesAfter} kép${result.removed ? `, ${result.removed} régi törölve` : ""})`);
+    } else {
+      errLines.push(`${label}: a csere nem sikerült — ${error || "a szerver nem válaszolt"}. A fent lévő rész változatlan.`);
+    }
+  }
+  resetUploadButtons();
+  renderQueue();
+  alert([
+    okLines.length ? "✅ Javítás kész:\n" + okLines.join("\n") : "",
+    errLines.length ? "❌ Javítás sikertelen:\n" + errLines.join("\n") : "",
+  ].filter(Boolean).join("\n\n"));
+  if (!bugfixPromptShown && okLines.length) {
+    bugfixPromptShown = true;
+    checkBugfixAfterUpload();
+  }
+}
+
 function resetUploadButtons() {
   uploadBtn.disabled = false;
   clearBtn.disabled  = false;
@@ -459,7 +648,9 @@ async function startUpload() {
         for (const b of data.blocked) {
           const items = pending.filter(i => i.relativePath.split("/")[0] === b.folder);
           const d = decisions[b.folder];
-          if (d === "own") {
+          if (d === "credited") {
+            items.forEach(i => { i.relativePath = b.creditedFolder + i.relativePath.slice(b.folder.length); });
+          } else if (d === "own") {
             items.forEach(i => { i.relativePath = b.series.ownFolder + i.relativePath.slice(b.folder.length); });
           } else if (d === "force") {
             items.forEach(i => { i.force = true; });
@@ -478,6 +669,16 @@ async function startUpload() {
       console.warn("Sorozat-ellenőrzés hiba:", err);
     }
   }
+
+  // Már fent lévő rész: javítás-e? (2026-11-11)
+  if (!(await askFixChapters(pending))) { resetUploadButtons(); return; }
+  pending = pending.filter(i => !i.blocked);
+  renderQueue();
+  if (!pending.length) { resetUploadButtons(); return; }
+  // A javítások átmeneti mappába mennek → nekik nem kell mappát létrehozni
+  topFolders.splice(0, topFolders.length, ...new Set(
+    pending.filter(i => !i.fixToken && i.relativePath.includes("/")).map(i => i.relativePath.split("/")[0])
+  ));
 
   if (topFolders.length > 0) {
     try {
@@ -516,7 +717,7 @@ async function startUpload() {
   }
 
   // Meglévő fájlok ellenőrzése
-  const destPaths = pending.map(item =>
+  const destPaths = pending.filter(item => !item.fixToken).map(item =>
     currentPath ? `${currentPath}/${item.relativePath}` : item.relativePath
   );
 
@@ -533,7 +734,7 @@ async function startUpload() {
       // Meglévő fájlok megjelölése a queue-ban
       data.existing.forEach(existPath => {
         const rel = currentPath ? existPath.slice(currentPath.length + 1) : existPath;
-        const item = pending.find(i => i.relativePath === rel);
+        const item = pending.find(i => i.relativePath === rel && !i.fixToken);
         if (item) item.exists = true;
       });
       renderQueue();
@@ -595,6 +796,8 @@ async function startUpload() {
   loadFiles();
 
   reportUploadErrors(toUpload, roundStartedAt);
+
+  await commitFinishedFixes();
 
   // Ha a sorban minden hibátlanul felment (és volt is mit feltölteni),
   // automatikusan indul egy scan, hogy az új fejezetek megjelenjenek.
@@ -752,6 +955,7 @@ function uploadAttempt(item) {
   fd.append("file", item.file);
   fd.append("path", destPath);
   if (item.force) fd.append("force", "1");
+  if (item.fixToken) fd.append("fixToken", item.fixToken);
 
   // Időkorlát nélkül egy beragadt kapcsolat (se válasz, se hiba) örökre
   // várakoztatta a feltöltést: 2026-10-15 Stukker 391/529-nél állt meg

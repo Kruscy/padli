@@ -105,7 +105,7 @@ async function fillMissingAltTitles() {
 
 async function loadSeries() {
   const { rows } = await pool.query(`
-    SELECT m.id, m.title, m.folder, m.slug, m.anilist_id, m.alt_titles,
+    SELECT m.id, m.title, m.folder, m.slug, m.anilist_id, m.alt_titles, m.uploaders,
            json_agg(json_build_object('library', l.name, 'path', l.path, 'chapters', x.n) ORDER BY x.n DESC) AS libraries,
            sum(x.n)::int AS chapters
     FROM manga m
@@ -133,7 +133,7 @@ async function anilistIdForName(name) {
 
 /* A feltöltő könyvtára (abszolút útvonal) + az új mappa neve alapján.
    Visszaad: null, ha nincs egyezés; különben
-   { mangaId, title, chapters, libraries, matchedBy, own, ownFolder, others } */
+   { mangaId, title, slug, folder, uploaders, chapters, libraries, matchedBy, own, ownFolder, others } */
 export async function findExistingSeries(folderName, uploaderBase) {
   const target = normalizeTitle(folderName);
   if (!target) return null;
@@ -194,6 +194,9 @@ export async function findExistingSeries(folderName, uploaderBase) {
   return {
     mangaId: hit.id,
     title: hit.title,
+    slug: hit.slug,
+    folder: hit.folder,
+    uploaders: hit.uploaders || [],
     chapters: hit.chapters,
     libraries: hit.libraries,
     matchedBy,

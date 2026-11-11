@@ -14,6 +14,8 @@ import { updateMangaCore } from "../lib/manga-meta.js";
 import { purgeChapterImages } from "../lib/cf-purge.js";
 import { trackUploadRequest, handleClientUploadReport } from "../lib/upload-log.js";
 import { processUploadedCover } from "../lib/cover-image.js";
+import { logAdminAction } from "../lib/admin-log.js";
+import { resolveChapterTarget, createFixToken, loadFixToken, stagedFilePath, commitFix, cleanupStaging } from "../lib/chapter-fix.js";
 
 const r2 = new S3Client({
   region: "auto",
@@ -82,7 +84,7 @@ const BASE_DIR = "/mnt/manga/Kavita";
 // újra, a hibaüzenetet kiírja). A fájl az /opt/padli-n KÍVÜL van, így a
 // kód-/adatszinkron nem viszi át egy másik gépre.
 const UPLOAD_DISABLED_FLAG = "/etc/padli/upload-disabled";
-const UPLOAD_WRITE_PATHS = new Set(["/upload", "/mkdir", "/file", "/scan"]);
+const UPLOAD_WRITE_PATHS = new Set(["/upload", "/mkdir", "/file", "/scan", "/fix-start", "/fix-commit"]);
 router.use((req, res, next) => {
   if (req.method === "GET" || !UPLOAD_WRITE_PATHS.has(req.path)) return next();
   if (!fs.existsSync(UPLOAD_DISABLED_FLAG)) return next();
@@ -182,6 +184,40 @@ function logSeriesOverride(req, folder, found) {
   });
 }
 
+/* Szerepel-e a bejelentkezett feltöltő a mű fordítói (manga.uploaders)
+   között. A lista megjelenő neveket tárol: ez lehet a felhasználónév, vagy
+   az uploader_names-ben a feltöltő mappájához rendelt név (pl. SKYPRO →
+   „SKYPRO18”). Kis-/nagybetű nem számít. */
+async function isCreditedTranslator(req, uploaders) {
+  if (!Array.isArray(uploaders) || !uploaders.length) return false;
+  const credited = new Set(uploaders.map(n => String(n).trim().toLowerCase()));
+  if (credited.has(String(req.session.user.username).trim().toLowerCase())) return true;
+  try {
+    const base = userBaseOf(req.uploaderRoot);
+    const { rows } = await pool.query(
+      `SELECT name, root_path FROM uploader_names WHERE root_path IS NOT NULL AND root_path != ''`
+    );
+    return rows.some(r => userBaseOf(String(r.root_path).replace(/\\/g, "/")) === base
+                          && credited.has(String(r.name).trim().toLowerCase()));
+  } catch (err) {
+    console.warn("[fordító-ellenőrzés] hiba:", err.message);
+    return false;
+  }
+}
+
+// Fordítóként más könyvtárában lévő műbe töltés naplózása (egyszer/óra/mappa)
+function logCoTranslatorUpload(req, folder, found) {
+  const key = `co\n${req.session.user.id}\n${folder}`;
+  const prev = overrideLogged.get(key);
+  if (prev && Date.now() - prev < 3600e3) return;
+  overrideLogged.set(key, Date.now());
+  logSecurityEvent({
+    req, type: "upload_credited_translator", severity: "info",
+    details: { folder, mangaId: found.mangaId, title: found.title, uploaders: found.uploaders,
+               libraries: found.others.map(o => o.library) },
+  });
+}
+
 // null = mehet; különben a 409-es válasz törzse
 async function checkNewSeriesFolder(req, relativePath, { isFolder }) {
   const parts = String(relativePath || "").replace(/\\/g, "/").split("/").filter(Boolean);
@@ -199,6 +235,25 @@ async function checkNewSeriesFolder(req, relativePath, { isFolder }) {
   if (!found) return null;
   // Saját sorozat, de a helyi mappája nem található → a saját művét ne tiltsuk
   if (found.own && !found.ownFolder) return null;
+  // Fordítóként meg van jelölve a műnél (manga.uploaders) → tölthet bele
+  // (2026-11-11). A saját könyvtárában ugyanazzal a mappanévvel kell
+  // feltöltenie, mert a scan a mappanév slugja alapján köti a fejezeteket
+  // a meglévő műhöz (ahogy pl. a több könyvtárra osztott sorozatoknál).
+  if (!found.own && await isCreditedTranslator(req, found.uploaders)) {
+    if (slugify(folder) === found.slug) {
+      logCoTranslatorUpload(req, folder, found);
+      return null;
+    }
+    return {
+      error: `„${found.title}” fordítójaként meg vagy jelölve, ezért feltölthetsz bele — a mappa neve pontosan „${found.folder}” legyen, különben nem a meglévő műhöz kerül.`,
+      code: "series_exists",
+      folder,
+      series: found,
+      canOverride: false,
+      nameClash: true,
+      creditedFolder: found.folder,
+    };
+  }
   // „Ez egy teljesen másik mű, újként töltöm fel” — bárki jelezheti, ha a
   // mappanév nem ütközik egy meglévő mű slugjával (különben a scan úgyis a
   // meglévőhöz kötné). Naplózzuk, hogy visszaélés esetén látszódjon.
@@ -349,6 +404,10 @@ router.post("/upload", trackUploadRequest, requireUploader, upload.single("file"
 
   if (!req.file) return res.status(400).json({ error: "Nincs fájl" });
 
+  // Javítás egy már fent lévő részhez: a kép az átmeneti mappába kerül,
+  // a cserét a /fix-commit végzi el, amikor a rész minden képe felért
+  if (req.body.fixToken) return handleFixUpload(req, res, relativePath);
+
   const topFolder = relativePath.replace(/\\/g, "/").split("/").filter(Boolean)[0];
   if (topFolder && CHAPTER_FOLDER_RE.test(topFolder)) {
     return res.status(400).json({
@@ -473,6 +532,113 @@ router.delete("/file", requireUploader, express.json(), async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+/* ── Javítás feltöltése már fent lévő részhez (2026-11-11) ──────────
+   Lásd lib/chapter-fix.js. Folyamat a kliensen:
+   1) /fix-candidates: a feltöltendő (manga-mappa, rész-mappa) párok közül
+      melyik van már fent → rákérdezés, hogy javítás-e;
+   2) /fix-start részenként → token;
+   3) /upload fixToken-nel → a képek átmeneti mappába;
+   4) /fix-commit, ha a rész minden képe felért → a régi képek cseréje. ── */
+async function canFixChapter(req, target) {
+  const base = userBaseOf(req.uploaderRoot);
+  const lib = path.resolve(target.library_path);
+  if (lib === base || lib.startsWith(base + path.sep)) return true;
+  return isCreditedTranslator(req, target.uploaders);
+}
+
+router.post("/fix-candidates", requireUploader, express.json(), async (req, res) => {
+  const pairs = Array.isArray(req.body?.pairs) ? req.body.pairs.slice(0, 300) : [];
+  const out = [];
+  try {
+    for (const p of pairs) {
+      const mangaFolder = String(p?.mangaFolder || ""), chapterFolder = String(p?.chapterFolder || "");
+      if (!mangaFolder || !chapterFolder) continue;
+      const t = await resolveChapterTarget(mangaFolder, chapterFolder);
+      if (!t) continue;
+      if (t.ambiguous) {
+        out.push({ mangaFolder, chapterFolder, title: t.title, allowed: false, reason: "A rész több helyen is fent van — szólj egy adminnak." });
+        continue;
+      }
+      const allowed = await canFixChapter(req, t);
+      const lib = path.resolve(t.library_path), base = userBaseOf(req.uploaderRoot);
+      out.push({
+        mangaFolder, chapterFolder, title: t.title, pages: t.currentPages.length,
+        library: t.library_name, own: lib === base || lib.startsWith(base + path.sep), allowed,
+        reason: allowed ? null : "Ez más feltöltő része, és nem vagy fordítóként megjelölve a műnél.",
+      });
+    }
+    res.json({ existing: out });
+  } catch (err) {
+    console.error("[javítás] fix-candidates hiba:", err);
+    res.status(500).json({ error: "Ellenőrzési hiba" });
+  }
+});
+
+router.post("/fix-start", requireUploader, express.json(), async (req, res) => {
+  const mangaFolder = String(req.body?.mangaFolder || ""), chapterFolder = String(req.body?.chapterFolder || "");
+  try {
+    const t = await resolveChapterTarget(mangaFolder, chapterFolder);
+    if (!t) return res.status(404).json({ error: "A rész nincs fent az oldalon" });
+    if (t.ambiguous) return res.status(409).json({ error: "A rész több helyen is fent van — szólj egy adminnak" });
+    if (!(await canFixChapter(req, t))) return res.status(403).json({ error: "Ehhez a részhez nincs jogod javítást feltölteni" });
+    const mode = req.body?.mode === "pages" ? "pages" : "full";
+    const token = createFixToken({ userId: req.session.user.id, mangaFolder, chapterFolder, chapterId: t.chapter_id, mode });
+    res.json({ token });
+  } catch (err) {
+    console.error("[javítás] fix-start hiba:", err);
+    res.status(500).json({ error: "Hiba a javítás indításakor" });
+  }
+});
+
+async function handleFixUpload(req, res, relativePath) {
+  const fix = loadFixToken(req.body.fixToken, req.session.user.id);
+  if (!fix) return res.status(400).json({ error: "A javítás lejárt vagy érvénytelen — indítsd újra a feltöltést" });
+  // A kép közvetlenül a javított rész mappájában legyen
+  const parts = relativePath.replace(/\\/g, "/").split("/").filter(Boolean);
+  const filename = parts[parts.length - 1];
+  if (parts.length < 2 || parts[parts.length - 2] !== fix.chapterFolder) {
+    return res.status(400).json({ error: "A kép nem a javított rész mappájában van" });
+  }
+  const dest = stagedFilePath(fix, filename);
+  if (!dest) return res.status(400).json({ error: "Érvénytelen fájlnév" });
+  if (!(await isImageBuffer(req.file.buffer))) {
+    return res.status(415).json({ error: "Csak képfájl tölthető fel (jpg, png, webp, gif, avif)" });
+  }
+  try {
+    const { buffer } = await compressPageImage(req.file.buffer, dest);
+    fs.writeFileSync(dest, buffer);
+    res.json({ ok: true, path: relativePath, fix: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+router.post("/fix-commit", requireUploader, express.json(), async (req, res) => {
+  const fix = loadFixToken(req.body?.token, req.session.user.id);
+  if (!fix) return res.status(400).json({ error: "A javítás lejárt vagy érvénytelen — indítsd újra a feltöltést" });
+  // Az R2-migráció közben ne cseréljünk (az helyben töröl és R2-re ír)
+  if (fs.existsSync(R2_MIGRATE_LOCK)) {
+    return res.status(423).json({ error: "Éppen fut az R2-áthelyezés, a csere pár perc múlva megy", retry: true });
+  }
+  try {
+    const result = await commitFix(fix, { checkAccess: t => canFixChapter(req, t) });
+    console.log(`[javítás] ${req.session.user.username}: ${result.title} / ${result.chapter} — ${result.pages} kép (régi: ${result.oldPages}, törölve: ${result.removed}), mentés: ${result.backup}`);
+    logAdminAction(req, {
+      action: "chapter_fix_replace", targetType: "chapter", targetId: result.chapterId,
+      targetTitle: `${result.title} / ${result.chapter}`,
+      details: { mode: result.mode, library: result.library, pages: result.pages, oldPages: result.oldPages, replaced: result.replaced,
+                 added: result.added, removed: result.removed, backup: result.backup },
+    });
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    console.error("[javítás] csere hiba:", err);
+    res.status(err.status || 500).json({ error: err.message || "Hiba a csere közben" });
+  }
+});
+
+cleanupStaging();
+setInterval(cleanupStaging, 3600e3).unref();
 
 /* ── POST /api/uploader/check-series – új mappák előzetes ellenőrzése ─
    A kliens a feltöltés előtt kérdezi meg, hogy az új sorozat-mappák
