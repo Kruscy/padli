@@ -829,10 +829,10 @@ router.post("/translate-text", requireAuth, async (req, res) => {
 
   const log = (ok, usage, error) => pool.query(
     `INSERT INTO pc_text_usage (user_id, api_key_id, manga_slug, pages, bubbles, points, model,
-                                prompt_tokens, cached_tokens, completion_tokens, cost_usd, ok, error)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+                                prompt_tokens, cached_tokens, completion_tokens, cost_usd, ok, error, username)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
     [userId, req.authUser.keyId || null, mangaSlug, pages, bubbles, ok ? cost : 0, TEXT_MODEL,
-     usage?.prompt || 0, usage?.cached || 0, usage?.completion || 0, usage?.costUsd || 0, ok, error ? String(error).slice(0, 500) : null]
+     usage?.prompt || 0, usage?.cached || 0, usage?.completion || 0, usage?.costUsd || 0, ok, error ? String(error).slice(0, 500) : null, req.authUser.username || null]
   ).catch(e => console.error("[PADLICROME] translate-text napló:", e.message));
 
   try {
@@ -1031,10 +1031,10 @@ router.post("/translate", requireAuth, upload.single("image"), async (req, res) 
     let after = null;
     try { after = await chargeMilli(userId, extraMilli); }
     catch (e) { console.error("[PADLICROME] torii többlet-levonás:", e.message); }
-    pool.query(`INSERT INTO pc_torii_usage (user_id, api_key_id, translator, credits, points_milli, byok, openai_ft, cost_ft, duration_ms)
-                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+    pool.query(`INSERT INTO pc_torii_usage (user_id, api_key_id, translator, credits, points_milli, byok, openai_ft, cost_ft, duration_ms, username)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
       [userId, req.authUser.keyId || null, translator, credits, 1000 + extraMilli,
-       !!TORII_MODELS[translator]?.byok, +byokOpenAiFt(translator, meta).toFixed(4), +costFt.toFixed(4), durationMs]).catch(e => console.error("[PADLICROME] torii napló:", e.message));
+       !!TORII_MODELS[translator]?.byok, +byokOpenAiFt(translator, meta).toFixed(4), +costFt.toFixed(4), durationMs, req.authUser.username || null]).catch(e => console.error("[PADLICROME] torii napló:", e.message));
     const used = (1 + extraMilli / 1000);
     res.setHeader("X-Points-Remaining", after ? after.available.toFixed(3) : String(spend.balance));
     res.setHeader("X-Points-Used", used.toFixed(3));

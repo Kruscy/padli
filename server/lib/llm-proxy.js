@@ -64,10 +64,10 @@ export async function chatCompletions(req, res) {
   }
 
   const log = (ok, usage, costUsd, milli, error) => pool.query(
-    `INSERT INTO pc_llm_usage (user_id, api_key_id, model, prompt_tokens, cached_tokens, completion_tokens, cost_usd, points_milli, ok, error)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+    `INSERT INTO pc_llm_usage (user_id, api_key_id, model, prompt_tokens, cached_tokens, completion_tokens, cost_usd, points_milli, ok, error, username)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
     [user.id, user.keyId || null, model, usage?.prompt_tokens || 0, usage?.prompt_tokens_details?.cached_tokens || 0,
-     usage?.completion_tokens || 0, costUsd || 0, milli || 0, ok, error ? String(error).slice(0, 500) : null]
+     usage?.completion_tokens || 0, costUsd || 0, milli || 0, ok, error ? String(error).slice(0, 500) : null, user.username || null]
   ).catch(e => console.error("[LLM-PROXY] napló:", e.message));
 
   let j;

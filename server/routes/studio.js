@@ -195,17 +195,17 @@ async function usageRows(month, userId = null) {
   let userCond = "";
   if (userId) { params.push(userId); userCond = "AND user_id = $2"; }
   const { rows } = await pool.query(`
-    SELECT user_id, 'felhő' AS mode, translator AS model, to_char(created_at AT TIME ZONE 'Europe/Budapest', 'YYYY-MM-DD') AS day,
+    SELECT user_id, username, 'felhő' AS mode, translator AS model, to_char(created_at AT TIME ZONE 'Europe/Budapest', 'YYYY-MM-DD') AS day,
            1 AS pages, points_milli / 1000.0 AS points,
            CASE WHEN cost_ft > 0 THEN cost_ft ELSE credits * 0.465 END AS cost_ft
       FROM pc_torii_usage
      WHERE created_at >= $1::date AND created_at < ($1::date + interval '1 month') ${userCond}
     UNION ALL
-    SELECT user_id, 'helyi', model, to_char(created_at AT TIME ZONE 'Europe/Budapest', 'YYYY-MM-DD'), 1, points_milli / 1000.0, cost_usd * ${USD_HUF}
+    SELECT user_id, username, 'helyi', model, to_char(created_at AT TIME ZONE 'Europe/Budapest', 'YYYY-MM-DD'), 1, points_milli / 1000.0, cost_usd * ${USD_HUF}
       FROM pc_llm_usage
      WHERE ok AND created_at >= $1::date AND created_at < ($1::date + interval '1 month') ${userCond}
     UNION ALL
-    SELECT user_id, 'szövegfordító', model, to_char(created_at AT TIME ZONE 'Europe/Budapest', 'YYYY-MM-DD'), pages, points, cost_usd * ${USD_HUF}
+    SELECT user_id, username, 'szövegfordító', model, to_char(created_at AT TIME ZONE 'Europe/Budapest', 'YYYY-MM-DD'), pages, points, cost_usd * ${USD_HUF}
       FROM pc_text_usage
      WHERE ok AND created_at >= $1::date AND created_at < ($1::date + interval '1 month') ${userCond}`, params);
   return rows.map(r => ({ ...r, points: Number(r.points), cost_ft: Number(r.cost_ft), day: r.day }));
@@ -271,10 +271,15 @@ admin.get("/overview", async (req, res) => {
       for (const x of u) names.set(x.id, x.username);
     }
     const perUser = new Map();
+    // Törölt fióknál (user_id = NULL) a naplóban eltárolt név látszik (2026-11-11)
     for (const r of rows) {
-      const e = perUser.get(r.user_id) || { user: names.get(r.user_id) || `#${r.user_id}`, pages: 0, points: 0, cost_ft: 0, modes: new Set() };
+      const key = r.user_id ?? `torolt:${r.username || ""}`;
+      const user = r.user_id
+        ? (names.get(r.user_id) || r.username || `#${r.user_id}`)
+        : (r.username ? `${r.username} (törölt fiók)` : "Törölt fiók");
+      const e = perUser.get(key) || { user, pages: 0, points: 0, cost_ft: 0, modes: new Set() };
       e.pages += r.pages; e.points += r.points; e.cost_ft += r.cost_ft; e.modes.add(r.mode);
-      perUser.set(r.user_id, e);
+      perUser.set(key, e);
     }
     const users = [...perUser.values()].map(e => ({
       user: e.user, pages: e.pages, points: +e.points.toFixed(2), modes: [...e.modes],
