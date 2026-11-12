@@ -9,8 +9,8 @@
   <link rel="stylesheet" href="/css/sidebar.css?v=20260119">
   <link rel="stylesheet" href="/css/search.css?v=20260619">
   <link rel="stylesheet" href="/css/locked.css?v=20260918">
-  <link rel="stylesheet" href="/css/chapters.css?v=20261022">
-  <link rel="stylesheet" href="/css/footer.css?v=20260405">
+  <link rel="stylesheet" href="/css/chapters.css?v=20261112">
+  <link rel="stylesheet" href="/css/footer.css?v=20261112">
   <link rel="stylesheet" href="/css/manga-edit.css?v=20260906">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -30,8 +30,12 @@
     .chapters-tab-btn.active { color: #fff; border-bottom-color: #7c3aed; }
     .chapters-tab-panel { display: none; }
     .chapters-tab-panel.active { display: block; }
-    .chapters-tabs { overflow-x: auto; scrollbar-width: none; }
-    .chapters-tab-btn { white-space: nowrap; }
+    /* Fülsor (2026-11-12): a fülek a kijelző szélességéhez igazodnak — a
+       betűméret és a térköz arányosan kisebb, és ha így sem férnek el, a
+       fülsor oldalra görgethető, de az oldalt sosem szélesíti ki. */
+    .chapters-tabs { overflow-x: auto; scrollbar-width: none; min-width: 0; max-width: 100%; contain: inline-size; }
+    .chapters-tabs::-webkit-scrollbar { display: none; }
+    .chapters-tab-btn { white-space: nowrap; flex: 0 0 auto; padding: 10px clamp(6px, 2.5vw, 20px); font-size: clamp(0.74rem, 3.4vw, 0.95rem); }
     /* Hozzászólások (2026-11-12) */
     .cm-form { background: #161b22; border: 1px solid #2a2a3e; border-radius: 12px; padding: 12px; margin: 1rem 0; }
     .cm-form textarea, .cm-edit-text { width: 100%; box-sizing: border-box; background: #0d1117; color: #e2e8f0; border: 1px solid #2a2a3e; border-radius: 8px; padding: 10px; font-family: inherit; font-size: .92rem; resize: vertical; min-height: 70px; }
@@ -157,7 +161,7 @@
 <script src="/js/chapters-locked-modal-init.js?v=20260918"></script>
 
 <script type="module" src="/js/paywall.js?v=20260918"></script>
-<script type="module" src="/js/layout-loader.js?v=20261004"></script>
+<script type="module" src="/js/layout-loader.js?v=20261112"></script>
 <script src="/js/purify.min.js?v=20260619"></script>
 <script src="/js/sidebar.js?v=20260204"></script>
 <script src="/js/email-verify-modal.js?v=20260808"></script>

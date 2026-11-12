@@ -20,7 +20,10 @@ const WRITE_EXCLUDE = /^\/api\/(uploader|progress|anilist\/queue|chat\/send|padl
 // Kérés-áradat számlálásnál kihagyott: képbetöltés (egy fejezet 60+ kép is
 // lehet) és az olvasási állás (olvasás közben sűrűn mentődik; a régi
 // listaoldalak — régi böngésző-cache-ből — mangánként kértek le állást).
-const FLOOD_EXCLUDE = /^\/api\/(image\/|pages\/|progress(\/|$))/;
+// 2026-11-12: a fejléc ártalmatlan számlálói (online-szám, olvasatlan
+// értesítések) sem: felébredő gépen a böngésző egyszerre pótolhatja az
+// elmaradt lekéréseket (11-11 03:26: téves „kérés-áradat” riasztás).
+const FLOOD_EXCLUDE = /^\/api\/(image\/|pages\/|progress(\/|$)|online-count$|bug-reports\/notifications\/unread-count$)/;
 // A feltöltő kéréseit csak a válasz után számoljuk (ott már látszik a
 // munkamenet): bejelentkezett feltöltő sikeres kérése nem számít — egy
 // nagy feltöltés 4 párhuzamos szállal könnyen 600+ kérés/perc (2026-10-14

@@ -20,6 +20,26 @@ main,
   flex: 1 0 auto;
 }
 
+/* Képernyőhöz igazodás (2026-11-12): a törzs oszlopos flexbox, ezért a
+   fő tartalom alapból nem lehetett keskenyebb a legszélesebb, nem törhető
+   elemnél — telefonon így a teljes oldal kilógott (és a html
+   overflow-x: hidden levágta a jobb szélét). Mindig a kijelző szélességét
+   veszi fel; a saját max-width + margin: auto középre igazítás marad. */
+body > main,
+body > .blog-main,
+body > .content,
+body > .polls-page,
+body > .wishlist-page,
+body > .auth-page {
+  min-width: 0;
+  /* kitölti a rendelkezésre álló szélességet a saját padding/margin
+     megtartásával (a max-width-et az oldalak továbbra is maguk adják) */
+  width: 100%;
+  width: -moz-available;
+  width: -webkit-fill-available;
+  width: stretch;
+}
+
 /* ── FOOTER ─────────────────────────────────────────────── */
 
 .site-footer {

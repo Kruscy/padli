@@ -134,14 +134,20 @@ router.post("/csp-report", express.json({ type: ["application/csp-report", "appl
 
 /* ===== READING PROGRESS → lásd routes/progress.js ===== */
 /* ===== online ===== */
+// 15 mp-es gyorsítótár (2026-11-12): minden nyitott lap 30 mp-enként kérdezi,
+// felébredő gépről egyszerre több száz is jöhet — ne menjen mind az adatbázisra.
+let onlineCache = { at: 0, value: 0 };
 router.get("/online-count", async (req, res) => {
-  const { rows } = await pool.query(`
-    SELECT COUNT(*) 
-    FROM users
-    WHERE last_seen > now() - interval '5 minutes'
-  `);
-
-  res.json({ online: Number(rows[0].count) });
+  try {
+    if (Date.now() - onlineCache.at > 15_000) {
+      const { rows } = await pool.query(
+        `SELECT COUNT(*) FROM users WHERE last_seen > now() - interval '5 minutes'`);
+      onlineCache = { at: Date.now(), value: Number(rows[0].count) };
+    }
+    res.json({ online: onlineCache.value });
+  } catch (err) {
+    res.status(500).json({ error: "Szerver hiba" });
+  }
 });
 
 

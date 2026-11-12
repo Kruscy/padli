@@ -84,9 +84,10 @@ body {
 /* ================= HERO ================= */
 
 .hero {
+  box-sizing: border-box; /* a padding ne tolja a 100% fölé (telefonon kilógott, 2026-11-12) */
   position: relative;
   width: 100%;
-  max-width: 1100px;
+  max-width: 1140px; /* = 1100px tartalom + 2×20px padding, asztali nézet változatlan */
   margin: 32px auto 48px;
   padding: 0 20px;
   min-height: 340px;

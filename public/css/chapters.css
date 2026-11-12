@@ -17,7 +17,8 @@ body {
 main.content {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 80px 24px 24px;
+  /* oldalsó margó a kijelző szélességével arányos (2026-11-12) */
+  padding: 80px clamp(12px, 4vw, 24px) 24px;
 }
 
 /* ===== MANGA HEADER ===== */
@@ -139,7 +140,8 @@ main.content {
 /* 🔹 TELJES SOR = KATTINTHATÓ */
 .chapter-row {
   display: grid;
-  grid-template-columns: 32px 1fr auto 110px;
+  /* minmax(0, 1fr): a cím oszlop zsugorodhat, a sor sosem lóg ki */
+  grid-template-columns: 32px minmax(0, 1fr) auto 110px;
   align-items: center;
   gap: 12px;
 
@@ -315,9 +317,9 @@ main.content {
   }
 
   .chapter-row {
-    grid-template-columns: 28px 1fr auto auto;
-    gap: 8px;
-    padding: 12px 12px;
+    grid-template-columns: 28px minmax(0, 1fr) auto auto;
+    gap: clamp(6px, 2vw, 8px);
+    padding: 12px clamp(8px, 3vw, 12px);
   }
 
   .scan-date {
@@ -336,4 +338,17 @@ main.content {
     padding: 8px 12px;
     font-size: 13px;
   }
+}
+
+/* Nagyon keskeny kijelző (2026-11-12): a megtekintés és a dátum egymás alá */
+@media (max-width: 380px) {
+  .chapter-row {
+    grid-template-columns: 24px minmax(0, 1fr) auto;
+    grid-template-areas: "st ti vw" "st ti dt";
+    row-gap: 2px;
+  }
+  .chapter-row > .read { grid-area: st; }
+  .chapter-row > .chapter-title { grid-area: ti; }
+  .chapter-row > .chapter-views { grid-area: vw; }
+  .chapter-row > .scan-date { grid-area: dt; }
 }

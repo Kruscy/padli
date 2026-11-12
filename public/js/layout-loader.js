@@ -285,11 +285,33 @@ async function loadOnlineCount() {
     console.error("Online count error", err);
   }
 }
-// első betöltés
-loadOnlineCount();
-
-// 30mp-enként frissít
-setInterval(loadOnlineCount, 30000);
+// Online-számláló frissítése (2026-11-12): setInterval helyett egymás után
+// ütemezett setTimeout, és háttérben lévő lapon nem kérdez. Korábban egy
+// éjszakára nyitva hagyott lap a gép felébredésekor egyszerre ~1000
+// elmaradt lekérést küldött (téves DoS-riasztás). Egy lapon csak egy
+// időzítő fut, akkor is, ha a modul valamiért kétszer töltődne be.
+(() => {
+  const PERIOD = 30000;
+  if (window.__padliOnlineTimer !== undefined) return;
+  window.__padliOnlineTimer = null;
+  let lastRun = 0;
+  const schedule = () => {
+    clearTimeout(window.__padliOnlineTimer);
+    window.__padliOnlineTimer = setTimeout(tick, PERIOD);
+  };
+  async function tick() {
+    if (document.hidden) { window.__padliOnlineTimer = null; return; } // láthatóvá váláskor indul újra
+    lastRun = Date.now();
+    await loadOnlineCount();
+    schedule();
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) return;
+    // visszatéréskor egyetlen frissítés (ha rég volt), utána a szokásos ütem
+    if (Date.now() - lastRun > PERIOD) tick(); else if (!window.__padliOnlineTimer) schedule();
+  });
+  tick();
+})();
 
 document.dispatchEvent(new Event("layoutLoaded"));
 document.addEventListener("DOMContentLoaded", loadLayout);
