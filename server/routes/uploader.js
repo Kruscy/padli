@@ -10,7 +10,7 @@ import { findExistingSeries } from "../lib/manga-duplicates.js";
 import { logSecurityEvent } from "../lib/security-log.js";
 import { isImageBuffer } from "../lib/safe-path.js";
 import { compressPageImage } from "../lib/image-compress.js";
-import { updateMangaCore } from "../lib/manga-meta.js";
+import { updateMangaCore, CoverFetchError } from "../lib/manga-meta.js";
 import { purgeChapterImages } from "../lib/cf-purge.js";
 import { trackUploadRequest, handleClientUploadReport } from "../lib/upload-log.js";
 import { processUploadedCover } from "../lib/cover-image.js";
@@ -836,11 +836,12 @@ router.post("/manga/:slug", requireUploader, loadEditableManga, express.json(), 
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    await updateMangaCore(client, req.editableMangaId, { cover_url, description, title, genres, tags });
+    const saved = await updateMangaCore(client, req.editableMangaId, { cover_url, description, title, genres, tags });
     await client.query("COMMIT");
-    res.json({ ok: true });
+    res.json({ ok: true, cover_url: saved.cover_url || null });
   } catch (err) {
     await client.query("ROLLBACK").catch(() => {});
+    if (err instanceof CoverFetchError) return res.status(400).json({ error: err.message });
     console.error("UPLOADER MANGA EDIT ERROR:", err);
     res.status(500).json({ error: "DB error" });
   } finally {

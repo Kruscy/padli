@@ -2,7 +2,16 @@
 // frissítése — ezt használja az admin szerkesztő ÉS a feltöltői adatlap-
 // szerkesztő is (server/routes/admin.js, server/routes/uploader.js), hogy a
 // műfaj/címke tranzakciós logika egy helyen éljen.
+import { localizeCoverUrl } from "./cover-fetch.js";
+export { CoverFetchError } from "./cover-fetch.js";
+
 export async function updateMangaCore(client, mangaId, { cover_url, description, title, genres, tags }) {
+  // Külső (pl. MangaDex) borító-URL: letöltjük a saját tárhelyre, mert a
+  // forrásoldal a beágyazott képet nem engedi (2026-11-12).
+  if (cover_url) {
+    const cur = (await client.query("SELECT slug, cover_url FROM manga WHERE id = $1", [mangaId])).rows[0];
+    cover_url = await localizeCoverUrl(cover_url, cur?.cover_url, cur?.slug);
+  }
   await client.query(
     `UPDATE manga SET
       cover_url = COALESCE($1, cover_url),
@@ -30,4 +39,5 @@ export async function updateMangaCore(client, mangaId, { cover_url, description,
       [mangaId, names]
     );
   }
+  return { cover_url };
 }

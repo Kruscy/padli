@@ -10,7 +10,7 @@ import { purgeChapterImages } from "../lib/cf-purge.js";
 import { requestScan, SCAN_OWNER_USER_ID } from "../lib/scan-runner.js";
 import { logAdminAction } from "../lib/admin-log.js";
 import { buildUploaderRoots, matchUploaderRoot, assignUploaderIfEmpty } from "../lib/uploader-roots.js";
-import { updateMangaCore } from "../lib/manga-meta.js";
+import { updateMangaCore, CoverFetchError } from "../lib/manga-meta.js";
 import fs from "fs";
 import path from "path";
 import { processUploadedCover } from "../lib/cover-image.js";
@@ -81,10 +81,11 @@ router.post("/manga/:slug", async (req, res) => {
     // Egy tranzakcióban: korábban egy félbeszakadt kérés után a műfajok/címkék
     // törölve maradhattak; és műfajonként/címkénként 2 külön lekérdezés helyett
     // csoportosan írunk.
+    let savedCover = null;
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
-      await updateMangaCore(client, mangaId, { cover_url, description, title, genres, tags });
+      ({ cover_url: savedCover } = await updateMangaCore(client, mangaId, { cover_url, description, title, genres, tags }));
       await client.query(
         `UPDATE manga SET
           uploaders = $1::text[],
@@ -102,8 +103,9 @@ router.post("/manga/:slug", async (req, res) => {
       client.release();
     }
 
-    res.json({ ok: true });
+    res.json({ ok: true, cover_url: savedCover || null });
   } catch (err) {
+    if (err instanceof CoverFetchError) return res.status(400).json({ error: err.message });
     console.error("ADMIN EDIT ERROR:", err);
     res.status(500).json({ error: "DB error", detail: err.message });
   }

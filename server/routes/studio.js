@@ -287,9 +287,11 @@ admin.get("/overview", async (req, res) => {
       profit_ft: +(e.points * POINT_FT - e.cost_ft).toFixed(0),
     })).sort((a, b) => b.pages - a.pages);
     const { rows: keys } = await pool.query(`
-      SELECT u.username, count(*)::int AS keys, max(k.last_used_at) AS last_used
+      SELECT u.id AS user_id, u.username, count(*)::int AS keys, max(k.last_used_at) AS last_used,
+             (SELECT count(*)::int FROM pc_key_requests r
+               WHERE r.user_id = u.id AND r.created_at >= now() - interval '30 days') AS requests_30d
         FROM api_keys k JOIN users u ON u.id = k.user_id
-       WHERE k.revoked_at IS NULL GROUP BY u.username ORDER BY max(k.last_used_at) DESC NULLS LAST`);
+       WHERE k.revoked_at IS NULL GROUP BY u.id, u.username ORDER BY max(k.last_used_at) DESC NULLS LAST`);
     res.json({
       month, latest: await latestInfo(), publicDownload: await publicDownload(),
       testers: [...testers()], pointFt: POINT_FT,
@@ -306,6 +308,29 @@ admin.get("/overview", async (req, res) => {
     });
   } catch (err) {
     console.error("[STUDIO] admin overview:", err.message);
+    res.status(500).json({ error: "Szerver hiba" });
+  }
+});
+
+// Egy felhasználó kulcsos kéréseinek naplója (2026-11-12): végpontonkénti
+// összesítés (30 nap) + a legutóbbi 100 kérés.
+admin.get("/key-requests/:userId", async (req, res) => {
+  const userId = parseInt(req.params.userId, 10);
+  if (!Number.isInteger(userId)) return res.status(400).json({ error: "Hibás azonosító" });
+  try {
+    const [byPath, recent] = await Promise.all([
+      pool.query(`SELECT method, path, count(*)::int AS n,
+                         count(*) FILTER (WHERE status >= 400)::int AS errors, max(created_at) AS last
+                    FROM pc_key_requests
+                   WHERE user_id = $1 AND created_at >= now() - interval '30 days'
+                   GROUP BY method, path ORDER BY n DESC LIMIT 50`, [userId]),
+      pool.query(`SELECT r.created_at, r.method, r.path, r.status, r.ms, r.ip, k.prefix
+                    FROM pc_key_requests r LEFT JOIN api_keys k ON k.id = r.key_id
+                   WHERE r.user_id = $1 ORDER BY r.created_at DESC LIMIT 100`, [userId]),
+    ]);
+    res.json({ byPath: byPath.rows, recent: recent.rows });
+  } catch (err) {
+    console.error("[STUDIO] key-requests:", err.message);
     res.status(500).json({ error: "Szerver hiba" });
   }
 });

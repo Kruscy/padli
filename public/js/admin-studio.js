@@ -23,6 +23,30 @@
   const tdr = td + ";text-align:right;white-space:nowrap";
   const B = "display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:999px;background:#1e1b2e;color:#e2e8f0;border:1px solid #3b3561;font-size:.86rem;font-weight:600;cursor:pointer";
 
+  // Kulcsos kérések naplója (2026-11-12): ingyenes lekérések is
+  async function showKeyLog(uid) {
+    const el = box.querySelector(`.sd-keylog-box[data-uid="${CSS.escape(uid)}"]`);
+    if (!el) return;
+    if (el.style.display !== "none") { el.style.display = "none"; return; }
+    el.style.display = ""; el.innerHTML = '<p style="color:#64748b">Betöltés…</p>';
+    try {
+      const r = await fetch(`/api/studio/admin/key-requests/${encodeURIComponent(uid)}`, { credentials: "include" });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      const d = await r.json();
+      const when = t => new Date(t).toLocaleString("hu-HU");
+      const stCol = s => s >= 400 ? "#ef4444" : "#22c55e";
+      el.innerHTML = !d.recent.length ? '<p style="color:#64748b">Nincs naplózott kérés (a naplózás 2026-11-12 óta él).</p>' : `
+        <div style="color:#94a3b8;font-size:.78rem;margin:4px 0">Végpontonként, utolsó 30 nap</div>
+        <table style="width:100%;border-collapse:collapse"><tr><th style="${th}">Végpont</th><th style="${th};text-align:right">Kérés</th><th style="${th};text-align:right">Hiba</th><th style="${th}">Utoljára</th></tr>
+        ${d.byPath.map(p => `<tr><td style="${td}">${esc(p.method)} ${esc(p.path)}</td><td style="${tdr}">${p.n}</td><td style="${tdr}">${p.errors}</td><td style="${td}">${when(p.last)}</td></tr>`).join("")}</table>
+        <div style="color:#94a3b8;font-size:.78rem;margin:10px 0 4px">Legutóbbi ${d.recent.length} kérés</div>
+        <div style="max-height:320px;overflow:auto"><table style="width:100%;border-collapse:collapse"><tr><th style="${th}">Idő</th><th style="${th}">Kérés</th><th style="${th};text-align:right">Állapot</th><th style="${th};text-align:right">ms</th><th style="${th}">Kulcs</th><th style="${th}">IP</th></tr>
+        ${d.recent.map(x => `<tr><td style="${td}">${when(x.created_at)}</td><td style="${td}">${esc(x.method)} ${esc(x.path)}</td><td style="${tdr};color:${stCol(x.status)}">${esc(x.status)}</td><td style="${tdr}">${esc(x.ms)}</td><td style="${td}">${esc(x.prefix || "–")}</td><td style="${td}">${esc(x.ip)}</td></tr>`).join("")}</table></div>`;
+    } catch (e) {
+      el.innerHTML = `<p style="color:#ef4444">Nem sikerült betölteni: ${esc(e.message)}</p>`;
+    }
+  }
+
   const nav = () => `<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
     <button id="sdPrev" style="${B}">‹ Előző hónap</button>
     <span style="min-width:170px;text-align:center;color:#e2e8f0;font-weight:700;padding:7px 14px;border-radius:999px;background:#0f172a;border:1px solid #1e293b">📅 ${esc(label(month))}</span>
@@ -83,12 +107,17 @@
           <td style="${tdr}">${ft(m.revenue_ft)}</td><td style="${tdr}">${ft(m.cost_ft)}</td><td style="${tdr}">${m.pages ? (m.cost_ft / m.pages).toFixed(2) + " Ft" : "–"}</td></tr>`).join("")
           || `<tr><td style="${td}" colspan="6">Nincs adat.</td></tr>`}</tbody></table></div>
       <div style="${card}"><div style="color:#e2e8f0;font-weight:600;margin-bottom:8px">API-kulccsal rendelkezők</div>
-        ${d.keyHolders.map(k => `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #1e293b;font-size:.85rem;color:#e2e8f0">
+        ${d.keyHolders.map(k => `<div style="padding:5px 0;border-bottom:1px solid #1e293b;font-size:.85rem;color:#e2e8f0">
+          <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap">
           <span>${esc(k.username)} <span style="color:#64748b">(${k.keys} kulcs)</span></span>
-          <span style="color:#94a3b8">${k.last_used ? "utoljára: " + new Date(k.last_used).toLocaleString("hu-HU") : "még nem használta"}</span></div>`).join("")
+          <span style="color:#94a3b8">${k.last_used ? "utoljára: " + new Date(k.last_used).toLocaleString("hu-HU") : "még nem használta"}
+            · ${k.requests_30d ?? 0} kérés / 30 nap
+            <button class="sd-keylog" data-uid="${esc(k.user_id)}" style="${B};padding:3px 10px;font-size:.75rem;margin-left:6px">Napló</button></span></div>
+          <div class="sd-keylog-box" data-uid="${esc(k.user_id)}" style="display:none;margin-top:8px"></div></div>`).join("")
           || '<p style="color:#64748b">Még senkinek nincs kulcsa.</p>'}</div>
       <p style="color:#64748b;font-size:.75rem">A bevétel a levont pontok × ${d.pointFt} Ft (a legolcsóbb csomag ára); áfa és Stripe-díj nélkül. A költség: Torii-kredit × 0,465 Ft + OpenAI-díj.</p>`;
     bindNav();
+    box.querySelectorAll(".sd-keylog").forEach(b => b.onclick = () => showKeyLog(b.dataset.uid));
     document.getElementById("sdPublic").onchange = async (e) => {
       const want = e.target.checked;
       if (want && !confirm("Biztosan letölthetővé teszed a programot minden belépett felhasználónak?")) { e.target.checked = false; return; }

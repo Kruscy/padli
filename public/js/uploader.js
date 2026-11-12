@@ -1592,7 +1592,14 @@ renderQueue();
           genres, tags,
         }),
       });
-      if (!r.ok) throw new Error((await r.json()).error || "Mentés sikertelen");
+      const saved = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(saved.error || "Mentés sikertelen");
+      // Külső (pl. MangaDex) borítót a szerver a saját tárhelyre tölti le
+      if (saved.cover_url && !coverFileEl.files[0]) {
+        coverUrlEl.value = saved.cover_url;
+        coverPreview.src = saved.cover_url;
+        coverPreview.style.display = "";
+      }
 
       saveStatus.textContent = "✓ Elmentve";
       setTimeout(() => { saveStatus.textContent = ""; }, 2500);

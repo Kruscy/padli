@@ -507,10 +507,13 @@ async function saveMangaEdit() {
       })
     });
 
+    const saveData = await res.json().catch(() => ({}));
     if (!res.ok) {
-      alert("❌ Mentés sikertelen");
+      alert("❌ Mentés sikertelen" + (saveData.error ? ": " + saveData.error : ""));
       return;
     }
+    // Külső (pl. MangaDex) borítót a szerver a saját tárhelyre tölti le
+    if (saveData.cover_url) coverUrl = saveData.cover_url;
 
     // Ha új AniList összekötés → metadata frissítés
     if (isNewAnilist) {

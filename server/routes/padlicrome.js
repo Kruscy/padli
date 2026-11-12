@@ -101,6 +101,29 @@ async function isSubscriber(userId) {
 const isKeyGateway = req => req.baseUrl.startsWith("/api/pc/");
 const KEY_BLOCKED = /^\/(import-bug-image|submit-bug-fix|fix-status)\b/;
 
+/* Minden kulcsos kérés naplózása, az ingyeneseké (/me, /stats, modellista,
+   könyvtár…) is (2026-11-12). A fizetős hívások részletei továbbra is a
+   pc_*_usage táblákban vannak; itt csak: ki, mikor, mit, milyen eredménnyel.
+   Egy kérés egyszer kerül be (több requireAuth-os útvonal esetén is). */
+function logKeyRequest(req, res) {
+  if (req._pcKeyLogged) return;
+  req._pcKeyLogged = true;
+  const t0 = Date.now();
+  const path = (req.baseUrl + req.path).slice(0, 300);
+  res.once("finish", () => {
+    pool.query(
+      `INSERT INTO pc_key_requests (key_id, user_id, username, method, path, status, ms, ip)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [req.authUser.keyId, req.authUser.id, req.authUser.username, req.method, path,
+       res.statusCode, Date.now() - t0, getClientIp(req)]
+    ).catch(err => console.warn("[PADLICROME] kulcsnapló:", err.message));
+  });
+}
+// 90 napnál régebbi kulcsnapló-sorok törlése (óránként)
+setInterval(() => {
+  pool.query("DELETE FROM pc_key_requests WHERE created_at < now() - interval '90 days'").catch(() => {});
+}, 60 * 60 * 1000).unref();
+
 async function requireAuth(req, res, next) {
   if (!isKeyGateway(req)) {
     if (!req.session?.user?.id) return res.status(401).json({ error: "Nem vagy bejelentkezve" });
@@ -116,8 +139,9 @@ async function requireAuth(req, res, next) {
                          dedupeKey: key.slice(0, 10), details: { prefix: key.slice(0, 10) } });
       return res.status(401).json({ error: "Érvénytelen vagy visszavont API-kulcs" });
     }
-    if (KEY_BLOCKED.test(req.path)) return res.status(403).json({ error: "Ez a funkció API-kulccsal nem érhető el" });
     req.authUser = { id: user.id, username: user.username, keyId: user.keyId };
+    logKeyRequest(req, res);
+    if (KEY_BLOCKED.test(req.path)) return res.status(403).json({ error: "Ez a funkció API-kulccsal nem érhető el" });
     next();
   } catch (err) {
     console.error("[PADLICROME] api-kulcs:", err.message);
