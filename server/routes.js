@@ -22,6 +22,7 @@ import { getNewReleasesCache, setNewReleasesCache, clearNewReleasesCache} from "
 import { getNewMangaCache } from "./cache/new-manga.js";
 import { resolveAdultMode, ADULT_GENRE_EXISTS_SQL } from "./lib/age.js";
 import mangaRoutes from "./routes/manga.js";
+import mangaCommentsRoutes from "./routes/manga-comments.js";
 import releasesRoutes from "./routes/releases.js";
 import pollRoutes from "./routes/polls.js";
 import statsRoutes from "./routes/stats.js";
@@ -583,6 +584,7 @@ router.post("/want/:slug", requireLogin, async (req, res) => {
 
 /* ================= ADMIN ================= */
 
+router.use("/", mangaCommentsRoutes);  // /manga/:slug/comments, /manga-comments/:id (2026-11-12)
 router.use("/", mangaRoutes);          // /manga, /chapters stb
 router.use("/", animeSubtitlesRoutes); // /anime, /admin/anime stb
 router.use(releasesRoutes);       // /new-releases

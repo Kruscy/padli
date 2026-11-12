@@ -984,6 +984,121 @@ function buildHistory(conversationHistory, searchTerm) {
   return history.slice(-4); // max 4 üzenet a history-ban
 }
 
+/* ── HASONLÓ MŰVEK (2026-11-12) ─────────────────────────────
+   „Crazy Demon-hoz hasonló?”, „valami olyat mint a Solo Leveling”:
+   a megnevezett művet megkeressük nálunk, és az oldal „Hasonló művek”
+   fülének adataiból (AniList-ajánlások, recommendation tábla) ajánlunk
+   — csak olyat, ami nálunk is fent van (van fejezete) és nem 18+.
+   Ha abból kevés van, a közös műfajok/címkék alapján pótoljuk. ── */
+const ADULT_SQL = "EXISTS (SELECT 1 FROM manga_genre mg JOIN genre g ON g.id = mg.genre_id " +
+  "WHERE mg.manga_id = m.id AND g.name IN ('Hentai','Ecchi'))";
+
+function extractSimilarTargetText(question) {
+  const q = question.replace(/\bpadli\b[,:]?\s*/gi, "").replace(/[?!.„”"“]/g, " ").replace(/\s+/g, " ").trim();
+  const pats = [
+    // „crazy demon-hoz hasonló”, „a Solo Levelinghez hasonlót”
+    /^(.*?\S)\s*-?\s*(?:hoz|hez|höz|ra|re|val|vel)\s+hasonl/i,
+    // „hasonló(t) mint a X”, „hasonló a X-hez”, „hasonlót a X-hez”
+    /hasonl\S*\s+(?:(?:valami|mu|művet|mű|sorozatot|manhwat|mangat|mangát|manhwát)\s+)?(?:mint\s+)?(?:az?\s+)?(.+?)(?:\s*-?\s*(?:hoz|hez|höz))?$/i,
+    // „olyat/olyan mint a X”, „ilyet mint a X”
+    /(?:olyan|olyat|ilyen|ilyet)\S*\s+(?:\S+\s+){0,2}mint\s+(?:az?\s+)?(.+)$/i,
+  ];
+  for (const re of pats) {
+    const m = q.match(re);
+    if (m && m[1] && m[1].trim().length >= 3) return m[1].trim();
+  }
+  return null;
+}
+
+async function findLocalMangaLoose(text) {
+  const words = text.split(/\s+/).filter(Boolean);
+  // A leghosszabb szóvégtől a rövidebb felé: „ajánlj valamit a crazy demon” → „crazy demon”
+  for (let n = Math.min(words.length, 7); n >= 1; n--) {
+    const term = words.slice(words.length - n).join(" ").replace(/^(?:az?|egy)\s+/i, "");
+    if (term.length < 3 || HU_STOP.has(term.toLowerCase())) continue;
+    try {
+      const { rows } = await dbPool.query(
+        `SELECT m.id, m.title, m.slug,
+                GREATEST(similarity(m.title, $1),
+                         COALESCE((SELECT max(similarity(a, $1)) FROM unnest(m.alt_titles) a), 0)) AS sim
+           FROM manga m
+          WHERE EXISTS (SELECT 1 FROM chapter c WHERE c.manga_id = m.id)
+            AND (m.title ILIKE $2 OR EXISTS (SELECT 1 FROM unnest(m.alt_titles) a WHERE a ILIKE $2)
+                 OR similarity(m.title, $1) > 0.35)
+          ORDER BY (m.title ILIKE $2) DESC, sim DESC LIMIT 1`,
+        [term, "%" + term + "%"]);
+      if (rows[0]) return rows[0];
+    } catch (err) { plog("SIMILAR", "keresési hiba: " + err.message); return null; }
+  }
+  return null;
+}
+
+async function findSimilarLocal(mangaId, limit) {
+  const { rows: recs } = await dbPool.query(
+    `SELECT DISTINCT ON (m.id) m.id, m.title, m.slug, m.average_score,
+            (SELECT count(*) FROM chapter c WHERE c.manga_id = m.id)::int AS chapter_count
+       FROM recommendation r JOIN manga m ON m.anilist_id = r.anilist_id
+      WHERE r.manga_id = $1 AND m.id <> $1 AND NOT ${ADULT_SQL}
+        AND EXISTS (SELECT 1 FROM chapter c WHERE c.manga_id = m.id)
+      ORDER BY m.id`, [mangaId]);
+  const out = recs.map(r => ({ ...r, source: "ajanlas" }));
+  if (out.length < limit) {
+    const { rows: more } = await dbPool.query(
+      `WITH src AS (
+         SELECT 'g' || genre_id AS k FROM manga_genre WHERE manga_id = $1
+         UNION SELECT 't' || tag_id FROM manga_tag WHERE manga_id = $1)
+       SELECT m.id, m.title, m.slug, m.average_score,
+              (SELECT count(*) FROM chapter c WHERE c.manga_id = m.id)::int AS chapter_count,
+              count(*) AS overlap
+         FROM manga m
+         JOIN (SELECT manga_id, 'g' || genre_id AS k FROM manga_genre
+               UNION ALL SELECT manga_id, 't' || tag_id FROM manga_tag) x ON x.manga_id = m.id
+         JOIN src ON src.k = x.k
+        WHERE m.id <> $1 AND m.id <> ALL($2::int[]) AND NOT ${ADULT_SQL}
+          AND EXISTS (SELECT 1 FROM chapter c WHERE c.manga_id = m.id)
+        GROUP BY m.id HAVING count(*) >= 3
+        ORDER BY count(*) DESC, m.average_score DESC NULLS LAST LIMIT $3`,
+      [mangaId, out.map(r => r.id), limit * 2]);
+    for (const r of more) out.push({ ...r, source: "mufaj" });
+  }
+  // Ne ugyanazokat ajánlja minden alkalommal
+  const fresh = out.filter(r => !recommendedTitles.has(r.title));
+  const pick = (fresh.length >= Math.min(limit, out.length) ? fresh : out).slice(0, limit);
+  pick.forEach(r => recommendedTitles.add(r.title));
+  return pick;
+}
+
+async function trySimilarReply(question) {
+  const l = question.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  if (!/hasonl|(?:olyan|olyat|ilyen|ilyet)\S*\s+(?:\S+\s+){0,2}mint/.test(l)) return null;
+  const targetText = extractSimilarTargetText(question);
+  if (!targetText) return null;
+  const target = await findLocalMangaLoose(targetText);
+  plog("SIMILAR", "\"" + targetText + "\" → " + (target ? target.title : "nincs nálunk"));
+  padliLog({ event: "similar_question", query: question, targetText, target: target?.title || null });
+  if (!target) return null; // nincs nálunk → a szokásos ág (AniList stb.) válaszol
+  const maxRes = getCfg("maxResults", config.recommendation.maxResults);
+  const recs = await findSimilarLocal(target.id, maxRes).catch(err => { plog("SIMILAR", err.message); return []; });
+  if (!recs.length) {
+    return await naturalize(
+      "Keresett mű: " + target.title + "\nHasonló, nálunk is fent lévő mű: nincs.",
+      "A user a(z) " + target.title + " című műhöz hasonlót kért, de nálunk most nincs hozzá hasonló. Válaszolj röviden, magyarul, javasold hogy mondjon egy műfajt.",
+      "A(z) " + target.title + " művéhez most nem találok hasonlót nálunk – mondj egy műfajt, és abból keresek! 📖");
+  }
+  const list = recs.map(r => {
+    const s = r.average_score ? " (" + (r.average_score / 10).toFixed(1) + "/10)" : "";
+    const c = r.chapter_count > 0 ? ", " + r.chapter_count + " fejezet" : "";
+    return "\"" + r.title + "\"" + s + c;
+  }).join(", ");
+  const linksBlock = recs.filter(r => r.slug).map(r => "[" + r.title + "](" + SITE_URL + "/chapters.html?slug=" + r.slug + ")").join("\n");
+  const fallback = "A(z) " + target.title + " rajongóinak nálunk ezeket ajánlom: " + list + " 📖" + (linksBlock ? "\n" + linksBlock : "");
+  const reply = await naturalize(
+    "Keresett mű: " + target.title + "\nHozzá hasonló, nálunk olvasható címek: " + list,
+    "A user a(z) " + target.title + " című műhöz hasonló sorozatot kért. Ajánld be ezeket a címeket lelkesen, természetesen, magyarul, 1-2 mondatban. Csak ezeket a címeket említsd.",
+    fallback);
+  return (linksBlock && !reply.includes(linksBlock)) ? reply + "\n" + linksBlock : reply;
+}
+
 /* ── VALASZ GENERAAS ────────────────────────────────────── */
 async function generateReply(question, conversationHistory, userKey) {
   conversationHistory = conversationHistory || [];
@@ -996,6 +1111,12 @@ async function generateReply(question, conversationHistory, userKey) {
   const intent = resolveIntent(scores);
   plog("INTENT", "-> " + (intent || "search"));
   trackAnalytics("intent", intent || "search");
+
+  // Egy megnevezett műhöz hasonlót kér → a „Hasonló művek” adataiból ajánlunk
+  if (intent !== "adult" && intent !== "patreon") {
+    const similarReply = await trySimilarReply(question).catch(err => { plog("SIMILAR", "hiba: " + err.message); return null; });
+    if (similarReply) return similarReply;
+  }
 
   if (intent === "adult") {
     plog("ADULT", "ollamanak atadva lazan");
