@@ -30,3 +30,6 @@ server/cache/*.tmp
 backups/
 /studio-dist/
 fix-staging/
+
+# Claude Code helyi beállításai (gépfüggő engedélyek)
+.claude/

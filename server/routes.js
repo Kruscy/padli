@@ -611,7 +611,23 @@ router.get("/new-manga", async (req, res) => {
     return res.json(rows);
   }
   const data = getNewMangaCache();
-  res.json(data || []);
+  if (!Array.isArray(data) || !data.length) return res.json([]);
+  // A cache-t csak a scan építi újra, a borító viszont gyakran a scan UTÁN
+  // kerül fel (feltöltő/admin szerkesztés, metaadat-letöltés) — ezért a
+  // borítót mindig élőben vesszük a DB-ből (2026-11-14).
+  try {
+    const { rows } = await pool.query(`
+      SELECT DISTINCT ON (slug) slug, cover_url
+      FROM manga
+      WHERE slug = ANY($1) AND cover_url IS NOT NULL AND cover_url <> ''
+      ORDER BY slug, id DESC
+    `, [data.map(m => m.slug)]);
+    const covers = new Map(rows.map(r => [r.slug, r.cover_url]));
+    return res.json(data.map(m => covers.has(m.slug) ? { ...m, cover_url: covers.get(m.slug) } : m));
+  } catch (err) {
+    console.error("[new-manga] borító-frissítés:", err.message);
+    return res.json(data);
+  }
 });
 router.use("/admin", adminRoutes);
 router.use("/wishlist", wishlistRoutes);
