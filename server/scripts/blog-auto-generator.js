@@ -6,6 +6,7 @@
 import OpenAI from "openai";
 import { pool } from "../db.js";
 import { generateStaticPost } from "../blog-static-generator.js";
+import { shareBlogPost } from "../lib/facebook-share.js";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
@@ -895,6 +896,9 @@ export async function generateBlogPost(topicIndex = null, customTopic = null, op
   // 4. Statikus HTML generálás
   await generateStaticPost(topic.slug);
   console.log(`[BlogGen] Kész: /blog/${topic.slug}.html`);
+
+  // 5. Facebook-oldal (ha be van állítva; hiba esetén csak naplóz)
+  await shareBlogPost(topic.slug);
 
   return rows[0];
 }

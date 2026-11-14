@@ -2,6 +2,7 @@
 import express from "express";
 import { pool } from "../db.js";
 import { generateStaticPost, regenerateIndex } from "../blog-static-generator.js";
+import { shareBlogPost } from "../lib/facebook-share.js";
 import { generateSitemap } from "../sitemap-generator.js";
 
 const router = express.Router();
@@ -171,7 +172,9 @@ router.post("/", requireAdmin, async (req, res) => {
     res.status(201).json(post);
     // Statikus HTML generálás közzétételkor
     if (post.published) {
-      generateStaticPost(post.slug).catch(console.error);
+      generateStaticPost(post.slug)
+        .then(() => shareBlogPost(post.slug))   // Facebook-oldal (2026-11-15)
+        .catch(console.error);
       generateSitemap().catch(console.error);
     }
   } catch (err) {
@@ -201,7 +204,10 @@ router.put("/:slug", requireAdmin, async (req, res) => {
     const updated = rows[0];
     res.json(updated);
     // Statikus HTML újragenerálás – közzétett vagy visszavont poszt esetén is
-    generateStaticPost(updated.slug).catch(console.error);
+    generateStaticPost(updated.slug)
+      // piszkozatból most közzétett új poszt → Facebook (a régiek 'skip'-pel jelölve)
+      .then(() => updated.published ? shareBlogPost(updated.slug) : null)
+      .catch(console.error);
     generateSitemap().catch(console.error);
   } catch (err) {
     console.error("Blog update error:", err);
