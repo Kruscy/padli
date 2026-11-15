@@ -10,7 +10,7 @@ import { fileURLToPath } from "url";
 import sharp from "sharp";
 import { pool } from "../db.js";
 import { ADULT_GENRE_EXISTS_SQL } from "./age.js";
-import { chapterFiles, openaiJson, contactSheet, textImg, ensureFont, cleanDescription, SOCIAL_SAFE_SQL } from "./manga-poster.js";
+import { chapterFiles, openaiJson, contactSheet, textImg, ensureFont, cleanDescription, SOCIAL_SAFE_SQL, recentFeedback } from "./manga-poster.js";
 import { r2Fetch, localPathToR2Key } from "../r2.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -125,13 +125,14 @@ async function extractSequence(chapters, tmp, maxPanels = 72) {
 }
 
 /* ── AI: 3–4 egymást követő kocka kiválasztása ── */
-async function aiChooseSequence(panels, manga) {
+async function aiChooseSequence(panels, manga, feedback = "", learned = "") {
   const sheet = await contactSheet(panels);
   const desc = cleanDescription(manga.description).slice(0, 600);
   const out = await openaiJson("gpt-4o", [
     { type: "text", text: `Ez egy manhwa első fejezetének kockái OLVASÁSI SORRENDBEN, sorszámozva (balról jobbra, sorról sorra). Mű: ${manga.title}. Leírás: ${desc}
 Egy Instagram lapozós (carousel) poszthoz keress 3 vagy 4 EGYMÁST KÖVETŐ kockát (pl. 12,13,14), amelyek együtt egy kis, önmagában is érthető jelenetet adnak, és kíváncsivá teszik az olvasót (feszült pillanat, poén, rejtélyes fordulat, látványos belépő). Az utolsó kocka legyen „cliffhanger”-szerű, ha lehet.
 KIZÁRVA: stáblista/fordítói oldal, vízjel vagy weboldal-cím, üres vagy szinte üres kocka, szexualizált/félmeztelen vagy véres-brutális kocka, nagyon kicsi vagy olvashatatlan kocka.
+MINDEN dián legyen értelmezhető, jól látható tartalom: az ELSŐ kockán jól felismerhető szereplő (lehetőleg egész arc) legyen. NE válassz olyan sort, amelyben csak egy tárgy (pl. kard, fegyver, kéz) látszik, vagy félbevágott / csak részben látható arc van — ezek önálló diaként értelmetlenek.${learned}${feedback ? "\nMOSTANI KÉRÉS AZ ADMINTÓL (ez a legfontosabb): " + feedback : ""}
 Adj 3 lehetőséget rangsorolva.
 Válasz CSAK JSON: {"options":[{"panels":[szám,...],"why":"rövid indok"}]}` },
     { type: "image_url", image_url: { url: "data:image/jpeg;base64," + sheet.toString("base64"), detail: "high" } },
@@ -141,12 +142,12 @@ Válasz CSAK JSON: {"options":[{"panels":[szám,...],"why":"rövid indok"}]}` },
 }
 
 /* Közelről ellenőrzi a kiválasztott sort, és megírja a szöveget. */
-async function aiVerify(seq, manga) {
+async function aiVerify(seq, manga, feedback = "", learned = "") {
   const imgs = await Promise.all(seq.map(p => sharp(p.file).resize(720, 900, { fit: "inside" }).jpeg({ quality: 80 }).toBuffer()));
   const desc = cleanDescription(manga.description).slice(0, 600);
   const out = await openaiJson("gpt-4o", [
     { type: "text", text: `Ezek egy manhwa (${manga.title}) egymást követő kockái, egy Instagram lapozós poszthoz. Leírás: ${desc}
-1) Megfelelő-e: összefüggő, érthető kis jelenet; nincs vízjel, stáblista, szexualizált vagy véres-brutális tartalom; a kockák élesek, a szövegek olvashatók?
+1) Megfelelő-e: összefüggő, érthető kis jelenet; nincs vízjel, stáblista, szexualizált vagy véres-brutális tartalom; a kockák élesek, a szövegek olvashatók; az első kockán jól látható szereplő van; egyik kocka sem csak egy tárgy (pl. kard) vagy félbevágott arc?${learned}${feedback ? " Az admin kérése: " + feedback : ""}
 2) Ha igen, írj magyarul egy rövid Instagram-szöveget: 1–2 figyelemfelkeltő mondat erről a jelenetről és a műről (ne spoilerezz a jeleneten túl, ne találj ki nem látható dolgot), a végén egy kérdés a követőkhöz. Hashtaget NE írj.
 Válasz CSAK JSON: {"ok":true/false,"reason":"...","caption":"..."}` },
     ...imgs.map(b => ({ type: "image_url", image_url: { url: "data:image/jpeg;base64," + b.toString("base64"), detail: "low" } })),
@@ -219,7 +220,8 @@ export async function ctaSlide(manga, fallbackFile, h = H) {
 }
 
 /* ── Teljes folyamat: diák + szöveg ── */
-export async function generateSnippet(slug, { avoid = [] } = {}) {
+export async function generateSnippet(slug, { avoid = [], feedback = "" } = {}) {
+  const learned = await recentFeedback("snippet");
   const { manga, chapters } = await loadFirstChapters(slug);
   if (!manga || !chapters.length) throw new Error("nincs olvasható fejezet");
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "padli-snippet-"));
@@ -228,12 +230,12 @@ export async function generateSnippet(slug, { avoid = [] } = {}) {
     if (panels.length < 8) throw new Error(`kevés képkocka (${panels.length})`);
     // Újragenerálásnál a korábban használt kockák kerülendők
     const avoidIdx = new Set(avoid.map(a => parseInt(String(a).match(/s(\d{4})\.jpg$/)?.[1] ?? "-1", 10) + 1));
-    const options = (await aiChooseSequence(panels, manga)).filter(o => !o.some(n => avoidIdx.has(n)));
+    const options = (await aiChooseSequence(panels, manga, feedback, learned)).filter(o => !o.some(n => avoidIdx.has(n)));
     if (!options.length) throw new Error("az AI nem talált megfelelő jelenetet");
     let seq = null, verdict = null;
     for (const opt of options) {
       const cand = opt.map(n => panels[n - 1]);
-      verdict = await aiVerify(cand, manga);
+      verdict = await aiVerify(cand, manga, feedback, learned);
       if (verdict.ok && verdict.caption) { seq = cand; break; }
       console.warn("[ig-snippet] elvetve:", opt.join(","), verdict.reason);
     }
@@ -253,13 +255,13 @@ export async function generateSnippet(slug, { avoid = [] } = {}) {
 }
 
 /* Több próbával (más művel), a sikertelen próbák naplózva. */
-export async function buildSnippet({ slug = null, exclude = [], avoid = [] } = {}) {
+export async function buildSnippet({ slug = null, exclude = [], avoid = [], feedback = "" } = {}) {
   const tried = [...exclude];
   let lastErr;
   for (let i = 0; i < (slug ? 1 : 3); i++) {
     const m = slug ? { slug } : await pickSnippetManga(tried);
     if (!m) break;
-    try { return await generateSnippet(m.slug, { avoid }); }
+    try { return await generateSnippet(m.slug, { avoid, feedback }); }
     catch (e) {
       lastErr = e; tried.push(m.slug);
       console.warn(`[ig-snippet] ${m.slug}: ${e.message}`);

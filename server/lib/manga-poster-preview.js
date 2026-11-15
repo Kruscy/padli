@@ -35,8 +35,8 @@ function buttons(id, disabled = false) {
 }
 
 /* Elkészít egy előnézetet és kiküldi a Discordra. */
-export async function createPreview({ slug = null, exclude = [], note = "" } = {}) {
-  const res = await buildWeeklyPoster({ slug, exclude });
+export async function createPreview({ slug = null, exclude = [], note = "", feedback = "" } = {}) {
+  const res = await buildWeeklyPoster({ slug, exclude, feedback });
   fs.mkdirSync(DIR, { recursive: true });
   const { rows } = await pool.query(
     `INSERT INTO manga_posters (manga_id, panels, caption, status) VALUES ($1, $2, $3, 'pending') RETURNING id`,

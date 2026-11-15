@@ -251,6 +251,10 @@ bot.on("messageCreate", async msg => {
 /* Más modulok gombjai (pl. heti manga-poszter előnézet, 2026-11-15):
    onButton("prefix:", handler) — a customId elejére illesztünk. */
 const buttonHandlers = [];
+/* Üzenet-figyelő más modulokból (pl. #media visszajelzés) — 2026-11-15 */
+export function onMessage(handler) {
+  bot.on("messageCreate", m => { if (!m.author.bot) Promise.resolve(handler(m)).catch(e => console.error("[onMessage]", e.message)); });
+}
 export function onButton(prefix, handler) { buttonHandlers.push({ prefix, handler }); }
 export function isAdminMember(member) { return !!member?.roles?.cache?.has(ADMIN_ROLE_ID); }
 

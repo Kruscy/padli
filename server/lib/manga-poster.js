@@ -47,6 +47,17 @@ export function ensureFont() {
 }
 
 /* ── Mű kiválasztása: nem 18+, van borító, ≥5 fejezet, még nem volt ── */
+/* Az adminok korábbi #media-visszajelzései (általános szabályok) az AI-promptba. */
+export async function recentFeedback(kind, limit = 12) {
+  try {
+    const { rows } = await pool.query(
+      `SELECT instruction FROM social_feedback WHERE kind = $1 AND instruction IS NOT NULL AND instruction <> ''
+        ORDER BY id DESC LIMIT $2`, [kind, limit]);
+    if (!rows.length) return "";
+    return "\nAZ ADMINOK KORÁBBI VISSZAJELZÉSEI (ezeket feltétlenül tartsd be):\n" + rows.map(r => "- " + r.instruction).join("\n");
+  } catch { return ""; }
+}
+
 /* Közösségi posztokból kizárva (2026-11-15, user kérése): kézi kizárás (pl. magyarul hivatalosan
    megjelent mű, Berserk), AniList 18+, nagyon véres (Gore ≥ 80) vagy meztelenkedős (Nudity ≥ 60) mű. */
 export const SOCIAL_SAFE_SQL = `m.social_exclude IS NULL AND NOT COALESCE(m.anilist_is_adult, false)
@@ -197,7 +208,8 @@ export async function openaiJson(model, content, maxTokens = 600) {
   return out;
 }
 
-async function aiPick(cands, { cover = null, description = "" } = {}) {
+async function aiPick(cands, { cover = null, description = "", feedback = "" } = {}) {
+  const learned = await recentFeedback("poster");
   const sheet = await contactSheet(cands);
   const prompt = `Ez egy manhwa több fejezetéből kivágott, sorszámozott képkockák áttekintője. Egy Facebook-ajánló poszterhez válogass képkockákat: add meg a legjobb 8 MEGFELELŐ kockát rangsorolva (a legjobb elöl; ebből az első ${PICKS} kerül a poszterre, ezért az első ${PICKS} együtt is legyen változatos).
 SZIGORÚAN KIZÁRVA:
@@ -208,7 +220,7 @@ SZIGORÚAN KIZÁRVA:
 - szexualizált, kihívó, félmeztelen vagy véres-brutális kockák.
 - ugyanarról a jelenetről/oldalról csak egy kocka.
 FŐSZEREPLŐ: ${cover ? "A MÁSODIK kép a mű borítója — a rajta kiemelt szereplő(k) a főszereplő(k). " : ""}${description ? "A mű leírása: " + description.slice(0, 700) + " " : ""}Keresd meg a kockák között a főszereplőt (ugyanaz a frizura, hajszín, ruha, arc, mint a borítón / a leírásban). Az első ${PICKS} kockából LEGALÁBB 2-n a FŐSZEREPLŐ legyen jól felismerhetően (ha egyáltalán szerepel), lehetőleg az arca. A "main" listába írd az ÖSSZES kockát, amelyen a főszereplő biztosan látszik. A főszereplős kockákra is ugyanúgy vonatkozik minden kizárás (buborék, felirat, vízjel)!
-VÁLOGATÁS: legyen változatos — 1 hangulatos helyszín, LEGALÁBB 3 kocka, amelyen jól felismerhető szereplő-ARC látszik (lehetőleg a főszereplők, különböző szereplők), 1 akció vagy feszült pillanat. Ha a sztoriban állat vagy különleges lény a főszereplő, az is szerepeljen. Látványos, éles, színes kockák, amelyek kíváncsivá tesznek.
+VÁLOGATÁS: legyen változatos — 1 hangulatos helyszín, LEGALÁBB 3 kocka, amelyen jól felismerhető szereplő-ARC látszik (lehetőleg a főszereplők, különböző szereplők), 1 akció vagy feszült pillanat. Ha a sztoriban állat vagy különleges lény a főszereplő, az is szerepeljen. Látványos, éles, színes kockák, amelyek kíváncsivá tesznek.${learned}${feedback ? "\nMOSTANI KÉRÉS AZ ADMINTÓL (ez a legfontosabb): " + feedback : ""}
 Ha nincs 8 megfelelő, add vissza azt, amennyi van — rossz kockát ne tegyél be csak a szám kedvéért.
 Válasz CSAK JSON: {"picks":[szám,...],"main":[szám,...],"rejected_watermark":[szám,...]}`;
   const ask = () => openaiJson("gpt-4o", [
@@ -407,7 +419,7 @@ export async function buildCaption(manga) {
 }
 
 /* ── Teljes folyamat ──────────────────────────────────────── */
-export async function generatePoster(slug, { nChap = 4 } = {}) {
+export async function generatePoster(slug, { nChap = 4, feedback = "" } = {}) {
   const { manga, chapters } = await loadChapters(slug, nChap);
   if (!manga || !chapters.length) throw new Error("nincs olvasható fejezet");
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "padli-poster-"));
@@ -419,7 +431,7 @@ export async function generatePoster(slug, { nChap = 4 } = {}) {
       .sort((a, b) => b.score - a.score).slice(0, 64)
       .sort((a, b) => a.file.localeCompare(b.file));
     if (cands.length < PICKS * 2) throw new Error(`kevés használható képkocka (${cands.length})`);
-    const { picks, mainCount } = await aiPick(cands, { cover: await coverRef(manga.cover_url), description: cleanDescription(manga.description) });
+    const { picks, mainCount } = await aiPick(cands, { cover: await coverRef(manga.cover_url), description: cleanDescription(manga.description), feedback });
     if (picks.length < 4) throw new Error(`az AI csak ${picks.length} megfelelő kockát talált`);
     const chosen = picks.slice(0, PICKS);
     await Promise.all(chosen.map(async p => {
@@ -448,7 +460,7 @@ export async function postPhotoToFacebook(image, caption) {
 
 /* Poszter + szöveg elkészítése: legfeljebb 3 művel próbálkozik.
    logErrors: a sikertelen műveket naplózza (30 napig kimaradnak). */
-export async function buildWeeklyPoster({ slug = null, exclude = [], logErrors = true } = {}) {
+export async function buildWeeklyPoster({ slug = null, exclude = [], logErrors = true, feedback = "" } = {}) {
   const tried = [...exclude];
   for (let attempt = 0; attempt < 3; attempt++) {
     const m = slug ? (await pool.query("SELECT id, slug, title FROM manga WHERE slug = $1 ORDER BY id DESC LIMIT 1", [slug])).rows[0]
@@ -456,7 +468,7 @@ export async function buildWeeklyPoster({ slug = null, exclude = [], logErrors =
     if (!m) throw new Error("nincs választható mű");
     tried.push(m.slug);
     try {
-      const res = await generatePoster(m.slug);
+      const res = await generatePoster(m.slug, { feedback });
       const caption = await buildCaption({ ...m, description: res.description });
       return { ...res, caption, manga: m };
     } catch (e) {

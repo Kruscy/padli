@@ -68,8 +68,8 @@ async function saveSnippet(res, status) {
   return id;
 }
 
-export async function createSnippetPreview({ slug = null, exclude = [], avoid = [], note = "" } = {}) {
-  const res = await buildSnippet({ slug, exclude, avoid });
+export async function createSnippetPreview({ slug = null, exclude = [], avoid = [], note = "", feedback = "" } = {}) {
+  const res = await buildSnippet({ slug, exclude, avoid, feedback });
   const id = await saveSnippet(res, "pending");
   const msg = await sendAdminMessage({
     content: (`📸 **Instagram lapozós részlet — előnézet${note ? " — " + note : ""}**\n` +
@@ -133,7 +133,7 @@ export async function publishSnippet() {
   const igToday = IG_DAYS.includes(bpNow().getDay()) && instagramConfigured();
   if (!igToday && !publerConfigured()) return null;
   const recent = await pool.query(
-    "SELECT 1 FROM ig_snippets WHERE status = 'posted' AND created_at > now() - interval '20 hours' LIMIT 1");
+    "SELECT 1 FROM ig_snippets WHERE status = 'posted' AND created_at > now() - interval '12 hours' LIMIT 1");
   if (recent.rows.length) { console.log("[ig-snippet] nemrég már volt, most kihagyva"); return null; }
   const { rows } = await pool.query(
     `SELECT s.*, m.slug, m.title FROM ig_snippets s JOIN manga m ON m.id = s.manga_id

@@ -343,6 +343,9 @@ cron.schedule("0 10 * * *", async () => {
   catch (err) { console.error("[SnippetCron] posztolás hiba:", err.message); }
 }, { timezone: "Europe/Budapest" });
 
+/* #media: szöveges admin-visszajelzés az előnézetekre (2026-11-15) */
+import("./lib/social-feedback.js").catch(err => console.error("[feedback] modul betöltési hiba:", err.message));
+
 /* ===== SITEMAP NAPI FRISSÍTÉS (új mangák/fejezetek) ===== */
 cron.schedule("30 4 * * *", () => {
   generateSitemap().catch(e => console.error("[Sitemap] Napi frissítés hiba:", e.message));
