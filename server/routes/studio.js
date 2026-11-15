@@ -18,6 +18,7 @@ import { pool } from "../db.js";
 import { requireLogin } from "../middleware/auth.js";
 import { SCAN_OWNER_USER_ID } from "../lib/scan-runner.js";
 import { POINT_FT, USD_HUF } from "../lib/llm-pricing.js";
+import { authenticateApiKey } from "../lib/api-keys.js";
 
 const router = express.Router();
 const DIST_DIR = process.env.STUDIO_DIST_DIR || "/opt/padli/studio-dist";
@@ -109,6 +110,79 @@ router.get("/info", requireLogin, async (req, res) => {
 });
 
 // Nyilvános: a program ebből látja, van-e újabb verzió (a letöltéshez belépés kell)
+/* ── Hibajelentés / használati események az asztali appból (2026-11-15) ──
+   Kulcs nélkül is fogadjuk (a kulcs-készítés előtti elakadás is érdekes); ha van X-API-Key,
+   a felhasználóhoz kötjük. Fájlnevet/tartalmat az app nem küld, csak állapotot és hibaüzenetet. */
+const STUDIO_EVENTS = new Set(["app_start", "engine_download", "engine_ready", "engine_error", "key_test",
+  "job_start", "job_finished", "job_error", "crash", "ui_error"]);
+const telemetryHits = new Map();
+router.post("/telemetry", express.json({ limit: "16kb" }), async (req, res) => {
+  const ip = req.headers["cf-connecting-ip"] || req.ip;
+  const now = Date.now();
+  const h = (telemetryHits.get(ip) || []).filter(t => now - t < 3600_000);
+  if (h.length >= 200) return res.status(429).json({ ok: false });
+  h.push(now); telemetryHits.set(ip, h);
+  const b = req.body || {};
+  const event = String(b.event || "");
+  if (!STUDIO_EVENTS.has(event)) return res.status(400).json({ ok: false, error: "ismeretlen esemény" });
+  let user = null;
+  const key = req.headers["x-api-key"];
+  if (key) user = await authenticateApiKey(String(key), ip).catch(() => null);
+  const data = b.data && typeof b.data === "object" ? JSON.stringify(b.data).slice(0, 4000) : null;
+  await pool.query(
+    `INSERT INTO studio_events (install_id, user_id, username, version, os, event, data, ip) VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8)`,
+    [String(b.install_id || "").slice(0, 64) || null, user?.id || null, user?.username || null,
+     String(b.version || "").slice(0, 20) || null, String(b.os || "").slice(0, 80) || null, event,
+     data && data.length < 4000 ? data : null, ip]).catch(e => console.warn("[studio] telemetry:", e.message));
+  res.json({ ok: true });
+});
+
+/* ── Körkérdés a letöltőknek (2026-11-15): e-mailben kapott egyedi link, kitöltésért +20 pont ── */
+const SURVEY_POINTS = 20;
+const SURVEY_Q = {
+  install: ["ok", "nem_indult", "virusirto", "nem_telepult"],
+  key: ["igen", "nem_talaltam", "nem_ertettem", "nem_akartam"],
+  translate: ["mukodott", "hiba", "nem_jutottam"],
+  gpu: ["nvidia", "mas", "nem_tudom"],
+};
+router.get("/survey/:token", async (req, res) => {
+  const { rows } = await pool.query(
+    "SELECT s.answered_at, u.username FROM studio_survey s JOIN users u ON u.id = s.user_id WHERE s.token = $1", [String(req.params.token).slice(0, 80)]);
+  if (!rows[0]) return res.status(404).json({ ok: false, error: "Érvénytelen vagy lejárt link." });
+  res.json({ ok: true, username: rows[0].username, answered: !!rows[0].answered_at, points: SURVEY_POINTS });
+});
+router.post("/survey/:token", express.json({ limit: "8kb" }), async (req, res) => {
+  const b = req.body || {};
+  const answers = {};
+  for (const [k, opts] of Object.entries(SURVEY_Q)) {
+    if (!opts.includes(b[k])) return res.status(400).json({ ok: false, error: "Kérlek, minden kérdésre válaszolj." });
+    answers[k] = b[k];
+  }
+  answers.comment = String(b.comment || "").trim().slice(0, 2000);
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const up = await client.query(
+      `UPDATE studio_survey SET answered_at = now(), answers = $2, points = $3
+        WHERE token = $1 AND answered_at IS NULL RETURNING user_id`, [String(req.params.token).slice(0, 80), answers, SURVEY_POINTS]);
+    if (!up.rowCount) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ ok: false, error: "Ezt a kérdőívet már kitöltötted, vagy a link érvénytelen." });
+    }
+    const uid = up.rows[0].user_id;
+    await client.query(`INSERT INTO user_points (user_id, fix_id, points, approved_by, earned_at, spent) VALUES ($1, NULL, $2, NULL, NOW(), false)`, [uid, SURVEY_POINTS]);
+    await client.query(`INSERT INTO notifications (user_id, type, message, link) VALUES ($1, 'points', $2, '/profile.html#studio')`,
+      [uid, `🎁 Köszönjük, hogy kitöltötted a Padlizsan Studio kérdőívet! ${SURVEY_POINTS} pontot írtunk jóvá.`]);
+    await client.query("COMMIT");
+    console.log(`[STUDIO] kérdőív kitöltve: user ${uid} +${SURVEY_POINTS} pont`);
+    res.json({ ok: true, points: SURVEY_POINTS });
+  } catch (e) {
+    await client.query("ROLLBACK").catch(() => {});
+    console.error("[STUDIO] kérdőív:", e.message);
+    res.status(500).json({ ok: false, error: "Hiba történt, próbáld újra később." });
+  } finally { client.release(); }
+});
+
 router.get("/latest", async (req, res) => {
   const info = await latestInfo();
   res.setHeader("Cache-Control", "public, max-age=300");

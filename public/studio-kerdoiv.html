@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Padlizsan Studio – kérdőív</title>
+<link rel="icon" href="/favicon.ico">
+<style>
+  :root { --lila: #7c3aed; --lila2: #a855f7; --bg: #0f0b1a; --kartya: #1b1530; --szoveg: #ece8f5; --halvany: #a59cc0; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: radial-gradient(circle at top, #2a1850, var(--bg) 60%); color: var(--szoveg); min-height: 100vh; }
+  main { max-width: 640px; margin: 0 auto; padding: 32px 18px 60px; }
+  header { text-align: center; margin-bottom: 22px; }
+  header img { width: 72px; height: 72px; }
+  h1 { font-size: 1.6rem; margin: 10px 0 6px; }
+  .al { color: var(--halvany); margin: 0; }
+  .jutalom { display: inline-block; margin-top: 12px; background: linear-gradient(90deg, var(--lila), var(--lila2)); padding: 6px 14px; border-radius: 999px; font-weight: 700; }
+  form, .uzenet { background: var(--kartya); border: 1px solid #2f2650; border-radius: 16px; padding: 22px; }
+  fieldset { border: 0; padding: 0; margin: 0 0 22px; }
+  legend { font-weight: 700; margin-bottom: 10px; font-size: 1.05rem; }
+  label.opcio { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid #3a3060; border-radius: 10px; margin-bottom: 8px; cursor: pointer; }
+  label.opcio:hover { border-color: var(--lila2); }
+  label.opcio input { accent-color: var(--lila2); width: 18px; height: 18px; }
+  textarea { width: 100%; min-height: 100px; background: #120d22; color: var(--szoveg); border: 1px solid #3a3060; border-radius: 10px; padding: 10px; font: inherit; }
+  button { width: 100%; padding: 14px; border: 0; border-radius: 12px; font-size: 1.05rem; font-weight: 700; color: #fff; background: linear-gradient(90deg, var(--lila), var(--lila2)); cursor: pointer; }
+  button:disabled { opacity: .6; cursor: default; }
+  .hiba { color: #fca5a5; margin: 10px 0 0; min-height: 1.2em; }
+  .uzenet { text-align: center; font-size: 1.1rem; line-height: 1.5; }
+  .uzenet a { color: #c4b5fd; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <img src="/assets/studio-icon.png" alt="">
+    <h1>Padlizsan Studio – 1 perces kérdőív</h1>
+    <p class="al" id="koszones">Segíts jobbá tenni a Studiót!</p>
+    <span class="jutalom">🎁 Kitöltésért +20 pont</span>
+  </header>
+
+  <div class="uzenet" id="betolt">Betöltés…</div>
+  <div class="uzenet" id="kesz" hidden></div>
+
+  <form id="urlap" hidden>
+    <fieldset>
+      <legend>1. Sikerült telepíteni és elindítani a Studiót?</legend>
+      <label class="opcio"><input type="radio" name="install" value="ok"> Igen, elindult</label>
+      <label class="opcio"><input type="radio" name="install" value="nem_indult"> Feltelepült, de nem indult el / hibát írt</label>
+      <label class="opcio"><input type="radio" name="install" value="virusirto"> A Windows vagy a vírusirtó letiltotta</label>
+      <label class="opcio"><input type="radio" name="install" value="nem_telepult"> Nem sikerült feltelepíteni</label>
+    </fieldset>
+    <fieldset>
+      <legend>2. Csináltál API-kulcsot a profilodon?</legend>
+      <label class="opcio"><input type="radio" name="key" value="igen"> Igen</label>
+      <label class="opcio"><input type="radio" name="key" value="nem_talaltam"> Nem találtam, hol kell</label>
+      <label class="opcio"><input type="radio" name="key" value="nem_ertettem"> Nem értettem, mire kell</label>
+      <label class="opcio"><input type="radio" name="key" value="nem_akartam"> Nem akartam / még nem jutottam el idáig</label>
+    </fieldset>
+    <fieldset>
+      <legend>3. Próbáltál fordítani vele?</legend>
+      <label class="opcio"><input type="radio" name="translate" value="mukodott"> Igen, működött</label>
+      <label class="opcio"><input type="radio" name="translate" value="hiba"> Igen, de hibát kaptam / nem lett jó</label>
+      <label class="opcio"><input type="radio" name="translate" value="nem_jutottam"> Nem jutottam el idáig</label>
+    </fieldset>
+    <fieldset>
+      <legend>4. Milyen videókártya van a gépedben?</legend>
+      <label class="opcio"><input type="radio" name="gpu" value="nvidia"> NVIDIA (GeForce, RTX, GTX)</label>
+      <label class="opcio"><input type="radio" name="gpu" value="mas"> Más (AMD, Intel, laptopba épített)</label>
+      <label class="opcio"><input type="radio" name="gpu" value="nem_tudom"> Nem tudom</label>
+    </fieldset>
+    <fieldset>
+      <legend>5. Mi hiányzott, mi volt nehéz? (nem kötelező)</legend>
+      <textarea name="comment" maxlength="2000" placeholder="Bármit írhatsz: hibaüzenet, ötlet, kérés…"></textarea>
+    </fieldset>
+    <button type="submit" id="kuld">Beküldöm és kérem a 20 pontot</button>
+    <p class="hiba" id="hiba"></p>
+  </form>
+</main>
+<script src="/js/studio-kerdoiv.js"></script>
+</body>
+</html>
