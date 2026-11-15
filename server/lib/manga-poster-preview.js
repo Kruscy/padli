@@ -1,5 +1,5 @@
 /* ── Heti manga-poszter: péntek esti Discord-előnézet (2026-11-15) ──
-   Heti 2x: hétfő/péntek 19:00 → elkészül a poszter, a #riasztás csatornába megy gombokkal.
+   Heti 2x: hétfő/péntek 19:00 → elkészül a poszter, az előnézet-csatornába (#uploaders) megy gombokkal.
    Gombok (csak Admin rang): ✅ Mehet | 🔄 Újragenerálás | 🎲 Másik mű | ⛔ Kihagyás
    Kedd/szombat 11:00 → a legutóbbi pending/approved poszt kimegy a Facebookra;
                    ha ki lett hagyva, semmi; ha nincs előnézet (pl. a gép
@@ -16,6 +16,8 @@ import { onButton, isAdminMember, sendAdminMessage } from "../discord-bot.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DIR = path.join(__dirname, "..", "..", "data", "posters");
 const SITE = "https://padlizsanfansub.hu";
+// Előnézetek csatornája (2026-11-15: #uploaders); ha nincs megadva, #riasztás
+const posterChannel = () => process.env.DISCORD_POSTER_CHANNEL_ID || process.env.DISCORD_SECURITY_CHANNEL_ID;
 /* A következő kitevés napja (kedd vagy szombat 11:00, Budapest) */
 function nextPublishLabel() {
   const dow = new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/Budapest" })).getDay();
@@ -49,7 +51,7 @@ export async function createPreview({ slug = null, exclude = [], note = "" } = {
       `**Facebook-szöveg:**\n>>> ${res.caption}`.slice(0, 1900),
     files: [{ attachment: res.image, name: `poszter-${res.manga.slug}.jpg` }],
     components: buttons(id),
-  });
+  }, posterChannel());
   await pool.query("UPDATE manga_posters SET image_path = $1, discord_message_id = $2 WHERE id = $3", [file, msg.id, id]);
   console.log(`[poster] előnézet kiküldve: ${res.manga.slug} (#${id})`);
   return id;
@@ -114,12 +116,12 @@ export async function publishWeekly() {
   if (row && row.image_path && fs.existsSync(row.image_path)) {
     const fbId = await postPhotoToFacebook(fs.readFileSync(row.image_path), row.caption);
     await pool.query("UPDATE manga_posters SET status = 'posted', fb_post_id = $1 WHERE id = $2", [fbId, row.id]);
-    await sendAdminMessage({ content: `✅ Heti manga-poszter kiment: **${row.slug}** → https://www.facebook.com/${fbId.replace("_", "/posts/")}` }).catch(() => {});
+    await sendAdminMessage({ content: `✅ Heti manga-poszter kiment: **${row.slug}** → https://www.facebook.com/${fbId.replace("_", "/posts/")}` }, posterChannel()).catch(() => {});
     console.log(`[poster] kiposztolva (előnézetből): ${row.slug} → ${fbId}`);
     return fbId;
   }
   // Nincs előnézet: a régi módon
   const res = await runWeeklyPoster({ post: true });
-  await sendAdminMessage({ content: `✅ Heti manga-poszter kiment (előnézet nélkül készült): **${res.manga.slug}**` }).catch(() => {});
+  await sendAdminMessage({ content: `✅ Heti manga-poszter kiment (előnézet nélkül készült): **${res.manga.slug}**` }, posterChannel()).catch(() => {});
   return res.fbId;
 }

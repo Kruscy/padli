@@ -375,8 +375,7 @@ export async function sendSecurityAlert(text) {
 }
 
 // Admin-csatorna (#riasztás) — tetszőleges üzenet (kép, gombok)
-export async function sendAdminMessage(payload) {
-  const channelId = process.env.DISCORD_SECURITY_CHANNEL_ID;
+export async function sendAdminMessage(payload, channelId = process.env.DISCORD_SECURITY_CHANNEL_ID) {
   if (!channelId || !bot.isReady()) throw new Error("Discord-bot vagy admin-csatorna nem elérhető");
   const channel = await bot.channels.fetch(channelId);
   return channel.send(payload);
