@@ -81,11 +81,27 @@ function splitRows(grey, w, h) {
 
 async function loadChapters(slug, nChap) {
   const { rows } = await pool.query(`
-    SELECT m.title, m.description, m.folder AS mf, m.r2_migrated, l.path AS lp, c.folder
+    SELECT m.title, m.description, m.cover_url, m.folder AS mf, m.r2_migrated, l.path AS lp, c.folder
       FROM manga m JOIN chapter c ON c.manga_id = m.id JOIN library l ON l.id = c.library_id
      WHERE m.slug = $1 AND (c.unlocks_at IS NULL OR c.unlocks_at <= now())`, [slug]);
   const num = s => parseFloat((String(s).match(/(\d+(?:\.\d+)?)/) || [0, 1e9])[1]);
-  return { manga: rows[0], chapters: rows.sort((a, b) => num(a.folder) - num(b.folder)).slice(0, nChap) };
+  const all = rows.sort((a, b) => num(a.folder) - num(b.folder));
+  // Szétszórva a mű első ~60%-ából (2026-11-15): az első pár fejezetben a főszereplő
+  // gyakran még gyerek / más alakban van (pl. The Beginning After The End), a vége spoileres.
+  let idx = [...new Set([0, 0.2, 0.4, 0.6].slice(0, nChap).map(f => Math.round(f * (all.length - 1))))];
+  for (let i = 0; idx.length < Math.min(nChap, all.length) && i < all.length; i++) if (!idx.includes(i)) idx.push(i);
+  idx.sort((a, b) => a - b);
+  return { manga: rows[0], chapters: idx.map(i => all[i]) };
+}
+
+/* A borító kicsiben, referenciának: rajta van a főszereplő. */
+async function coverRef(url) {
+  if (!url) return null;
+  try {
+    const r = await fetch(url, { signal: AbortSignal.timeout(20000) });
+    if (!r.ok) return null;
+    return await sharp(Buffer.from(await r.arrayBuffer())).resize(480, 480, { fit: "inside" }).jpeg({ quality: 80 }).toBuffer();
+  } catch { return null; }
 }
 
 async function chapterFiles(ch) {
@@ -167,9 +183,9 @@ async function openaiJson(model, content, maxTokens = 600) {
   return out;
 }
 
-async function aiPick(cands) {
+async function aiPick(cands, { cover = null, description = "" } = {}) {
   const sheet = await contactSheet(cands);
-  const prompt = `Ez egy manhwa első fejezeteiből kivágott, sorszámozott képkockák áttekintője. Egy Facebook-ajánló poszterhez válogass képkockákat: add meg a legjobb 8 MEGFELELŐ kockát rangsorolva (a legjobb elöl; ebből az első ${PICKS} kerül a poszterre, ezért az első ${PICKS} együtt is legyen változatos).
+  const prompt = `Ez egy manhwa több fejezetéből kivágott, sorszámozott képkockák áttekintője. Egy Facebook-ajánló poszterhez válogass képkockákat: add meg a legjobb 8 MEGFELELŐ kockát rangsorolva (a legjobb elöl; ebből az első ${PICKS} kerül a poszterre, ezért az első ${PICKS} együtt is legyen változatos).
 SZIGORÚAN KIZÁRVA:
 - bármilyen vízjel, weboldal-cím vagy logó a kockán (pl. "VORTEXSCANS.COM", "...scans", ".com", ".org"), akár kicsi is a sarokban;
 - stáblista, fordítócsapat-hirdetés, toborzó vagy "támogass minket" oldalak;
@@ -177,21 +193,35 @@ SZIGORÚAN KIZÁRVA:
 - üres, elmosódott, szinte egyszínű kockák, absztrakt háttér-textúrák, sebesség- vagy effektcsíkok, amelyeken nincs felismerhető tárgy vagy szereplő;
 - szexualizált, kihívó, félmeztelen vagy véres-brutális kockák.
 - ugyanarról a jelenetről/oldalról csak egy kocka.
+FŐSZEREPLŐ: ${cover ? "A MÁSODIK kép a mű borítója — a rajta kiemelt szereplő(k) a főszereplő(k). " : ""}${description ? "A mű leírása: " + description.slice(0, 700) + " " : ""}Keresd meg a kockák között a főszereplőt (ugyanaz a frizura, hajszín, ruha, arc, mint a borítón / a leírásban). Az első ${PICKS} kockából LEGALÁBB 2-n a FŐSZEREPLŐ legyen jól felismerhetően (ha egyáltalán szerepel), lehetőleg az arca. A "main" listába írd az ÖSSZES kockát, amelyen a főszereplő biztosan látszik. A főszereplős kockákra is ugyanúgy vonatkozik minden kizárás (buborék, felirat, vízjel)!
 VÁLOGATÁS: legyen változatos — 1 hangulatos helyszín, LEGALÁBB 3 kocka, amelyen jól felismerhető szereplő-ARC látszik (lehetőleg a főszereplők, különböző szereplők), 1 akció vagy feszült pillanat. Ha a sztoriban állat vagy különleges lény a főszereplő, az is szerepeljen. Látványos, éles, színes kockák, amelyek kíváncsivá tesznek.
 Ha nincs 8 megfelelő, add vissza azt, amennyi van — rossz kockát ne tegyél be csak a szám kedvéért.
-Válasz CSAK JSON: {"picks":[szám,...],"rejected_watermark":[szám,...]}`;
+Válasz CSAK JSON: {"picks":[szám,...],"main":[szám,...],"rejected_watermark":[szám,...]}`;
   const ask = () => openaiJson("gpt-4o", [
     { type: "text", text: prompt },
     { type: "image_url", image_url: { url: "data:image/jpeg;base64," + sheet.toString("base64"), detail: "high" } },
+    ...(cover ? [{ type: "image_url", image_url: { url: "data:image/jpeg;base64," + cover.toString("base64"), detail: "low" } }] : []),
   ]);
   let out;
   try { out = await ask(); }
   catch (e) { console.warn("[poster] válogatás, újrapróba:", e.message); out = await ask(); }
   const bad = new Set((out.rejected_watermark || []).map(Number));
-  const picks = [...new Set((out.picks || []).map(Number))]
-    .filter(n => Number.isInteger(n) && n >= 1 && n <= cands.length && !bad.has(n))
-    .map(n => cands[n - 1]);
-  return { picks, sheet };
+  const ok = n => Number.isInteger(n) && n >= 1 && n <= cands.length && !bad.has(n);
+  const ranked = [...new Set((out.picks || []).map(Number))].filter(ok);
+  const main = [...new Set((out.main || []).map(Number))].filter(ok);
+  // Legalább 2 főszereplős kocka az első PICKS között (ha van ilyen)
+  const need = Math.min(2, main.length);
+  const front = ranked.slice(0, PICKS);
+  for (const m of ranked.slice(PICKS)) {   // csak szabályos (rangsorolt) kocka cserélhető be
+    if (front.filter(n => main.includes(n)).length >= need) break;
+    if (!main.includes(m) || front.includes(m)) continue;
+    const drop = [...front].reverse().find(n => !main.includes(n));
+    if (drop === undefined) break;
+    front[front.indexOf(drop)] = m;
+  }
+  const order = [...front, ...ranked.filter(n => !front.includes(n))];
+  const picks = order.map(n => ({ ...cands[n - 1], main: main.includes(n) }));
+  return { picks, sheet, mainCount: main.length };
 }
 
 /* A kocka fő témájának helye (arc / fő alak) az AI szerint, 0–1 arányokban. */
@@ -375,7 +405,7 @@ export async function generatePoster(slug, { nChap = 4 } = {}) {
       .sort((a, b) => b.score - a.score).slice(0, 64)
       .sort((a, b) => a.file.localeCompare(b.file));
     if (cands.length < PICKS * 2) throw new Error(`kevés használható képkocka (${cands.length})`);
-    const { picks } = await aiPick(cands);
+    const { picks, mainCount } = await aiPick(cands, { cover: await coverRef(manga.cover_url), description: cleanDescription(manga.description) });
     if (picks.length < 4) throw new Error(`az AI csak ${picks.length} megfelelő kockát talált`);
     const chosen = picks.slice(0, PICKS);
     await Promise.all(chosen.map(async p => {
@@ -383,7 +413,8 @@ export async function generatePoster(slug, { nChap = 4 } = {}) {
     }));
     const image = await composePoster(manga.title, chosen);
     return { image, title: manga.title, description: manga.description, slug,
-      panels: picks.slice(0, PICKS).map(p => `${p.chapter}/${p.page}`), totalPanels: panels.length };
+      panels: picks.slice(0, PICKS).map(p => `${p.chapter}/${p.page}`), totalPanels: panels.length,
+      mainInPoster: chosen.filter(p => p.main).length, mainCount };
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
