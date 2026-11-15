@@ -159,7 +159,7 @@ router.get("/home", appAuth, async (req, res) => {
     let homeCache = homeCaches.get(adult) || { at: 0, data: null };
     if (!homeCache.data || Date.now() - homeCache.at > 5 * 60_000) {
       const [ann, releases, featuredAll] = await Promise.all([
-        pool.query(`SELECT id, title, body, image_url, cta_label, cta_url FROM announcements WHERE expires_at > now() ORDER BY created_at DESC LIMIT 10`),
+        pool.query(`SELECT id, title, body, image_url, cta_label, cta_url FROM announcements WHERE expires_at > now() AND COALESCE(cta_url, '') NOT IN ('/app.html', '/api/studio/download') ORDER BY created_at DESC LIMIT 10`),
         pool.query(`SELECT m.title, m.slug, m.cover_url, COUNT(c.id)::int AS new_count, MAX(c.scanned_at) AS latest_scan
                       FROM chapter c JOIN manga m ON m.id = c.manga_id
                      WHERE c.scanned_at >= now() - interval '7 days' AND (${ADULT_GENRE_EXISTS_SQL}) = $1

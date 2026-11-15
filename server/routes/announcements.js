@@ -1,6 +1,7 @@
 import express from "express";
 import { pool } from "../db.js";
 import { requireLogin } from "../middleware/auth.js";
+import { deviceOf, platformMatches } from "../lib/device.js";
 
 const router = express.Router();
 
@@ -8,12 +9,15 @@ const router = express.Router();
 router.get("/", requireLogin, async (req, res) => {
   try {
     const { rows } = await pool.query(`
-      SELECT id, title, body, image_url, expires_at, click_count, cta_label, cta_url
+      SELECT id, title, body, image_url, expires_at, click_count, cta_label, cta_url, platform
       FROM announcements
       WHERE expires_at > now()
       ORDER BY created_at DESC
     `);
-    res.json(rows);
+    // Készülék szerint: a Windows-os Studio csak gépen, az Android-app csak Androidon (2026-11-15)
+    const dev = deviceOf(req);
+    res.setHeader("Vary", "User-Agent");
+    res.json(rows.filter(r => platformMatches(r.platform, dev)));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server error" });

@@ -4,6 +4,8 @@
 (() => {
   const box = document.getElementById("studioPromo");
   if (!box) return;
+  // Windows-os program: telefonon/tableten nem ajánljuk (2026-11-15)
+  if (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)) return;
   const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   fetch("/api/studio/latest").then(r => r.ok ? r.json() : null).then(L => {
     if (!L) return;

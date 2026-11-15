@@ -185,6 +185,7 @@ app.use(sessionRenewal);
 
 /* ===== BUILD VERSION (cache busting) ===== */
 import { readFileSync, statSync } from "fs";
+import { deviceOf } from "./lib/device.js";
 import { resolveInside } from "./lib/safe-path.js";
 const BUILD_VER = Date.now().toString(36);
 const PUBLIC_DIR = path.join(__dirname, "../public");
@@ -197,6 +198,19 @@ function injectVersion(html) {
 
 /* ===== STATIC FRONTEND ===== */
 app.use('/downloads', express.static(path.join(PUBLIC_DIR, 'downloads')));
+
+/* Oldalsáv készülék szerint (2026-11-15; a .html-kiszolgáló ELŐTT kell lennie): telefonon nincs Windows-os
+   Studio-letöltés, gépen és iPhone-on nincs Android-app link */
+app.get("/partials/sidebar.html", (req, res, next) => {
+  let html;
+  try { html = readFileSync(path.join(PUBLIC_DIR, "partials", "sidebar.html"), "utf8"); } catch { return next(); }
+  const dev = deviceOf(req);
+  if (dev !== "desktop") html = html.replace(/\s*<a href="\/api\/studio\/download"[^>]*>[^<]*<\/a>/, "");
+  if (dev !== "android") html = html.replace(/\s*<a href="\/app\.html"[^>]*>[^<]*<\/a>/, "");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Vary", "User-Agent");
+  res.type("html").send(html);
+});
 
 
 
