@@ -46,6 +46,7 @@ import geminiProxyRoutes from "./routes/gemini-proxy.js";
 import pointsRoutes from "./routes/points.js";
 import padlicromeRoutes from "./routes/padlicrome.js";
 import studioRoutes from "./routes/studio.js";
+import appApiRoutes from "./routes/app-api.js";
 import gdprRoutes from "./routes/gdpr.js";
 import patreonInvoiceRoutes from "./routes/patreon-invoice.js";
 import animeSubtitlesRoutes from "./routes/anime-subtitles.js";
@@ -665,6 +666,7 @@ router.use("/padlicrome", padlicromeRoutes);
 router.use("/pc/v1", padlicromeRoutes);
 // Padlizsan Studio letöltés (tesztfázis: csak STUDIO_TESTERS)
 router.use("/studio", studioRoutes);
+router.use("/app", appApiRoutes);   // Android-app (2026-11-15)
 router.use("/gdpr", gdprRoutes);
 router.use("/patreon-invoice", patreonInvoiceRoutes);
 
