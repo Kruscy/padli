@@ -488,7 +488,7 @@ router.post("/feedback", express.json({ limit: "16kb" }), async (req, res) => {
 router.get("/dist/:name", requireLogin, (req, res) => {
   if (!appTesters().has(req.session.user.id)) return res.status(403).send("Csak tesztelőknek.");
   const name = path.basename(String(req.params.name));
-  if (!/^[A-Za-z0-9._-]+\.(aab|apk|png|jpg|txt)$/.test(name)) return res.status(400).send("Hibás fájlnév.");
+  if (!/^[A-Za-z0-9._-]+\.(aab|apk|png|jpg|txt|exe|zip)$/.test(name)) return res.status(400).send("Hibás fájlnév.");
   const f = path.join(APK_DIR, name);
   if (!fs.existsSync(f)) return res.status(404).send("Nincs ilyen fájl.");
   res.download(f, name);
