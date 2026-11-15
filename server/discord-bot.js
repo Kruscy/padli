@@ -2,6 +2,7 @@ import { Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle
 import { WebSocketServer } from "ws";
 import { pool } from "./db.js";
 import { sessionMiddleware } from "./session.js";
+import { resolveUser } from "./lib/flex-auth.js";
 import { handleChatMessageForAI } from "./padli-ai.js";
 
 const CHANNEL_ID = process.env.DISCORD_CHANNEL_ID;
@@ -88,8 +89,9 @@ const wss = new WebSocketServer({
   maxPayload: 64 * 1024, // a kliens nem küld üzenetet ezen át, csak fogad
   verifyClient: (info, done) => {
     sessionMiddleware(info.req, {}, () => {
-      if (info.req.session?.user?.id) done(true);
-      else done(false, 401, "Unauthorized");
+      if (info.req.session?.user?.id) return done(true);
+      // Android-app (Authorization: Bearer pdla_…) / Studio (X-API-Key) — 2026-11-15
+      resolveUser(info.req).then(u => (u ? done(true) : done(false, 401, "Unauthorized"))).catch(() => done(false, 401, "Unauthorized"));
     });
   },
 });

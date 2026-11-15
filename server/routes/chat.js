@@ -6,6 +6,7 @@ import { pool } from "../db.js";
 import { r2, BUCKET } from "../r2.js";
 import { sendToDiscord, sendImageToDiscord, broadcast, getGuildEmojis } from "../discord-bot.js";
 import { requireLogin } from "../middleware/auth.js";
+import { requireAnyAuth } from "../lib/flex-auth.js";
 import { handleChatMessageForAI } from "../padli-ai.js";
 
 const router = express.Router();
@@ -62,9 +63,9 @@ async function saveAndSendMessage(user, content, discordRelay) {
 }
 
 /* ===== SEND ===== */
-router.post("/send", requireLogin, async (req, res) => {
-  const { content } = req.body;
-  const user = req.session.user;
+router.post("/send", requireAnyAuth, express.json(), async (req, res) => {
+  const { content } = req.body || {};
+  const user = req.anyUser;   // weboldal, Android-app vagy Studio (2026-11-15)
 
   if (typeof content !== "string" || !content.trim()) return res.status(400).json({ error: "Empty message" });
   if (content.length > 500) return res.status(400).json({ error: "Too long" });
@@ -79,7 +80,7 @@ router.post("/send", requireLogin, async (req, res) => {
 });
 
 /* ===== KÉP KÜLDÉSE (JPEG-re konvertálva, R2-re feltöltve) ===== */
-router.post("/send-image", requireLogin, (req, res) => {
+router.post("/send-image", requireAnyAuth, (req, res) => {
   // A multer middleware-t kézzel hívjuk (nem router-szintű middleware-ként),
   // hogy a fileFilter/méret hibái is tiszta JSON-t adjanak vissza a
   // képi Express hibaoldal (nyers stack trace) helyett.
@@ -88,7 +89,7 @@ router.post("/send-image", requireLogin, (req, res) => {
       return res.status(400).json({ error: uploadErr.message || "Hibás fájl" });
     }
 
-    const user = req.session.user;
+    const user = req.anyUser;
     if (!req.file) return res.status(400).json({ error: "Nincs fájl" });
 
     try {
@@ -120,7 +121,7 @@ router.post("/send-image", requireLogin, (req, res) => {
 });
 
 /* ===== HISTORY ===== */
-router.get("/history", requireLogin, async (req, res) => {
+router.get("/history", requireAnyAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT * FROM chat_messages ORDER BY created_at DESC LIMIT 50`
@@ -132,7 +133,7 @@ router.get("/history", requireLogin, async (req, res) => {
 });
 
 /* ===== EMOJIS ===== */
-router.get("/emojis", requireLogin, async (req, res) => {
+router.get("/emojis", requireAnyAuth, async (req, res) => {
   try {
     const emojis = await getGuildEmojis();
     res.json(emojis);
