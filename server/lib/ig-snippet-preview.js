@@ -1,7 +1,7 @@
 /* ── Instagram lapozós részlet: Discord-előnézet + közzététel (2026-11-15) ──
-   H/Sze/P 20:00 → előnézet az előnézet-csatornába (#uploaders) gombokkal
+   H/Sze/P 16:00 → előnézet az előnézet-csatornába (#uploaders) gombokkal
    (✅ Mehet | 🔄 Másik jelenet | 🎲 Másik mű | ⛔ Kihagyás, csak Admin).
-   K/Cs/Szo 18:00 → a legutóbbi (2 napon belüli) előnézet kimegy az Instagramra;
+   K/Cs/Szo 10:00 → a legutóbbi (2 napon belüli) előnézet kimegy az Instagramra;
    ha ki lett hagyva, semmi; ha nincs előnézet, előnézet nélkül készül egy.
    NE importáld parancssori scriptből: a discord-bot.js importkor bejelentkezik. */
 import fs from "fs";
@@ -11,6 +11,7 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
 import { pool } from "../db.js";
 import { buildSnippet } from "./ig-snippet.js";
 import { postCarouselToInstagram, instagramConfigured } from "./instagram.js";
+import { postTikTokCarousel, publerConfigured, toTikTokCaption } from "./publer.js";
 import { onButton, isAdminMember, sendAdminMessage } from "../discord-bot.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -21,7 +22,7 @@ let busy = false;
 
 function nextPublishLabel() {
   const dow = new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/Budapest" })).getDay();
-  return ({ 0: "kedd", 1: "kedd", 2: "csütörtök", 3: "csütörtök", 4: "szombat", 5: "szombat", 6: "kedd" })[dow] + " 18:00-kor";
+  return ({ 0: "kedd", 1: "kedd", 2: "csütörtök", 3: "csütörtök", 4: "szombat", 5: "szombat", 6: "kedd" })[dow] + " 10:00-kor";
 }
 
 function buttons(id, disabled = false) {
@@ -44,7 +45,12 @@ async function saveSnippet(res, status) {
     fs.writeFileSync(f, b);
     return f;
   });
-  await pool.query("UPDATE ig_snippets SET image_paths = $1 WHERE id = $2", [paths, id]);
+  const tt = (res.tiktokSlides || []).map((b, i) => {
+    const f = path.join(DIR, `${id}-${res.manga.slug}-tiktok-${i + 1}.jpg`);
+    fs.writeFileSync(f, b);
+    return f;
+  });
+  await pool.query("UPDATE ig_snippets SET image_paths = $1, tiktok_paths = $2 WHERE id = $3", [paths, tt, id]);
   return id;
 }
 
@@ -54,7 +60,7 @@ export async function createSnippetPreview({ slug = null, exclude = [], avoid = 
   const msg = await sendAdminMessage({
     content: (`📸 **Instagram lapozós részlet — előnézet${note ? " — " + note : ""}**\n` +
       `Mű: **${res.manga.title}** (${SITE}/chapters.html?slug=${encodeURIComponent(res.manga.slug)})\n` +
-      `${res.slides.length} dia, ebben a sorrendben. Ha nem nyúltok hozzá, **${nextPublishLabel()}** kimegy az Instagramra.\n\n` +
+      `${res.slides.length} dia, ebben a sorrendben. Ha nem nyúltok hozzá, **${nextPublishLabel()}** kimegy az Instagramra${publerConfigured() ? " és a TikTokra (álló változatban, zenével)" : ""}.\n\n` +
       `**Instagram-szöveg:**\n>>> ${res.caption}`).slice(0, 1900),
     files: res.slides.map((b, i) => ({ attachment: b, name: `dia-${i + 1}.jpg` })),
     components: buttons(id),
@@ -108,26 +114,42 @@ onButton("snip:", async (interaction) => {
   }
 });
 
-/* K/Cs/Szo 18:00: a legfrissebb (2 napon belüli) döntés szerint posztol. */
+/* K/Cs/Szo 10:00: a legfrissebb (2 napon belüli) döntés szerint posztol. */
 export async function publishSnippet() {
-  if (!instagramConfigured()) return null;
+  if (!instagramConfigured() && !publerConfigured()) return null;
   const recent = await pool.query(
     "SELECT 1 FROM ig_snippets WHERE status = 'posted' AND created_at > now() - interval '20 hours' LIMIT 1");
   if (recent.rows.length) { console.log("[ig-snippet] nemrég már volt, most kihagyva"); return null; }
   const { rows } = await pool.query(
-    `SELECT s.*, m.slug FROM ig_snippets s JOIN manga m ON m.id = s.manga_id
+    `SELECT s.*, m.slug, m.title FROM ig_snippets s JOIN manga m ON m.id = s.manga_id
       WHERE s.status IN ('pending','approved','skipped') AND s.created_at > now() - interval '2 days'
       ORDER BY s.id DESC LIMIT 1`);
   let row = rows[0];
   if (row?.status === "skipped") { console.log("[ig-snippet] kihagyva"); return null; }
-  let images;
+  let images, ttImages = null;
   if (row && row.image_paths?.length && row.image_paths.every(f => fs.existsSync(f))) {
     images = row.image_paths.map(f => fs.readFileSync(f));
+    if (row.tiktok_paths?.length && row.tiktok_paths.every(f => fs.existsSync(f))) ttImages = row.tiktok_paths.map(f => fs.readFileSync(f));
   } else {
     const res = await buildSnippet();
     const id = await saveSnippet(res, "pending");
-    row = { id, slug: res.manga.slug, caption: res.caption };
+    row = { id, slug: res.manga.slug, title: res.manga.title, caption: res.caption };
     images = res.slides;
+    ttImages = res.tiktokSlides;
+  }
+  // TikTok (Publer) külön: az Instagram hibája nem állítja meg, és fordítva
+  if (ttImages && publerConfigured()) {
+    try {
+      const tt = await postTikTokCarousel(ttImages, toTikTokCaption(row.caption), { prefix: `snippet-${row.id}-${row.slug}`, title: row.title || row.slug });
+      const postId = tt.result?.payload?.[0]?.post?.id || tt.jobId;
+      await pool.query("UPDATE ig_snippets SET tiktok_post_id = $1 WHERE id = $2", [postId, row.id]);
+      await sendAdminMessage({ content: `🎵 TikTok lapozós részlet kiment: **${row.slug}**` }, channel()).catch(() => {});
+      console.log(`[ig-snippet] TikTok: ${row.slug} → ${postId}`);
+    } catch (e) {
+      await pool.query("UPDATE ig_snippets SET tiktok_error = $1 WHERE id = $2", [e.message.slice(0, 500), row.id]).catch(() => {});
+      await sendAdminMessage({ content: `⚠️ TikTok lapozós részlet NEM ment ki (**${row.slug}**): ${e.message.slice(0, 300)}` }, channel()).catch(() => {});
+      console.error("[ig-snippet] TikTok hiba:", e.message);
+    }
   }
   try {
     const ig = await postCarouselToInstagram(images, row.caption, `snippet-${row.id}-${row.slug}`);

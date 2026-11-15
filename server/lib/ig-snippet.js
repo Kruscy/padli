@@ -10,7 +10,7 @@ import { fileURLToPath } from "url";
 import sharp from "sharp";
 import { pool } from "../db.js";
 import { ADULT_GENRE_EXISTS_SQL } from "./age.js";
-import { chapterFiles, openaiJson, contactSheet, textImg, ensureFont, cleanDescription } from "./manga-poster.js";
+import { chapterFiles, openaiJson, contactSheet, textImg, ensureFont, cleanDescription, SOCIAL_SAFE_SQL } from "./manga-poster.js";
 import { r2Fetch, localPathToR2Key } from "../r2.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -20,17 +20,26 @@ const W = 1080, H = 1350, PW = 1080;   // dia mérete; a lapokat erre a széless
 const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 /* ── Mű és fejezet ── */
+const POPULAR_ORDER = process.env.SOCIAL_PICK === "random" ? "" :
+  "(COALESCE(m.anilist_popularity, 0) >= 10000) DESC, m.average_score DESC NULLS LAST,";
 export async function pickSnippetManga(exclude = []) {
   const { rows } = await pool.query(`
     SELECT m.id, m.slug, m.title
       FROM manga m
      WHERE NOT ${ADULT_GENRE_EXISTS_SQL}
+       AND ${SOCIAL_SAFE_SQL}
        AND m.cover_url IS NOT NULL
        AND (SELECT count(*) FROM chapter c WHERE c.manga_id = m.id) >= 5
        AND m.slug <> ALL($1::text[])
+       -- ne ugyanaz a mű legyen, mint a heti FB-ajánlóban (7 napon belül)
+       AND NOT EXISTS (SELECT 1 FROM manga_posters p WHERE p.manga_id = m.id AND p.created_at > now() - interval '7 days'
+                          AND p.status IN ('pending','approved','posted'))
        AND NOT EXISTS (SELECT 1 FROM ig_snippets s WHERE s.manga_id = m.id AND s.error IS NOT NULL
                           AND s.created_at > now() - interval '30 days')
      ORDER BY (SELECT max(created_at) FROM ig_snippets s WHERE s.manga_id = m.id AND s.ig_media_id IS NOT NULL) NULLS FIRST,
+              -- 2026-11-15: amíg a TikTok/FB be nem indul, a legismertebb művek elöl
+              -- (AniList: ≥ 10 000 listán, azon belül a legjobb pontszám). SOCIAL_PICK=random → véletlen.
+              ${POPULAR_ORDER}
               random()
      LIMIT 1`, [exclude]);
   return rows[0] || null;
@@ -146,14 +155,18 @@ Válasz CSAK JSON: {"ok":true/false,"reason":"...","caption":"..."}` },
 }
 
 /* ── Diák ── */
-async function blurredBg(input) {
-  return sharp(input).resize(W, H, { fit: "cover" }).blur(40).modulate({ brightness: 0.45, saturation: 1.1 }).toBuffer();
+async function blurredBg(input, h = H) {
+  return sharp(input).resize(W, h, { fit: "cover" }).blur(40).modulate({ brightness: 0.45, saturation: 1.1 }).toBuffer();
 }
 
-async function panelSlide(p, idx, total, title) {
+/* h = 1350 (Instagram 4:5) vagy 1920 (TikTok 9:16; ott alul/jobbra a TikTok gombjai takarnak,
+   ezért a felirat és a számláló felülre kerül, a kocka a „biztonságos” sávba) */
+export async function panelSlide(p, idx, total, title, h = H) {
   ensureFont();
-  const top = title ? 190 : 60, bottom = 90;
-  const maxW = W - 80, maxH = H - top - bottom;
+  const tall = h > H;
+  const top = tall ? (title ? 330 : 220) : (title ? 190 : 60);
+  const bottom = tall ? 430 : 90;
+  const maxW = W - 80, maxH = h - top - bottom;
   const fg = await sharp(p.file).resize(maxW, maxH, { fit: "inside" }).toBuffer({ resolveWithObject: true });
   const fw = fg.info.width, fh = fg.info.height;
   const x = Math.round((W - fw) / 2), y = Math.round(top + (maxH - fh) / 2);
@@ -163,13 +176,19 @@ async function panelSlide(p, idx, total, title) {
   ];
   if (title) {
     const t = await textImg(`<text x="20" y="300" font-family="${FONT}" font-size="230" fill="#ffffff" stroke="#000" stroke-width="10" paint-order="stroke">${esc(title.toUpperCase())}</text>`, W - 120, 120, Math.max(4000, title.length * 240));
-    layers.push({ input: t.data, left: Math.round((W - t.info.width) / 2), top: Math.round((top - 30 - t.info.height) / 2) + 10 });
+    const ty = tall ? 190 : Math.round((top - 30 - t.info.height) / 2) + 10;
+    layers.push({ input: t.data, left: Math.round((W - t.info.width) / 2), top: ty });
   }
   const pill = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="120" height="54"><rect width="120" height="54" rx="27" fill="#000" fill-opacity="0.55"/><text x="60" y="37" font-family="DejaVu Sans" font-weight="bold" font-size="26" fill="#fff" text-anchor="middle">${idx}/${total}</text></svg>`);
-  layers.push({ input: pill, left: W - 140, top: H - 72 });
   const site = await textImg(`<text x="20" y="300" font-family="${FONT}" font-size="200"><tspan fill="#c084fc">PADLIZSAN</tspan><tspan fill="#ffffff">FANSUB.HU</tspan></text>`, 420, 40);
-  layers.push({ input: site.data, left: 30, top: H - 66 });
-  return sharp(await blurredBg(p.file)).composite(layers).jpeg({ quality: 90, mozjpeg: true }).toBuffer();
+  if (tall) {
+    layers.push({ input: pill, left: W - 160, top: 100 });
+    layers.push({ input: site.data, left: 40, top: 107 });
+  } else {
+    layers.push({ input: pill, left: W - 140, top: h - 72 });
+    layers.push({ input: site.data, left: 30, top: h - 66 });
+  }
+  return sharp(await blurredBg(p.file, h)).composite(layers).jpeg({ quality: 90, mozjpeg: true }).toBuffer();
 }
 
 async function fetchCover(url) {
@@ -177,25 +196,26 @@ async function fetchCover(url) {
   return null;
 }
 
-export async function ctaSlide(manga, fallbackFile) {
+export async function ctaSlide(manga, fallbackFile, h = H) {
+  const dy = h > H ? 160 : 0;   // TikTokon feljebb, hogy az alsó gombok ne takarják
   ensureFont();
   const cover = (await fetchCover(manga.cover_url)) || fs.readFileSync(fallbackFile);
   const cv = await sharp(cover).resize(560, 760, { fit: "cover" }).toBuffer();
   const layers = [
-    { input: { create: { width: 572, height: 772, channels: 4, background: { r: 255, g: 255, b: 255, alpha: 1 } } }, left: Math.round((W - 572) / 2), top: 200 },
-    { input: cv, left: Math.round((W - 560) / 2), top: 206 },
+    { input: { create: { width: 572, height: 772, channels: 4, background: { r: 255, g: 255, b: 255, alpha: 1 } } }, left: Math.round((W - 572) / 2), top: 200 + dy },
+    { input: cv, left: Math.round((W - 560) / 2), top: 206 + dy },
   ];
   const head = await textImg(`<text x="20" y="300" font-family="${FONT}" font-size="230" fill="#ffffff" stroke="#000" stroke-width="10" paint-order="stroke">HOGYAN TOVÁBB?</text>`, W - 160, 110);
-  layers.push({ input: head.data, left: Math.round((W - head.info.width) / 2), top: 60 });
+  layers.push({ input: head.data, left: Math.round((W - head.info.width) / 2), top: 60 + dy });
   const t = await textImg(`<text x="20" y="300" font-family="${FONT}" font-size="230" fill="#ffffff">${esc(manga.title.toUpperCase())}</text>`, W - 160, 80, Math.max(4000, manga.title.length * 240));
-  layers.push({ input: t.data, left: Math.round((W - t.info.width) / 2), top: 1000 });
+  layers.push({ input: t.data, left: Math.round((W - t.info.width) / 2), top: 1000 + dy });
   const sub = await textImg(`<text x="120" y="300" xml:space="preserve" font-family="${FONT}" font-size="200"><tspan fill="#ffffff">OLVASD MAGYARUL: </tspan><tspan fill="#c084fc">PADLIZSAN</tspan><tspan fill="#ffffff">FANSUB.HU</tspan></text>`, W - 380, 52, 6000);
   const mas = await sharp(MASCOT).resize({ height: 230 }).png().toBuffer({ resolveWithObject: true });
-  layers.push({ input: mas.data, left: 40, top: H - mas.info.height - 20 });
-  layers.push({ input: sub.data, left: 40 + mas.info.width + 36, top: 1120 });
+  layers.push({ input: mas.data, left: 40, top: H - mas.info.height - 20 + dy });
+  layers.push({ input: sub.data, left: 40 + mas.info.width + 36, top: 1120 + dy });
   const link = await textImg(`<text x="20" y="300" font-family="DejaVu Sans" font-weight="bold" font-size="160" fill="#ffffff">🔗 link a bióban</text>`, 420, 46);
-  layers.push({ input: link.data, left: 40 + mas.info.width + 36, top: 1200 });
-  return sharp(await blurredBg(cover)).composite(layers).jpeg({ quality: 90, mozjpeg: true }).toBuffer();
+  layers.push({ input: link.data, left: 40 + mas.info.width + 36, top: 1200 + dy });
+  return sharp(await blurredBg(cover, h)).composite(layers).jpeg({ quality: 90, mozjpeg: true }).toBuffer();
 }
 
 /* ── Teljes folyamat: diák + szöveg ── */
@@ -222,8 +242,11 @@ export async function generateSnippet(slug, { avoid = [] } = {}) {
     const slides = [];
     for (let i = 0; i < seq.length; i++) slides.push(await panelSlide(seq[i], i + 1, total, i === 0 ? manga.title : null));
     slides.push(await ctaSlide(manga, seq[0].file));
+    const tiktokSlides = [];
+    for (let i = 0; i < seq.length; i++) tiktokSlides.push(await panelSlide(seq[i], i + 1, total, i === 0 ? manga.title : null, 1920));
+    tiktokSlides.push(await ctaSlide(manga, seq[0].file, 1920));
     const caption = `📖 ${manga.title}\n\n${String(verdict.caption).trim()}\n\n👉 Lapozz! A folytatás magyarul a padlizsanfansub.hu-n — link a bióban.\n\n#manhwa #manga #webtoon #magyarmanga #mangamagyarul #PadlizsanFanSub`;
-    return { manga: { ...manga, id: manga.manga_id, slug }, slides, caption, panels: seq.map(p => `${p.chapter}#${path.basename(p.file)}`), totalPanels: panels.length };
+    return { manga: { ...manga, id: manga.manga_id, slug }, slides, tiktokSlides, caption, panels: seq.map(p => `${p.chapter}#${path.basename(p.file)}`), totalPanels: panels.length };
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }

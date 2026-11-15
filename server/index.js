@@ -328,15 +328,16 @@ cron.schedule("0 11 * * 2,6", async () => {
 }, { timezone: "Europe/Budapest" });
 
 /* ===== INSTAGRAM LAPOZÓS RÉSZLET (2026-11-15) ===== */
-// H/Sze/P 20:00 előnézet az #uploaders csatornába, K/Cs/Szo 18:00 kimegy az Instagramra.
+// H/Sze/P 16:00 előnézet az #uploaders csatornába (este munka után el lehet dönteni),
+// K/Cs/Szo 10:00 kimegy az Instagramra és a TikTokra (Publer).
 const snippetPreview = import("./lib/ig-snippet-preview.js")
   .catch(err => { console.error("[SnippetCron] modul betöltési hiba:", err.message); return null; });
-cron.schedule("0 20 * * 1,3,5", async () => {
+cron.schedule("0 16 * * 1,3,5", async () => {
   if (!process.env.IG_USER_ID || !process.env.FB_PAGE_TOKEN) return;
   try { await (await snippetPreview)?.createSnippetPreview(); }
   catch (err) { console.error("[SnippetCron] előnézet hiba:", err.message); }
 }, { timezone: "Europe/Budapest" });
-cron.schedule("0 18 * * 2,4,6", async () => {
+cron.schedule("0 10 * * 2,4,6", async () => {
   if (!process.env.IG_USER_ID || !process.env.FB_PAGE_TOKEN) return;
   try { await (await snippetPreview)?.publishSnippet(); }
   catch (err) { console.error("[SnippetCron] posztolás hiba:", err.message); }

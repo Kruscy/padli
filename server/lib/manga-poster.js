@@ -47,18 +47,31 @@ export function ensureFont() {
 }
 
 /* ── Mű kiválasztása: nem 18+, van borító, ≥5 fejezet, még nem volt ── */
+/* Közösségi posztokból kizárva (2026-11-15, user kérése): kézi kizárás (pl. magyarul hivatalosan
+   megjelent mű, Berserk), AniList 18+, nagyon véres (Gore ≥ 80) vagy meztelenkedős (Nudity ≥ 60) mű. */
+export const SOCIAL_SAFE_SQL = `m.social_exclude IS NULL AND NOT COALESCE(m.anilist_is_adult, false)
+       AND COALESCE(m.anilist_gore, 0) < 80 AND COALESCE(m.anilist_nudity, 0) < 60`;
+const POPULAR_ORDER = process.env.SOCIAL_PICK === "random" ? "" :
+  "(COALESCE(m.anilist_popularity, 0) >= 10000) DESC, m.average_score DESC NULLS LAST,";
 export async function pickManga(exclude = []) {
   const { rows } = await pool.query(`
     SELECT m.id, m.slug, m.title
       FROM manga m
      WHERE NOT ${ADULT_GENRE_EXISTS_SQL}
+       AND ${SOCIAL_SAFE_SQL}
        AND m.cover_url IS NOT NULL
        AND (SELECT count(*) FROM chapter c WHERE c.manga_id = m.id) >= 5
        AND m.slug <> ALL($1::text[])
+       -- ne ugyanaz, mint az Instagram/TikTok részletben (7 napon belül)
+       AND NOT EXISTS (SELECT 1 FROM ig_snippets s WHERE s.manga_id = m.id AND s.created_at > now() - interval '7 days'
+                          AND s.status IN ('pending','approved','posted'))
        -- 30 napon belül sikertelen próba → most kihagyjuk
        AND NOT EXISTS (SELECT 1 FROM manga_posters p WHERE p.manga_id = m.id AND p.error IS NOT NULL
                           AND p.created_at > now() - interval '30 days')
      ORDER BY (SELECT max(created_at) FROM manga_posters p WHERE p.manga_id = m.id AND p.fb_post_id IS NOT NULL) NULLS FIRST,
+              -- 2026-11-15: amíg a TikTok/FB be nem indul, a legismertebb művek elöl
+              -- (AniList: ≥ 10 000 listán, azon belül a legjobb pontszám). SOCIAL_PICK=random → véletlen.
+              ${POPULAR_ORDER}
               random()
      LIMIT 1`, [exclude]);
   return rows[0] || null;
