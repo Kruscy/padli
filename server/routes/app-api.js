@@ -18,6 +18,8 @@ import { getPresignedUrl, listFiles, localPathToR2Key } from "../r2.js";
 import { getChapterFlags, denyReason } from "../lib/chapter-access.js";
 import { ADULT_GENRE_EXISTS_SQL, isAdultVerified } from "../lib/age.js";
 import { getNewMangaCache } from "../cache/new-manga.js";
+import { resolveUser, forgetTokens } from "../lib/flex-auth.js";
+import { createApiKey } from "../lib/api-keys.js";
 
 const router = express.Router();
 const SITE = "https://padlizsanfansub.hu";
@@ -41,10 +43,18 @@ const ipOf = req => req.headers["cf-connecting-ip"] || req.ip;
 router.post("/auth/grant", requireLogin, express.json(), async (req, res) => {
   const state = String(req.body?.state || "");
   if (!/^[A-Za-z0-9_-]{16,128}$/.test(state)) return res.status(400).json({ error: "Hibás kérés (state)." });
+  // PKCE (2026-11-15): az app egy titkos „verifier” S256-ujjlenyomatát küldi; a kódot csak az válthatja be, aki a
+  // verifiert is ismeri — így egy elkapott kód (pl. a padlizsan:// linkre jelentkező kártékony app) használhatatlan
+  const challenge = String(req.body?.code_challenge || "");
+  if (challenge && !/^[A-Za-z0-9_-]{43}$/.test(challenge)) return res.status(400).json({ error: "Hibás kérés (challenge)." });
+  if (!challenge && process.env.APP_PKCE_REQUIRED === "1") return res.status(400).json({ error: "Frissítsd az alkalmazást." });
   const code = crypto.randomBytes(24).toString("base64url");
-  await pool.query("INSERT INTO app_auth_codes (code_hash, user_id, state, device) VALUES ($1, $2, $3, $4)",
-    [sha(code), req.session.user.id, state, String(req.body?.device || "").slice(0, 80) || null]);
-  res.json({ ok: true, redirect: `padlizsan://auth?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}` });
+  await pool.query("INSERT INTO app_auth_codes (code_hash, user_id, state, device, code_challenge) VALUES ($1, $2, $3, $4, $5)",
+    [sha(code), req.session.user.id, state, String(req.body?.device || "").slice(0, 80) || null, challenge || null]);
+  // Asztali Studio: a gépen futó saját szerverére irányítunk vissza (csak 127.0.0.1, csak port) — 2026-11-15
+  const ret = /^local:(\d{2,5})$/.exec(String(req.body?.return || ""));
+  const q = `code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`;
+  res.json({ ok: true, redirect: ret ? `http://127.0.0.1:${Number(ret[1])}/auth-callback?${q}` : `padlizsan://auth?${q}` });
 });
 
 // Az app beváltja a kódot (5 percig érvényes, egyszer használható, a state-nek egyeznie kell)
@@ -53,8 +63,13 @@ router.post("/auth/token", express.json(), async (req, res) => {
   const { rows } = await pool.query(
     `UPDATE app_auth_codes SET used_at = now()
       WHERE code_hash = $1 AND state = $2 AND used_at IS NULL AND created_at > now() - interval '5 minutes'
-      RETURNING user_id, device`, [sha(code), state]);
+      RETURNING user_id, device, code_challenge`, [sha(code), state]);
   if (!rows[0]) return res.status(400).json({ error: "A belépési kód lejárt vagy érvénytelen. Próbáld újra." });
+  if (rows[0].code_challenge) {
+    const v = String(req.body?.code_verifier || "");
+    const ok = /^[A-Za-z0-9._~-]{43,128}$/.test(v) && crypto.createHash("sha256").update(v).digest("base64url") === rows[0].code_challenge;
+    if (!ok) return res.status(400).json({ error: "A belépés nem igazolható. Próbáld újra." });
+  }
   const token = TOKEN_PREFIX + crypto.randomBytes(32).toString("base64url");
   await pool.query("INSERT INTO app_tokens (user_id, token_hash, device) VALUES ($1, $2, $3)", [rows[0].user_id, sha(token), rows[0].device]);
   const u = await pool.query("SELECT username FROM users WHERE id = $1", [rows[0].user_id]);
@@ -65,18 +80,54 @@ router.post("/auth/token", express.json(), async (req, res) => {
 async function appAuth(req, res, next) {
   const h = String(req.headers.authorization || "");
   const tok = h.startsWith("Bearer ") ? h.slice(7).trim() : "";
+  // Asztali Padlizsan Studio: ugyanezek az adatok az API-kulccsal (X-API-Key: pdl_…) — 2026-11-15
+  if (!tok.startsWith(TOKEN_PREFIX) && req.headers["x-api-key"]) {
+    const u = await resolveUser({ headers: { "x-api-key": req.headers["x-api-key"], "cf-connecting-ip": req.headers["cf-connecting-ip"] }, ip: req.ip }).catch(() => null);
+    if (u) { req.appUser = { id: u.id, username: u.username, role: u.role, token_id: null, viaKey: true }; return next(); }
+  }
   if (!tok.startsWith(TOKEN_PREFIX)) return res.status(401).json({ error: "Jelentkezz be az appban." });
   const { rows } = await pool.query(
     `SELECT t.id AS token_id, u.id, u.username, u.role FROM app_tokens t JOIN users u ON u.id = t.user_id
       WHERE t.token_hash = $1 AND t.revoked_at IS NULL`, [sha(tok)]);
   if (!rows[0]) return res.status(401).json({ error: "A belépésed lejárt, jelentkezz be újra." });
   req.appUser = rows[0];
-  pool.query("UPDATE app_tokens SET last_used_at = now() WHERE id = $1 AND (last_used_at IS NULL OR last_used_at < now() - interval '5 minutes')", [rows[0].token_id]).catch(() => {});
+  pool.query("UPDATE app_tokens SET last_used_at = now(), last_ip = $2 WHERE id = $1 AND (last_used_at IS NULL OR last_used_at < now() - interval '5 minutes')",
+    [rows[0].token_id, ipOf(req)]).catch(() => {});
   next();
 }
 
+/* ── Bejelentkezett eszközeim (profil) — 2026-11-15 ── */
+router.get("/devices", requireLogin, async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT id, device, created_at, last_used_at, last_ip FROM app_tokens
+      WHERE user_id = $1 AND revoked_at IS NULL ORDER BY COALESCE(last_used_at, created_at) DESC`, [req.session.user.id]);
+  // IP-cím csak részben (az első két tag), elég a felismeréshez
+  res.json({ devices: rows.map(r => ({ ...r, last_ip: r.last_ip ? r.last_ip.split(/[.:]/).slice(0, 2).join(r.last_ip.includes(":") ? ":" : ".") + (r.last_ip.includes(":") ? ":…" : ".x.x") : null })) });
+});
+router.post("/devices/:id/revoke", requireLogin, async (req, res) => {
+  const { rowCount } = await pool.query("UPDATE app_tokens SET revoked_at = now() WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL",
+    [Number(req.params.id) || 0, req.session.user.id]);
+  forgetTokens();
+  res.json({ ok: rowCount > 0 });
+});
+
+/* Asztali Studio belépés után: fordítási API-kulcs automatikusan (a felhasználónak nem kell kulccsal bajlódnia).
+   Csak app-tokennel (böngészős engedélyezés után) kérhető; a korábbi automatikus kulcsot visszavonjuk. */
+router.post("/studio-key", appAuth, async (req, res) => {
+  if (!req.appUser.token_id) return res.status(403).json({ error: "Csak belépett alkalmazás kérhet kulcsot." });
+  const LABEL = "Padlizsan Studio (automatikus)";
+  await pool.query("UPDATE api_keys SET revoked_at = now() WHERE user_id = $1 AND label = $2 AND revoked_at IS NULL", [req.appUser.id, LABEL]);
+  try {
+    const k = await createApiKey(req.appUser.id, LABEL);
+    res.json({ ok: true, key: k.key });
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message || "Nem sikerült kulcsot készíteni." });
+  }
+});
+
 router.post("/auth/logout", appAuth, async (req, res) => {
-  await pool.query("UPDATE app_tokens SET revoked_at = now() WHERE id = $1", [req.appUser.token_id]);
+  if (req.appUser.token_id) await pool.query("UPDATE app_tokens SET revoked_at = now() WHERE id = $1", [req.appUser.token_id]);
+  forgetTokens();
   res.json({ ok: true });
 });
 
@@ -200,6 +251,7 @@ router.get("/home", appAuth, async (req, res) => {
 
 /* ── Online olvasás az appban (letöltés nélkül, keretbe nem számít) — ugyanaz a hozzáférés-döntés ── */
 router.get("/read/:slug/:chapter", appAuth, async (req, res) => {
+  if (req.appUser.viaKey) return res.status(403).json({ error: "Olvasáshoz és letöltéshez lépj be a weboldalon (a fordítási kulcs ehhez nem elég).", reason: "login", needLogin: true });
   const { slug } = req.params;
   let chapter = req.params.chapter;
   let flags = await getChapterFlags(slug, chapter);
@@ -319,6 +371,7 @@ async function chapterPages(slug, chapter) {
 
 /* ── Letöltési engedély ── */
 router.post("/download", appAuth, express.json(), async (req, res) => {
+  if (req.appUser.viaKey) return res.status(403).json({ error: "Olvasáshoz és letöltéshez lépj be a weboldalon (a fordítási kulcs ehhez nem elég).", reason: "login", needLogin: true });
   const slug = String(req.body?.slug || ""), chapter = String(req.body?.chapter || "");
   const flags = await getChapterFlags(slug, chapter);
   if (!flags.exists) return res.status(404).json({ error: "Nincs ilyen fejezet." });
@@ -360,6 +413,7 @@ router.post("/download", appAuth, express.json(), async (req, res) => {
 
 // Csak helyben tárolt fejezet képe (ritka): a kiadott letöltés tulajdonosának, 30 percig
 router.get("/page/:id/:i", appAuth, async (req, res) => {
+  if (req.appUser.viaKey) return res.status(403).json({ error: "Olvasáshoz és letöltéshez lépj be a weboldalon (a fordítási kulcs ehhez nem elég).", reason: "login", needLogin: true });
   const { rows } = await pool.query(
     `SELECT manga_slug, chapter FROM app_downloads WHERE id = $1 AND user_id = $2 AND created_at > now() - interval '30 minutes'`,
     [req.params.id, req.appUser.id]);

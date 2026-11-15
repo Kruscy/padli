@@ -69,6 +69,33 @@
       <p class="st-muted" style="margin:8px 0 0">Csomagold ki egy mappába, és indítsd a „Padlizsan Studio.exe”-t.</p>`;
   }
 
+  function hideNewKey() {
+    $("stKeyNewValue").textContent = "";
+    $("stKeyNew").hidden = true;
+  }
+
+  /* ── Bejelentkezett eszközök (2026-11-15) ── */
+  async function loadDevices() {
+    const box = $("stDevices");
+    if (!box) return;
+    try {
+      const r = await fetch("/api/app/devices", { credentials: "include" });
+      if (!r.ok) throw 0;
+      const { devices } = await r.json();
+      box.innerHTML = devices.length ? devices.map(d => `<div class="st-key"><div><b>${esc(d.device || "Ismeretlen eszköz")}</b>
+          <small>Belépés: ${fmtDate(d.created_at)} · Utoljára aktív: ${fmtDate(d.last_used_at)}${d.last_ip ? " · IP: " + esc(d.last_ip) : ""}</small></div>
+          <button class="st-btn" data-devrevoke="${d.id}">Kijelentkeztetés</button></div>`).join("")
+        : `<p class="st-muted">Egyik alkalmazásban sem vagy belépve.</p>`;
+    } catch { box.innerHTML = `<p class="st-muted" style="color:#f87171">Nem sikerült betölteni az eszközöket.</p>`; }
+  }
+  document.getElementById("stDevices")?.addEventListener("click", async e => {
+    const id = e.target.closest("[data-devrevoke]")?.dataset.devrevoke;
+    if (!id || !confirm("Biztosan kijelentkezteted ezt az eszközt?")) return;
+    await fetch(`/api/app/devices/${id}/revoke`, { method: "POST", credentials: "include" }).catch(() => {});
+    loadDevices();
+  });
+  loadDevices();
+
   /* ── API-kulcsok ── */
   async function loadKeys() {
     const list = $("stKeyList");
@@ -76,7 +103,7 @@
       const r = await fetch("/api/user/api-keys", { credentials: "include" });
       if (!r.ok) throw 0;
       const { keys } = await r.json();
-      list.innerHTML = keys.length ? keys.map(k => `<div class="st-key"><div><b>${esc(k.label || "Névtelen kulcs")}</b> <code style="color:#888">${esc(k.prefix)}…</code>
+      list.innerHTML = keys.length ? keys.map(k => `<div class="st-key"><div><b>${esc(k.label || "Névtelen kulcs")}</b> <code style="color:#888">${esc(k.masked || "pdl_••••••••")}</code>
           <small>Létrehozva: ${fmtDate(k.created_at)} · Utoljára használva: ${fmtDate(k.last_used_at)}</small></div>
           <button class="st-btn" data-revoke="${k.id}">Visszavonás</button></div>`).join("")
         : `<p class="st-muted">Még nincs API-kulcsod. Hozz létre egyet, és másold be a programba.</p>`;
@@ -90,10 +117,12 @@
     $("stKeyNewValue").textContent = d.key;
     $("stKeyNew").hidden = false;
     $("stKeyLabel").value = "";
+    // biztonság: a teljes kulcs csak most, rövid ideig látszik — másolás után vagy 2 perc múlva eltűnik, és többé nem jeleníthető meg
+    clearTimeout(window.__keyHide); window.__keyHide = setTimeout(hideNewKey, 120000);
     loadKeys();
   });
   $("stKeyCopy").addEventListener("click", async () => {
-    try { await navigator.clipboard.writeText($("stKeyNewValue").textContent); $("stKeyStatus").textContent = "Kimásolva ✔"; $("stKeyStatus").style.color = ""; }
+    try { await navigator.clipboard.writeText($("stKeyNewValue").textContent); $("stKeyStatus").textContent = "Kimásolva ✔ — biztonsági okból a kulcs többé nem jeleníthető meg."; $("stKeyStatus").style.color = ""; setTimeout(hideNewKey, 1500); }
     catch { $("stKeyStatus").textContent = "Jelöld ki és másold kézzel."; }
   });
   $("stKeyList").addEventListener("click", async e => {

@@ -9,7 +9,10 @@ const tokenCache = new Map();   // hash → { at, user }
 setInterval(() => { const n = Date.now(); for (const [k, v] of tokenCache) if (n - v.at > 60_000) tokenCache.delete(k); }, 60_000).unref();
 
 // → { id, username, role, display_name, via } vagy null
-export async function resolveUser(req) {
+/** Kijelentkeztetéskor azonnal ürítjük (különben 60 mp-ig még élne a gyorsítótárban). */
+export function forgetTokens() { tokenCache.clear(); }
+
+export async function resolveUser(req, { allowKey = true } = {}) {
   if (req.session?.user?.id) return { ...req.session.user, via: "web" };
   const h = String(req.headers?.authorization || "");
   const ip = req.headers?.["cf-connecting-ip"] || req.ip || req.socket?.remoteAddress;
@@ -23,7 +26,7 @@ export async function resolveUser(req) {
     if (rows[0]) { const user = { ...rows[0], via: "android" }; tokenCache.set(hk, { at: Date.now(), user }); return user; }
   }
   const key = req.headers?.["x-api-key"];
-  if (key) {
+  if (key && allowKey) {
     const k = await authenticateApiKey(String(key), ip).catch(() => null);
     if (k) {
       const { rows } = await pool.query("SELECT id, username, role FROM users WHERE id = $1", [k.id]);
@@ -35,6 +38,17 @@ export async function resolveUser(req) {
 
 export function requireAnyAuth(req, res, next) {
   resolveUser(req).then(u => {
+    if (!u) return res.status(401).json({ error: "Jelentkezz be." });
+    req.anyUser = u;
+    next();
+  }).catch(() => res.status(500).json({ error: "Hiba az azonosításnál." }));
+}
+
+/* Olvasáshoz / fejezetképekhez: a fordítási kulcs (pdl_) NEM elég — azt könnyű továbbadni (pl. egy támogató
+   kiposztolja, és bárki olvasná a zárolt részeket). Csak weboldali munkamenet vagy böngészős belépéssel
+   kapott app-token (pdla_, a felhasználó nem látja, nem tudja kimásolni). */
+export function requireUserNoKey(req, res, next) {
+  resolveUser(req, { allowKey: false }).then(u => {
     if (!u) return res.status(401).json({ error: "Jelentkezz be." });
     req.anyUser = u;
     next();

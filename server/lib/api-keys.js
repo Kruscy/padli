@@ -24,17 +24,19 @@ export async function createApiKey(userId, label) {
   const key = KEY_PREFIX + randomBytes(32).toString("base64url");
   const cleanLabel = String(label || "").trim().slice(0, 60) || null;
   const { rows } = await pool.query(
-    `INSERT INTO api_keys (user_id, key_hash, prefix, label) VALUES ($1, $2, $3, $4)
+    `INSERT INTO api_keys (user_id, key_hash, prefix, label, suffix) VALUES ($1, $2, $3, $4, $5)
      RETURNING id, prefix, label, created_at`,
-    [userId, hashKey(key), key.slice(0, 10), cleanLabel]);
+    [userId, hashKey(key), key.slice(0, 4), cleanLabel, key.slice(-4)]);
   return { ...rows[0], key };
 }
 
 export async function listApiKeys(userId) {
   const { rows } = await pool.query(
-    `SELECT id, prefix, label, created_at, last_used_at
+    `SELECT id, suffix, label, created_at, last_used_at
        FROM api_keys WHERE user_id = $1 AND revoked_at IS NULL ORDER BY created_at DESC`, [userId]);
-  return rows;
+  // A teljes kulcs csak létrehozáskor látszik; utána csak kicsillagozva, a végével (a régieknél az sem ismert)
+  return rows.map(r => ({ id: r.id, label: r.label, created_at: r.created_at, last_used_at: r.last_used_at,
+    masked: KEY_PREFIX + "••••••••••••" + (r.suffix || "") }));
 }
 
 export async function revokeApiKey(userId, id) {
