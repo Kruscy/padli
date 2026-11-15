@@ -211,9 +211,6 @@ router.get("/read/:slug/:chapter", appAuth, async (req, res) => {
   if (deny) return res.status(403).json({ error: "Ehhez a fejezethez nincs hozzáférésed.", reason: deny });
   const pages = await chapterPages(slug, chapter);
   if (!pages) return res.status(404).json({ error: "A fejezet képei nem találhatók." });
-  if (!pages.remote) return res.status(409).json({ error: "Ez a fejezet még csak letöltve olvasható az appban." });
-  const urls = [];
-  for (const f of pages.files) urls.push(await getPresignedUrl(localPathToR2Key(`${pages.base}/${f}`.replace(/\/+/g, "/")), 3 * 3600));
   // olvasási előrehaladás a weboldallal közösen (Most olvasott; highest_chapter csak felfelé)
   (async () => {
     const m = await pool.query("SELECT id FROM manga WHERE slug = $1 ORDER BY id DESC LIMIT 1", [slug]);
@@ -225,6 +222,21 @@ router.get("/read/:slug/:chapter", appAuth, async (req, res) => {
                       ON CONFLICT (user_id, manga_id) DO UPDATE SET chapter = EXCLUDED.chapter, page = 0, updated_at = now(), highest_chapter = $4`,
       [req.appUser.id, m.rows[0].id, chapter, highest]);
   })().catch(e => console.warn("[app] progress:", e.message));
+  // A 0.3.6 előtti appok a képekhez nem küldenek tokent → nekik marad az aláírt R2-link
+  const appVer = String(req.headers["x-app-version"] || "0").split(".").map(Number);
+  const modern = (appVer[0] || 0) * 10000 + (appVer[1] || 0) * 100 + (appVer[2] || 0) >= 306;
+  if (!modern) {
+    if (!pages.remote) return res.status(409).json({ error: "Ez a fejezet még csak letöltve olvasható az appban." });
+    const old = [];
+    for (const f of pages.files) old.push(await getPresignedUrl(localPathToR2Key(`${pages.base}/${f}`.replace(/\/+/g, "/")), 3 * 3600));
+    return res.json({ slug, chapter, pages: old });
+  }
+  // Ugyanaz a /api/image URL, mint a weboldali olvasóban → a Cloudflare-gyorsítótár közös, és a telefon is
+  // eltárolja (az aláírt R2-linkek minden megnyitáskor mások voltak: se CDN-, se telefonos gyorsítótár)
+  const fx = await pool.query(`SELECT image_file, EXTRACT(EPOCH FROM fixed_at)::bigint AS v FROM bug_fixes
+                                WHERE manga_slug = $1 AND chapter = $2 AND is_applied = true`, [slug, chapter]).catch(() => ({ rows: [] }));
+  const fixV = Object.fromEntries(fx.rows.filter(r => r.image_file).map(r => [r.image_file, Number(r.v)]));
+  const urls = pages.files.map(f => `${SITE}/api/image/${encodeURIComponent(pages.library)}/${encodeURIComponent(slug)}/${encodeURIComponent(chapter)}/${encodeURIComponent(f)}?r2=1${fixV[f] ? "&v=" + fixV[f] : ""}`);
   res.json({ slug, chapter, pages: urls });
 });
 
@@ -280,7 +292,7 @@ function pageNumber(f) {
 }
 async function chapterPages(slug, chapter) {
   const cands = await pool.query(
-    `SELECT l.path AS lp, m.folder AS mf, m.r2_migrated FROM chapter c JOIN manga m ON m.id = c.manga_id
+    `SELECT l.path AS lp, l.name AS lname, m.folder AS mf, m.r2_migrated FROM chapter c JOIN manga m ON m.id = c.manga_id
        JOIN library l ON l.id = c.library_id WHERE m.slug = $1 AND c.folder = $2`, [slug, chapter]);
   for (const c of cands.rows) {
     const dir = path.join(c.lp, c.mf, chapter);
@@ -300,7 +312,7 @@ async function chapterPages(slug, chapter) {
       if (y !== null) return 1;
       return a.localeCompare(b, undefined, { numeric: true });
     });
-    return { files, remote, base: `${c.lp}/${c.mf}/${chapter}` };
+    return { files, remote, base: `${c.lp}/${c.mf}/${chapter}`, library: c.lname };
   }
   return null;
 }

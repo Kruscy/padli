@@ -5,6 +5,8 @@ import { pool } from "../db.js";
 import { authenticateApiKey } from "./api-keys.js";
 
 const sha = s => crypto.createHash("sha256").update(String(s)).digest("hex");
+const tokenCache = new Map();   // hash → { at, user }
+setInterval(() => { const n = Date.now(); for (const [k, v] of tokenCache) if (n - v.at > 60_000) tokenCache.delete(k); }, 60_000).unref();
 
 // → { id, username, role, display_name, via } vagy null
 export async function resolveUser(req) {
@@ -12,10 +14,13 @@ export async function resolveUser(req) {
   const h = String(req.headers?.authorization || "");
   const ip = req.headers?.["cf-connecting-ip"] || req.ip || req.socket?.remoteAddress;
   if (h.startsWith("Bearer pdla_")) {
+    const hk = sha(h.slice(7).trim());
+    const hit = tokenCache.get(hk);
+    if (hit && Date.now() - hit.at < 60_000) return hit.user;
     const { rows } = await pool.query(
       `SELECT u.id, u.username, u.role FROM app_tokens t JOIN users u ON u.id = t.user_id
-        WHERE t.token_hash = $1 AND t.revoked_at IS NULL`, [sha(h.slice(7).trim())]);
-    if (rows[0]) return { ...rows[0], via: "android" };
+        WHERE t.token_hash = $1 AND t.revoked_at IS NULL`, [hk]);
+    if (rows[0]) { const user = { ...rows[0], via: "android" }; tokenCache.set(hk, { at: Date.now(), user }); return user; }
   }
   const key = req.headers?.["x-api-key"];
   if (key) {

@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import { pool } from "../db.js";
 import { requireLogin } from "../middleware/auth.js";
+import { requireAnyAuth } from "../lib/flex-auth.js";
 import { getPresignedUrl, mangaImageToR2Key, objectExists, listFiles, localPathToR2Key, pipeFetchBody, r2Fetch } from "../r2.js";
 import { isAdultVerified, resolveAdultMode, ADULT_GENRE_EXISTS_SQL } from "../lib/age.js";
 import { denyReason, flagsFromRows, getChapterFlags } from "../lib/chapter-access.js";
@@ -343,7 +344,7 @@ router.get("/pages/:slug/:chapter", requireLogin, async (req, res) => {
 // saját originről kiszolgálva szkriptként futhatna
 const SERVABLE_IMAGE_EXTS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"]);
 
-router.get("/image/:library/:slug/:chapter/:file", requireLogin, async (req, res) => {
+router.get("/image/:library/:slug/:chapter/:file", requireAnyAuth, async (req, res) => {   // weboldal VAGY Android-app (2026-11-15)
   const { library, slug, chapter, file } = req.params;
   if (!SERVABLE_IMAGE_EXTS.has(path.extname(file).toLowerCase())) return res.status(404).end();
 
@@ -375,7 +376,7 @@ router.get("/image/:library/:slug/:chapter/:file", requireLogin, async (req, res
   // nélkül is letölthető volt). A jogosultsághoz kötött választ a
   // Cloudflare nem tárolhatja (private), különben bárkinek kiadná.
   const flags = flagsFromRows(result.rows);
-  const reason = await denyReason(req.session.user, flags);
+  const reason = await denyReason(req.anyUser, flags);
   if (reason) return res.status(reason === "login" ? 401 : 403).end();
   const cacheControl = (flags.locked || flags.adult) ? "private, max-age=3600" : "public, max-age=86400";
 
