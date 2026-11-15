@@ -200,8 +200,11 @@ router.get("/home", appAuth, async (req, res) => {
 
 /* ── Online olvasás az appban (letöltés nélkül, keretbe nem számít) — ugyanaz a hozzáférés-döntés ── */
 router.get("/read/:slug/:chapter", appAuth, async (req, res) => {
-  const { slug, chapter } = req.params;
-  const flags = await getChapterFlags(slug, chapter);
+  const { slug } = req.params;
+  let chapter = req.params.chapter;
+  let flags = await getChapterFlags(slug, chapter);
+  // A 0.3.3-as app a szóközt „+”-ként küldte (URL-űrlap kódolás) — visszafelé kompatibilisen elfogadjuk
+  if (!flags.exists && chapter.includes("+")) { chapter = chapter.replace(/\+/g, " "); flags = await getChapterFlags(slug, chapter); }
   if (!flags.exists) return res.status(404).json({ error: "Nincs ilyen fejezet." });
   const deny = await denyReason({ id: req.appUser.id, role: req.appUser.role }, flags);
   if (deny === "locked") return res.status(403).json({ error: "Ez a fejezet még csak támogatóknak érhető el.", reason: deny });
