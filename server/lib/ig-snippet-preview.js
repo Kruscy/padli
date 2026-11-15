@@ -1,7 +1,7 @@
 /* ── Instagram lapozós részlet: Discord-előnézet + közzététel (2026-11-15) ──
-   H/Sze/P 16:00 → előnézet az előnézet-csatornába (#uploaders) gombokkal
+   Minden nap 16:00 → előnézet az előnézet-csatornába (#uploaders) gombokkal
    (✅ Mehet | 🔄 Másik jelenet | 🎲 Másik mű | ⛔ Kihagyás, csak Admin).
-   K/Cs/Szo 10:00 → a legutóbbi (2 napon belüli) előnézet kimegy az Instagramra;
+   Másnap 10:00 → a legutóbbi (2 napon belüli) előnézet kimegy a TikTokra, K/Cs/Szo az Instagramra is;
    ha ki lett hagyva, semmi; ha nincs előnézet, előnézet nélkül készül egy.
    NE importáld parancssori scriptből: a discord-bot.js importkor bejelentkezik. */
 import fs from "fs";
@@ -20,9 +20,23 @@ const SITE = "https://padlizsanfansub.hu";
 const channel = () => process.env.DISCORD_POSTER_CHANNEL_ID || process.env.DISCORD_SECURITY_CHANNEL_ID;
 let busy = false;
 
-function nextPublishLabel() {
-  const dow = new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/Budapest" })).getDay();
-  return ({ 0: "kedd", 1: "kedd", 2: "csütörtök", 3: "csütörtök", 4: "szombat", 5: "szombat", 6: "kedd" })[dow] + " 10:00-kor";
+/* 2026-11-15: TikTok minden nap 10:00, Instagram csak K/Cs/Szo. */
+const IG_DAYS = [2, 4, 6];
+const DAY = ["vasárnap", "hétfő", "kedd", "szerda", "csütörtök", "péntek", "szombat"];
+function bpNow() { return new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/Budapest" })); }
+/* A következő kitevés: ma 10:00, ha még nem volt, különben holnap 10:00. */
+function nextPublish() {
+  const n = bpNow();
+  const today = n.getHours() < 10;
+  const dow = today ? n.getDay() : (n.getDay() + 1) % 7;
+  return { label: `${today ? "ma" : "holnap"} (${DAY[dow]}) 10:00-kor`, ig: IG_DAYS.includes(dow) };
+}
+function nextPublishLabel() { return nextPublish().label; }
+function platformsLabel() {
+  const p = [];
+  if (publerConfigured()) p.push("a TikTokra (álló változatban, zenével)");
+  if (nextPublish().ig) p.push("az Instagramra");
+  return p.join(" és ") || "sehova (nincs beállítva)";
 }
 
 function buttons(id, disabled = false) {
@@ -60,7 +74,7 @@ export async function createSnippetPreview({ slug = null, exclude = [], avoid = 
   const msg = await sendAdminMessage({
     content: (`📸 **Instagram lapozós részlet — előnézet${note ? " — " + note : ""}**\n` +
       `Mű: **${res.manga.title}** (${SITE}/chapters.html?slug=${encodeURIComponent(res.manga.slug)})\n` +
-      `${res.slides.length} dia, ebben a sorrendben. Ha nem nyúltok hozzá, **${nextPublishLabel()}** kimegy az Instagramra${publerConfigured() ? " és a TikTokra (álló változatban, zenével)" : ""}.\n\n` +
+      `${res.slides.length} dia, ebben a sorrendben. Ha nem nyúltok hozzá, **${nextPublishLabel()}** kimegy ${platformsLabel()}.\n\n` +
       `**Instagram-szöveg:**\n>>> ${res.caption}`).slice(0, 1900),
     files: res.slides.map((b, i) => ({ attachment: b, name: `dia-${i + 1}.jpg` })),
     components: buttons(id),
@@ -114,9 +128,10 @@ onButton("snip:", async (interaction) => {
   }
 });
 
-/* K/Cs/Szo 10:00: a legfrissebb (2 napon belüli) döntés szerint posztol. */
+/* Minden nap 10:00 (TikTok; Instagram csak K/Cs/Szo): a legfrissebb (2 napon belüli) döntés szerint posztol. */
 export async function publishSnippet() {
-  if (!instagramConfigured() && !publerConfigured()) return null;
+  const igToday = IG_DAYS.includes(bpNow().getDay()) && instagramConfigured();
+  if (!igToday && !publerConfigured()) return null;
   const recent = await pool.query(
     "SELECT 1 FROM ig_snippets WHERE status = 'posted' AND created_at > now() - interval '20 hours' LIMIT 1");
   if (recent.rows.length) { console.log("[ig-snippet] nemrég már volt, most kihagyva"); return null; }
@@ -142,7 +157,7 @@ export async function publishSnippet() {
     try {
       const tt = await postTikTokCarousel(ttImages, toTikTokCaption(row.caption), { prefix: `snippet-${row.id}-${row.slug}`, title: row.title || row.slug });
       const postId = tt.result?.payload?.[0]?.post?.id || tt.jobId;
-      await pool.query("UPDATE ig_snippets SET tiktok_post_id = $1 WHERE id = $2", [postId, row.id]);
+      await pool.query("UPDATE ig_snippets SET tiktok_post_id = $1, status = 'posted' WHERE id = $2", [postId, row.id]);
       await sendAdminMessage({ content: `🎵 TikTok lapozós részlet kiment: **${row.slug}**` }, channel()).catch(() => {});
       console.log(`[ig-snippet] TikTok: ${row.slug} → ${postId}`);
     } catch (e) {
@@ -151,6 +166,7 @@ export async function publishSnippet() {
       console.error("[ig-snippet] TikTok hiba:", e.message);
     }
   }
+  if (!igToday) return null;
   try {
     const ig = await postCarouselToInstagram(images, row.caption, `snippet-${row.id}-${row.slug}`);
     await pool.query("UPDATE ig_snippets SET status = 'posted', ig_media_id = $1, ig_permalink = $2 WHERE id = $3", [ig.id, ig.permalink, row.id]);

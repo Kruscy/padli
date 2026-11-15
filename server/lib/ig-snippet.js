@@ -36,7 +36,7 @@ export async function pickSnippetManga(exclude = []) {
                           AND p.status IN ('pending','approved','posted'))
        AND NOT EXISTS (SELECT 1 FROM ig_snippets s WHERE s.manga_id = m.id AND s.error IS NOT NULL
                           AND s.created_at > now() - interval '30 days')
-     ORDER BY (SELECT max(created_at) FROM ig_snippets s WHERE s.manga_id = m.id AND s.ig_media_id IS NOT NULL) NULLS FIRST,
+     ORDER BY (SELECT max(created_at) FROM ig_snippets s WHERE s.manga_id = m.id AND s.status = 'posted') NULLS FIRST,
               -- 2026-11-15: amíg a TikTok/FB be nem indul, a legismertebb művek elöl
               -- (AniList: ≥ 10 000 listán, azon belül a legjobb pontszám). SOCIAL_PICK=random → véletlen.
               ${POPULAR_ORDER}
