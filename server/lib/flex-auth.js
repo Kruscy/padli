@@ -54,3 +54,20 @@ export function requireUserNoKey(req, res, next) {
     next();
   }).catch(() => res.status(500).json({ error: "Hiba az azonosításnál." }));
 }
+
+/* A weboldal meglévő végpontjai (hozzászólások, hasonló művek, értékelés, könyvjelző) az Android-appból és a
+   Studióból is (2026-11-15): app-tokennel (pdla_, NEM fordítási kulccsal) a kérés idejére beállítjuk a
+   munkamenet-felhasználót, a válasz előtt visszavesszük — így a munkamenet nem mentődik el, és a végpontok
+   szabályai (ki mit törölhet stb.) pontosan ugyanazok maradnak. */
+export function sessionFromAppToken(req, res, next) {
+  if (req.session?.user || !req.session) return next();
+  const h = String(req.headers?.authorization || "");
+  if (!h.startsWith("Bearer pdla_")) return next();
+  resolveUser(req, { allowKey: false }).then(u => {
+    if (!u || u.via !== "android") return next();
+    req.session.user = { id: u.id, username: u.username, role: u.role };
+    const end = res.end;
+    res.end = function (...args) { try { delete req.session.user; } catch {} return end.apply(this, args); };
+    next();
+  }).catch(() => next());
+}

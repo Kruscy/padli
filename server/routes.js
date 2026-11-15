@@ -46,6 +46,7 @@ import geminiProxyRoutes from "./routes/gemini-proxy.js";
 import pointsRoutes from "./routes/points.js";
 import padlicromeRoutes from "./routes/padlicrome.js";
 import studioRoutes from "./routes/studio.js";
+import { sessionFromAppToken } from "./lib/flex-auth.js";
 import appApiRoutes from "./routes/app-api.js";
 import gdprRoutes from "./routes/gdpr.js";
 import patreonInvoiceRoutes from "./routes/patreon-invoice.js";
@@ -54,6 +55,8 @@ import { rateLimit } from "express-rate-limit";
 import { SESSION_MAX_AGE } from "./session.js";
 
 const router = express.Router();
+// Android-app / Studio (app-tokennel) a mű-oldal funkcióihoz — 2026-11-15
+router.use(["/manga/:slug/comments", "/manga-comments", "/manga/:slug/recommendations", "/rating", "/progress"], sessionFromAppToken);
 
 /* ── AI-/OCR-/inpaint-proxyk korlátja ─────────────────────────
    Ezek fizetős API-kvótát (DeepL/Gemini) és a belső hálózat gépeit
