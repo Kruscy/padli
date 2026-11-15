@@ -24,6 +24,11 @@ const SITE = "https://padlizsanfansub.hu";
 const TOKEN_PREFIX = "pdla_";
 const FREE_PER_DAY = parseInt(process.env.APP_DL_FREE_PER_DAY || "10", 10);
 const PATRON_PER_DAY = parseInt(process.env.APP_DL_PATRON_PER_DAY || "200", 10);
+// Ideiglenes emelés (pl. áramszünet előtt): APP_DL_FREE_BOOST=50, APP_DL_BOOST_UNTIL=2026-11-19T00:00:00+01:00
+const freeLimit = () => {
+  const until = Date.parse(process.env.APP_DL_BOOST_UNTIL || "");
+  return until && Date.now() < until ? parseInt(process.env.APP_DL_FREE_BOOST || String(FREE_PER_DAY), 10) : FREE_PER_DAY;
+};
 const MAX_ACTIVE = parseInt(process.env.APP_DL_MAX_ACTIVE || "40", 10);   // egész oldalra
 const URL_TTL = 30 * 60;                                                  // aláírt link: 30 perc
 const ACTIVE_WINDOW = "20 minutes";                                       // ennyi után egy félbehagyott letöltés már nem foglal helyet
@@ -82,7 +87,7 @@ async function isPatron(userId) {
 }
 async function quota(user) {
   const patron = user.role === "admin" || await isPatron(user.id);
-  const limit = patron ? PATRON_PER_DAY : FREE_PER_DAY;
+  const limit = patron ? PATRON_PER_DAY : freeLimit();
   // Ugyanannak a fejezetnek az újbóli letöltése 30 napon belül nem számít bele
   const { rows } = await pool.query(
     `SELECT count(DISTINCT (manga_slug, chapter))::int AS n FROM app_downloads d
@@ -373,10 +378,38 @@ router.get("/apk", (req, res) => {
   pool.query("INSERT INTO app_apk_downloads (user_id, file, ip) VALUES ($1, $2, $3)", [req.session?.user?.id || null, f, ip]).catch(() => {});
   res.download(path.join(APK_DIR, f), f);
 });
-router.get("/apk-info", (req, res) => {
+router.get("/apk-info", async (req, res) => {
   const f = latestApk();
   const v = f?.match(/(\d+\.\d+\.\d+)/)?.[1] || null;
-  res.json({ file: f, version: v, size: f ? fs.statSync(path.join(APK_DIR, f)).size : 0 });
+  const st = await pool.query(`SELECT
+      (SELECT count(DISTINCT COALESCE(user_id::text, ip)) FROM app_apk_downloads)::int AS downloads,
+      (SELECT count(DISTINCT user_id) FROM app_tokens WHERE revoked_at IS NULL)::int AS users`).catch(() => ({ rows: [{}] }));
+  res.json({ file: f, version: v, size: f ? fs.statSync(path.join(APK_DIR, f)).size : 0,
+    downloads: st.rows[0].downloads ?? null, users: st.rows[0].users ?? null, free_limit: freeLimit(), patron_limit: PATRON_PER_DAY });
+});
+
+/* ── Visszajelzés / kérdőív a letöltő oldalról (és az appból) ── */
+const WISHES = ["forditas", "ertesites", "lapozos", "tema", "kommentek", "kivansag", "szavazas", "tablet", "ios"];
+const fbHits = new Map();
+router.post("/feedback", express.json({ limit: "16kb" }), async (req, res) => {
+  const ip = req.headers["cf-connecting-ip"] || req.ip;
+  const now = Date.now();
+  const h = (fbHits.get(ip) || []).filter(t => now - t < 3600_000);
+  if (h.length >= 5) return res.status(429).json({ ok: false, error: "Túl sok beküldés, próbáld később." });
+  h.push(now); fbHits.set(ip, h);
+  const b = req.body || {};
+  const t = (v, n) => String(v || "").trim().slice(0, n) || null;
+  const wishes = Array.isArray(b.wishes) ? b.wishes.filter(w => WISHES.includes(w)).slice(0, 12) : [];
+  const rating = Number.isInteger(b.rating) && b.rating >= 1 && b.rating <= 5 ? b.rating : null;
+  if (!wishes.length && !t(b.wish_text, 10) && !t(b.bug_text, 10) && !rating && !b.install) {
+    return res.status(400).json({ ok: false, error: "Írj legalább egy választ." });
+  }
+  await pool.query(`INSERT INTO app_feedback (user_id, username, install, device, rating, wishes, wish_text, bug_text, helper, contact, ip)
+                    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+    [req.session?.user?.id || null, req.session?.user?.username || null, t(b.install, 30), t(b.device, 80), rating, wishes,
+     t(b.wish_text, 3000), t(b.bug_text, 3000), !!b.helper, t(b.contact, 120), ip]);
+  console.log(`[app] visszajelzés: ${req.session?.user?.username || "névtelen"} (${wishes.join(",")})`);
+  res.json({ ok: true });
 });
 
 /* Google Play-feltöltéshez és áruházi anyagokhoz: a dist mappa fájljai a tesztelőknek (.aab, .png) */

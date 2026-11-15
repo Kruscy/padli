@@ -27,6 +27,18 @@
   .megj { color: var(--halvany); font-size: .92rem; }
   code { background: #120d22; padding: 2px 6px; border-radius: 6px; font-size: .85rem; word-break: break-all; }
   .kicsi { font-size: .85rem; color: var(--halvany); }
+  .szamlalo { margin-top: 10px; color: #c4b5fd; font-weight: 600; }
+  form label.sor { display: block; margin: 12px 0 6px; font-weight: 700; }
+  .opciok label { display: flex; gap: 10px; align-items: center; padding: 8px 10px; border: 1px solid #3a3060; border-radius: 10px; margin-bottom: 6px; cursor: pointer; }
+  .opciok input { accent-color: #a855f7; width: 18px; height: 18px; flex: none; }
+  textarea, input[type=text] { width: 100%; background: #120d22; color: var(--szoveg); border: 1px solid #3a3060; border-radius: 10px; padding: 10px; font: inherit; }
+  textarea { min-height: 90px; }
+  .csillagok { display: flex; gap: 6px; font-size: 1.8rem; }
+  .csillagok span { cursor: pointer; color: #4b4466; user-select: none; }
+  .csillagok span.be { color: #facc15; }
+  button.kuld { width: 100%; margin-top: 16px; padding: 14px; border: 0; border-radius: 12px; font-size: 1.05rem; font-weight: 700; color: #fff; background: linear-gradient(90deg, #7c3aed, #a855f7); cursor: pointer; }
+  button.kuld:disabled { opacity: .6; }
+  .hiba { color: #fca5a5; } .ok { color: #86efac; font-weight: 700; }
 </style>
 </head>
 <body>
@@ -38,6 +50,7 @@
     <p class="al">Olvass online, vagy töltsd le a fejezeteket, és olvasd őket <strong>net nélkül is</strong>.</p>
     <a class="letolt" id="letoltGomb" href="/api/app/apk">⬇ Letöltés Androidra</a>
     <div class="verzio" id="verzio">Android 8.0 vagy újabb</div>
+    <div class="szamlalo" id="szamlalo"></div>
   </header>
 
   <div class="figy">⚡ <strong>November 18-án áramszünet miatt nem lesz elérhető az oldal.</strong>
@@ -50,7 +63,7 @@
       <li><strong>Letöltés offline olvasásra:</strong> a mű oldalán a „⬇️ Letöltés” gombbal kijelölöd a részeket, és megadod, mikor töltse le: azonnal, éjjel vagy este; csak wifin vagy mobilneten is; csak töltés közben.</li>
       <li>A letöltött képek <strong>titkosítva</strong> tárolódnak, csak az appban olvashatók.</li>
       <li>Közös olvasási előrehaladás a weboldallal: ahol az appban abbahagytad, ott folytathatod a gépen is.</li>
-      <li>Napi letöltési keret: 10 fejezet (támogatóinknak 200). Online olvasni korlátlanul lehet.</li>
+      <li>Napi letöltési keret: <span id="keret">10</span> fejezet (támogatóinknak 200). Online olvasni korlátlanul lehet.</li>
     </ul>
   </section>
 
@@ -84,6 +97,49 @@
       <li>Nyisd meg azokat a műveket, amiket olvasni szeretnél, nyomd meg a <strong>⬇️ Letöltés</strong> gombot, pipáld be a részeket, és indítsd el a letöltést.</li>
       <li>A letöltött részek a profilképedre koppintva, a <strong>Letöltéseim</strong> alatt találhatók – és az áramszünet alatt a kezdőlapon is megjelennek.</li>
     </ol>
+  </section>
+
+  <section id="visszajelzes">
+    <h2>💬 Segíts fejleszteni az appot!</h2>
+    <p class="megj">Az app most indult, és veletek együtt szeretnénk jobbá tenni. Írd meg, mi tetszik, mi nem működik, és mit szeretnél még benne látni. (Ha be vagy jelentkezve az oldalon, a válaszod a fiókodhoz kötjük, hogy vissza tudjunk írni.)</p>
+    <form id="urlap">
+      <label class="sor">Sikerült telepíteni?</label>
+      <div class="opciok">
+        <label><input type="radio" name="install" value="ok"> Igen, működik</label>
+        <label><input type="radio" name="install" value="nehezen"> Igen, de nehezen ment</label>
+        <label><input type="radio" name="install" value="nem"> Nem sikerült</label>
+        <label><input type="radio" name="install" value="nem_probaltam"> Még nem próbáltam</label>
+      </div>
+      <label class="sor">Mennyire tetszik? (ha már kipróbáltad)</label>
+      <div class="csillagok" id="csillagok"><span data-v="1">★</span><span data-v="2">★</span><span data-v="3">★</span><span data-v="4">★</span><span data-v="5">★</span></div>
+      <label class="sor">Mit szeretnél még benne? (többet is választhatsz)</label>
+      <div class="opciok">
+        <label><input type="checkbox" name="wishes" value="ertesites"> 🔔 Értesítés, ha új rész jön a könyvespolcos műveimhez</label>
+        <label><input type="checkbox" name="wishes" value="lapozos"> 📖 Lapozós olvasási mód (nem csak görgetős)</label>
+        <label><input type="checkbox" name="wishes" value="forditas"> 🌐 Saját képek fordítása az appban (felhős fordító)</label>
+        <label><input type="checkbox" name="wishes" value="kommentek"> 💬 Hozzászólások az appban</label>
+        <label><input type="checkbox" name="wishes" value="kivansag"> 📝 Kívánságlista az appban</label>
+        <label><input type="checkbox" name="wishes" value="szavazas"> 🗳️ Szavazások az appban</label>
+        <label><input type="checkbox" name="wishes" value="tema"> 🎨 Világos téma, betűméret, olvasási beállítások</label>
+        <label><input type="checkbox" name="wishes" value="tablet"> 📱 Tabletre igazított elrendezés</label>
+        <label><input type="checkbox" name="wishes" value="ios"> 🍎 iPhone (iOS) verzió</label>
+      </div>
+      <label class="sor" for="wish_text">Más ötleted van? Mit szeretnél még?</label>
+      <textarea id="wish_text" maxlength="3000" placeholder="Bármi, ami eszedbe jut…"></textarea>
+      <label class="sor" for="bug_text">Találtál hibát? Mi nem működött?</label>
+      <textarea id="bug_text" maxlength="3000" placeholder="Mit csináltál, mi történt, és mit vártál volna?"></textarea>
+      <label class="sor" for="device">Milyen telefonod van? (nem kötelező)</label>
+      <input type="text" id="device" maxlength="80" placeholder="pl. Samsung Galaxy A17, Xiaomi Redmi Note 13">
+      <div class="opciok" style="margin-top:14px">
+        <label><input type="checkbox" id="helper"> 🙋 Szívesen segítenék a fejlesztésben (új verziók kipróbálása, ötletek)</label>
+      </div>
+      <div id="kapcsolatDoboz" hidden>
+        <label class="sor" for="contact">Hol érünk el? (Discord-név vagy e-mail)</label>
+        <input type="text" id="contact" maxlength="120">
+      </div>
+      <button class="kuld" type="submit" id="kuld">Beküldöm</button>
+      <p id="eredmeny"></p>
+    </form>
   </section>
 
   <section>
