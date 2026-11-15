@@ -47,7 +47,7 @@ export async function createPreview({ slug = null, exclude = [], note = "" } = {
   const msg = await sendAdminMessage({
     content: `🖼️ **Heti manga-poszter előnézet${note ? " — " + note : ""}**\n` +
       `Mű: **${res.manga.title}** (${SITE}/chapters.html?slug=${encodeURIComponent(res.manga.slug)})\n` +
-      `Ha nem nyúltok hozzá, **${nextPublishLabel()}** ez megy ki a Facebookra és az Instagramra.\n\n` +
+      `Ha nem nyúltok hozzá, **${nextPublishLabel()}** ez megy ki a Facebookra.\n\n` +
       `**Facebook-szöveg:**\n>>> ${res.caption}`.slice(0, 1900),
     files: [{ attachment: res.image, name: `poszter-${res.manga.slug}.jpg` }],
     components: buttons(id),

@@ -28,6 +28,16 @@ async function graph(pathPart, params) {
   return d;
 }
 
+/* A konténer feldolgozása pár másodperc */
+async function waitContainer(container) {
+  for (let i = 0; i < 30; i++) {
+    const s = await (await fetch(`${GRAPH}/${container}?fields=status_code,status&access_token=${process.env.FB_PAGE_TOKEN}`)).json();
+    if (s.status_code === "FINISHED") return;
+    if (s.status_code === "ERROR" || s.status_code === "EXPIRED") throw new Error(`Instagram feldolgozás: ${s.status || s.status_code}`);
+    await new Promise(r => setTimeout(r, 3000));
+  }
+}
+
 export async function uploadPublicImage(image, name) {
   const key = `social/${name.replace(/[^a-z0-9._-]/gi, "-")}`;
   await r2.send(new PutObjectCommand({
@@ -43,13 +53,27 @@ export async function postPhotoToInstagram(image, caption, name = `ig-${Date.now
   const ig = process.env.IG_USER_ID;
   const imageUrl = await uploadPublicImage(image, name);
   const { id: container } = await graph(`${ig}/media`, { image_url: imageUrl, caption });
-  // A konténer feldolgozása pár másodperc
-  for (let i = 0; i < 20; i++) {
-    const s = await (await fetch(`${GRAPH}/${container}?fields=status_code,status&access_token=${process.env.FB_PAGE_TOKEN}`)).json();
-    if (s.status_code === "FINISHED") break;
-    if (s.status_code === "ERROR" || s.status_code === "EXPIRED") throw new Error(`Instagram feldolgozás: ${s.status || s.status_code}`);
-    await new Promise(r => setTimeout(r, 3000));
+  await waitContainer(container);
+  const { id } = await graph(`${ig}/media_publish`, { creation_id: container });
+  let permalink = null;
+  try {
+    permalink = (await (await fetch(`${GRAPH}/${id}?fields=permalink&access_token=${process.env.FB_PAGE_TOKEN}`)).json()).permalink || null;
+  } catch {}
+  return { id, permalink };
+}
+
+/* Lapozós (carousel) poszt: 2–10 kép. */
+export async function postCarouselToInstagram(images, caption, prefix = `ig-${Date.now()}`) {
+  if (!instagramConfigured()) throw new Error("Instagram nincs beállítva (IG_USER_ID / FB_PAGE_TOKEN / R2)");
+  const ig = process.env.IG_USER_ID;
+  const children = [];
+  for (let i = 0; i < images.length; i++) {
+    const url = await uploadPublicImage(images[i], `${prefix}-${i + 1}.jpg`);
+    const { id } = await graph(`${ig}/media`, { image_url: url, is_carousel_item: "true" });
+    children.push(id);
   }
+  const { id: container } = await graph(`${ig}/media`, { media_type: "CAROUSEL", children: children.join(","), caption });
+  await waitContainer(container);
   const { id } = await graph(`${ig}/media_publish`, { creation_id: container });
   let permalink = null;
   try {

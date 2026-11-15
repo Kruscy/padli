@@ -1037,4 +1037,14 @@ router.post("/poster-preview", express.json(), async (req, res) => {
   } catch (e) { console.error("[poster] kézi előnézet:", e.message); }
 });
 
+/* Instagram lapozós részlet előnézet kézzel (2026-11-15) */
+router.post("/snippet-preview", express.json(), async (req, res) => {
+  const slug = typeof req.body?.slug === "string" && req.body.slug.trim() ? req.body.slug.trim() : null;
+  res.status(202).json({ ok: true, message: "Készül, 1–2 perc múlva megjelenik a Discordon." });
+  try {
+    const { createSnippetPreview } = await import("../lib/ig-snippet-preview.js");
+    await createSnippetPreview({ slug, note: `kézi indítás (${req.session.user.username})` });
+  } catch (e) { console.error("[ig-snippet] kézi előnézet:", e.message); }
+});
+
 export default router;

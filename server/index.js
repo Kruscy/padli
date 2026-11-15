@@ -327,6 +327,21 @@ cron.schedule("0 11 * * 2,6", async () => {
   catch (err) { console.error("[PosterCron] posztolás hiba:", err.message); }
 }, { timezone: "Europe/Budapest" });
 
+/* ===== INSTAGRAM LAPOZÓS RÉSZLET (2026-11-15) ===== */
+// H/Sze/P 20:00 előnézet az #uploaders csatornába, K/Cs/Szo 18:00 kimegy az Instagramra.
+const snippetPreview = import("./lib/ig-snippet-preview.js")
+  .catch(err => { console.error("[SnippetCron] modul betöltési hiba:", err.message); return null; });
+cron.schedule("0 20 * * 1,3,5", async () => {
+  if (!process.env.IG_USER_ID || !process.env.FB_PAGE_TOKEN) return;
+  try { await (await snippetPreview)?.createSnippetPreview(); }
+  catch (err) { console.error("[SnippetCron] előnézet hiba:", err.message); }
+}, { timezone: "Europe/Budapest" });
+cron.schedule("0 18 * * 2,4,6", async () => {
+  if (!process.env.IG_USER_ID || !process.env.FB_PAGE_TOKEN) return;
+  try { await (await snippetPreview)?.publishSnippet(); }
+  catch (err) { console.error("[SnippetCron] posztolás hiba:", err.message); }
+}, { timezone: "Europe/Budapest" });
+
 /* ===== SITEMAP NAPI FRISSÍTÉS (új mangák/fejezetek) ===== */
 cron.schedule("30 4 * * *", () => {
   generateSitemap().catch(e => console.error("[Sitemap] Napi frissítés hiba:", e.message));

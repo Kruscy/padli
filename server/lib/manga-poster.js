@@ -33,7 +33,7 @@ const W = 1080, H = 1350, BORDER = 5, GAP = 16, PICKS = 5;
 const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 /* A cím betűtípusa: a librsvg a fontconfigból tölti, ezért telepítjük, ha hiányzik. */
-function ensureFont() {
+export function ensureFont() {
   try {
     if (execFileSync("fc-list", [FONT], { encoding: "utf8" }).trim()) return;
     const dir = path.join(os.homedir(), ".local/share/fonts");
@@ -105,7 +105,7 @@ async function coverRef(url) {
   } catch { return null; }
 }
 
-async function chapterFiles(ch) {
+export async function chapterFiles(ch) {
   const dir = path.join(ch.lp, ch.mf, ch.folder);
   let files = [];
   if (ch.r2_migrated) {
@@ -125,7 +125,7 @@ async function loadPage(ch, file) {
   return Buffer.from(await r.arrayBuffer());
 }
 
-async function extractPanels(chapters, tmp) {
+export async function extractPanels(chapters, tmp) {
   const panels = [];
   for (const ch of chapters) {
     for (const f of await chapterFiles(ch)) {
@@ -155,7 +155,7 @@ async function extractPanels(chapters, tmp) {
 }
 
 /* ── 2. Előszűrés + AI-válogatás ─────────────────────────── */
-async function contactSheet(cands) {
+export async function contactSheet(cands) {
   const cols = 8, cw = 220, chh = 260, layers = [];
   for (let i = 0; i < cands.length; i++) {
     const tile = await sharp(cands[i].file).resize(cw - 8, chh - 34, { fit: "contain", background: "#ffffff" }).toBuffer();
@@ -167,7 +167,7 @@ async function contactSheet(cands) {
     .composite(layers).jpeg({ quality: 82 }).toBuffer();
 }
 
-async function openaiJson(model, content, maxTokens = 600) {
+export async function openaiJson(model, content, maxTokens = 600) {
   const r = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
@@ -238,7 +238,7 @@ async function aiFocus(file) {
 }
 
 /* ── 3. Összeállítás ──────────────────────────────────────── */
-async function textImg(svgInner, maxW, maxH, canvasW = 4000) {
+export async function textImg(svgInner, maxW, maxH, canvasW = 4000) {
   const big = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${canvasW}" height="400">${svgInner}</svg>`);
   const t = await sharp(big).trim().png().toBuffer();
   const m = await sharp(t).metadata();
@@ -371,7 +371,7 @@ export async function composePoster(title, picks) {
 }
 
 /* ── Facebook-szöveg ──────────────────────────────────────── */
-function cleanDescription(d) {
+export function cleanDescription(d) {
   return String(d || "")
     .replace(/ford\.?\s*megj\.?:[^\n]*(\n|<br\s*\/?>)*/gi, "")   // fordítói megjegyzés
     .replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]+>/g, " ").replace(/\*\*/g, "")
@@ -458,7 +458,8 @@ export async function buildWeeklyPoster({ slug = null, exclude = [], logErrors =
 /* Elkészít és (post=true esetén) azonnal kitesz — kézi futtatáshoz. */
 /* Instagramra is (ha be van állítva); hiba esetén csak naplóz, a Facebook-poszt marad. */
 export async function shareToInstagram(posterId, image, caption, slug) {
-  if (!instagramConfigured()) return null;
+  // 2026-11-15: a user kérésére Instagramra a lapozós részlet megy, a poszter csak IG_POSTERS=1 esetén
+  if (process.env.IG_POSTERS !== "1" || !instagramConfigured()) return null;
   try {
     const ig = await postPhotoToInstagram(image, toInstagramCaption(caption), `poster-${posterId}-${slug}.jpg`);
     await pool.query("UPDATE manga_posters SET ig_media_id = $1, ig_permalink = $2 WHERE id = $3", [ig.id, ig.permalink, posterId]);
