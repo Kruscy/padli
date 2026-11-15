@@ -1,7 +1,7 @@
 /* ── Heti manga-poszter: péntek esti Discord-előnézet (2026-11-15) ──
-   Péntek 19:00  → elkészül a poszter, a #riasztás csatornába megy gombokkal.
+   Heti 2x: hétfő/péntek 19:00 → elkészül a poszter, a #riasztás csatornába megy gombokkal.
    Gombok (csak Admin rang): ✅ Mehet | 🔄 Újragenerálás | 🎲 Másik mű | ⛔ Kihagyás
-   Szombat 11:00 → a legutóbbi pending/approved poszt kimegy a Facebookra;
+   Kedd/szombat 11:00 → a legutóbbi pending/approved poszt kimegy a Facebookra;
                    ha ki lett hagyva, semmi; ha nincs előnézet (pl. a gép
                    pénteken állt), a régi módon készít és kitesz egyet.
    NE importáld parancssori scriptből: a discord-bot.js importkor bejelentkezik. */
@@ -16,6 +16,11 @@ import { onButton, isAdminMember, sendAdminMessage } from "../discord-bot.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DIR = path.join(__dirname, "..", "..", "data", "posters");
 const SITE = "https://padlizsanfansub.hu";
+/* A következő kitevés napja (kedd vagy szombat 11:00, Budapest) */
+function nextPublishLabel() {
+  const dow = new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/Budapest" })).getDay();
+  return (dow >= 3 && dow <= 6) ? "szombat 11:00-kor" : "kedd 11:00-kor";
+}
 let busy = false;
 
 function buttons(id, disabled = false) {
@@ -40,7 +45,7 @@ export async function createPreview({ slug = null, exclude = [], note = "" } = {
   const msg = await sendAdminMessage({
     content: `🖼️ **Heti manga-poszter előnézet${note ? " — " + note : ""}**\n` +
       `Mű: **${res.manga.title}** (${SITE}/chapters.html?slug=${encodeURIComponent(res.manga.slug)})\n` +
-      `Ha nem nyúltok hozzá, **szombat 11:00-kor** ez megy ki a Facebookra.\n\n` +
+      `Ha nem nyúltok hozzá, **${nextPublishLabel()}** ez megy ki a Facebookra.\n\n` +
       `**Facebook-szöveg:**\n>>> ${res.caption}`.slice(0, 1900),
     files: [{ attachment: res.image, name: `poszter-${res.manga.slug}.jpg` }],
     components: buttons(id),
@@ -71,7 +76,7 @@ onButton("poster:", async (interaction) => {
 
   if (action === "approve") {
     await setStatus(id, "approved", who);
-    return interaction.update({ content: interaction.message.content.replace(base, base + `\n✅ **Jóváhagyta: ${who}** — szombat 11:00-kor kimegy.`).slice(0, 2000), components: buttons(id) });
+    return interaction.update({ content: interaction.message.content.replace(base, base + `\n✅ **Jóváhagyta: ${who}** — ${nextPublishLabel()} kimegy.`).slice(0, 2000), components: buttons(id) });
   }
   if (action === "skip") {
     await setStatus(id, "skipped", who);
@@ -94,18 +99,18 @@ onButton("poster:", async (interaction) => {
   }
 });
 
-/* Szombat: a legfrissebb (3 napon belüli) döntés szerint posztol. */
+/* Kedd/szombat: a legfrissebb (2 napon belüli) döntés szerint posztol. */
 export async function publishWeekly() {
-  // Védelem: ha 5 napon belül már kiment egy (pl. kézzel), ezen a héten nem
+  // Védelem: ha 2 napon belül már kiment egy (pl. kézzel), most nem
   const recent = await pool.query(
-    "SELECT 1 FROM manga_posters WHERE status = 'posted' AND created_at > now() - interval '5 days' LIMIT 1");
-  if (recent.rows.length) { console.log("[poster] 5 napon belül már volt poszt, most kihagyva"); return null; }
+    "SELECT 1 FROM manga_posters WHERE status = 'posted' AND created_at > now() - interval '2 days' LIMIT 1");
+  if (recent.rows.length) { console.log("[poster] 2 napon belül már volt poszt, most kihagyva"); return null; }
   const { rows } = await pool.query(
     `SELECT p.*, m.slug FROM manga_posters p JOIN manga m ON m.id = p.manga_id
-      WHERE p.status IN ('pending','approved','skipped') AND p.created_at > now() - interval '3 days'
+      WHERE p.status IN ('pending','approved','skipped') AND p.created_at > now() - interval '2 days'
       ORDER BY p.id DESC LIMIT 1`);
   const row = rows[0];
-  if (row?.status === "skipped") { console.log("[poster] e heti poszter kihagyva"); return null; }
+  if (row?.status === "skipped") { console.log("[poster] ez a poszter kihagyva"); return null; }
   if (row && row.image_path && fs.existsSync(row.image_path)) {
     const fbId = await postPhotoToFacebook(fs.readFileSync(row.image_path), row.caption);
     await pool.query("UPDATE manga_posters SET status = 'posted', fb_post_id = $1 WHERE id = $2", [fbId, row.id]);

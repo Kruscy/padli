@@ -311,16 +311,17 @@ cron.schedule("0 10 * * 1,3,5", async () => {
 }, { timezone: "Europe/Budapest" });
 
 /* ===== HETI MANGA-POSZTER A FACEBOOKRA ===== */
-// Péntek 19:00: előnézet a #riasztás csatornába (gombok: Mehet / Újra / Másik / Kihagyás).
-// Szombat 11:00: kiposztolás. Nem a blog napjain (H/Sze/P).
+// Heti 2x (2026-11-15): hétfő + péntek 19:00 előnézet a #riasztás csatornába
+// (gombok: Mehet / Újra / Másik / Kihagyás), kedd + szombat 11:00 kiposztolás.
+// Nem a blog napjain (H/Sze/P).
 const posterPreview = import("./lib/manga-poster-preview.js")
   .catch(err => { console.error("[PosterCron] modul betöltési hiba:", err.message); return null; });
-cron.schedule("0 19 * * 5", async () => {
+cron.schedule("0 19 * * 1,5", async () => {
   if (!process.env.FB_PAGE_ID || !process.env.FB_PAGE_TOKEN) return;
   try { await (await posterPreview)?.createPreview(); }
   catch (err) { console.error("[PosterCron] előnézet hiba:", err.message); }
 }, { timezone: "Europe/Budapest" });
-cron.schedule("0 11 * * 6", async () => {
+cron.schedule("0 11 * * 2,6", async () => {
   if (!process.env.FB_PAGE_ID || !process.env.FB_PAGE_TOKEN) return;
   try { await (await posterPreview)?.publishWeekly(); }
   catch (err) { console.error("[PosterCron] posztolás hiba:", err.message); }
