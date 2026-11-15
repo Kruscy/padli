@@ -17,6 +17,7 @@ import { requireLogin } from "../middleware/auth.js";
 import { getPresignedUrl, listFiles, localPathToR2Key } from "../r2.js";
 import { getChapterFlags, denyReason } from "../lib/chapter-access.js";
 import { ADULT_GENRE_EXISTS_SQL, isAdultVerified } from "../lib/age.js";
+import { getNewMangaCache } from "../cache/new-manga.js";
 
 const router = express.Router();
 const SITE = "https://padlizsanfansub.hu";
@@ -94,6 +95,76 @@ async function quota(user) {
 
 router.get("/me", appAuth, async (req, res) => {
   res.json({ username: req.appUser.username, quota: await quota(req.appUser) });
+});
+
+/* ── Kezdőlap: ugyanazok a blokkok, mint a weboldalon (2026-11-15) ──
+   hírek (hero), napi kiemelt művek, Most olvasott, Új részek (7 nap), Új mangák. Az appban nincs 18+ mód. */
+let homeCache = { at: 0, data: null };
+router.get("/home", appAuth, async (req, res) => {
+  try {
+    if (!homeCache.data || Date.now() - homeCache.at > 5 * 60_000) {
+      const [ann, releases, featuredAll] = await Promise.all([
+        pool.query(`SELECT id, title, body, image_url, cta_label, cta_url FROM announcements WHERE expires_at > now() ORDER BY created_at DESC LIMIT 10`),
+        pool.query(`SELECT m.title, m.slug, m.cover_url, COUNT(c.id)::int AS new_count, MAX(c.scanned_at) AS latest_scan
+                      FROM chapter c JOIN manga m ON m.id = c.manga_id
+                     WHERE c.scanned_at >= now() - interval '7 days' AND NOT ${ADULT_GENRE_EXISTS_SQL}
+                     GROUP BY m.id ORDER BY latest_scan DESC LIMIT 40`),
+        pool.query(`SELECT title, slug, cover_url, description FROM manga m
+                     WHERE cover_url IS NOT NULL AND description IS NOT NULL AND NOT ${ADULT_GENRE_EXISTS_SQL}`),
+      ]);
+      // napi kiemelt: a nap dátumával seedelt keverés (ugyanaz egész nap)
+      const day = new Date().toISOString().slice(0, 10);
+      let h = 0; for (const ch of day) h = (Math.imul(31, h) + ch.charCodeAt(0)) | 0;
+      const rnd = () => { h = Math.imul(48271, h) % 0x7fffffff; return (h & 0xfffffff) / 0xfffffff; };
+      const featured = [...featuredAll.rows].sort(() => rnd() - 0.5).slice(0, 5)
+        .map(f => ({ ...f, description: String(f.description).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 300) }));
+      let newManga = (getNewMangaCache() || []).slice(0, 30);
+      if (newManga.length) {
+        const { rows } = await pool.query(`SELECT DISTINCT ON (slug) slug, cover_url FROM manga WHERE slug = ANY($1) AND cover_url <> '' ORDER BY slug, id DESC`, [newManga.map(m => m.slug)]);
+        const cov = new Map(rows.map(r => [r.slug, r.cover_url]));
+        newManga = newManga.map(m => ({ slug: m.slug, title: m.title, cover_url: cov.get(m.slug) || m.cover_url }));
+      }
+      homeCache = { at: Date.now(), data: { announcements: ann.rows, featured, releases: releases.rows, newManga } };
+    }
+    // Most olvasott: a weboldali olvasás alapján, userenként
+    const { rows: recent } = await pool.query(`
+      SELECT DISTINCT ON (m.slug) m.slug, m.title, m.cover_url, rp.chapter, rp.page, rp.updated_at
+        FROM reading_progress rp JOIN manga m ON m.id = rp.manga_id
+       WHERE rp.user_id = $1 AND NOT ${ADULT_GENRE_EXISTS_SQL}
+       ORDER BY m.slug, rp.updated_at DESC`, [req.appUser.id]);
+    recent.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+    res.json({ ...homeCache.data, recent: recent.slice(0, 20) });
+  } catch (e) {
+    console.error("[app] home:", e.message);
+    res.status(500).json({ error: "Nem sikerült betölteni a kezdőlapot." });
+  }
+});
+
+/* ── Online olvasás az appban (letöltés nélkül, keretbe nem számít) — ugyanaz a hozzáférés-döntés ── */
+router.get("/read/:slug/:chapter", appAuth, async (req, res) => {
+  const { slug, chapter } = req.params;
+  const flags = await getChapterFlags(slug, chapter);
+  if (!flags.exists) return res.status(404).json({ error: "Nincs ilyen fejezet." });
+  const deny = await denyReason({ id: req.appUser.id, role: req.appUser.role }, flags);
+  if (deny === "locked") return res.status(403).json({ error: "Ez a fejezet még csak támogatóknak érhető el.", reason: deny });
+  if (deny) return res.status(403).json({ error: "Ehhez a fejezethez nincs hozzáférésed.", reason: deny });
+  const pages = await chapterPages(slug, chapter);
+  if (!pages) return res.status(404).json({ error: "A fejezet képei nem találhatók." });
+  if (!pages.remote) return res.status(409).json({ error: "Ez a fejezet még csak letöltve olvasható az appban." });
+  const urls = [];
+  for (const f of pages.files) urls.push(await getPresignedUrl(localPathToR2Key(`${pages.base}/${f}`.replace(/\/+/g, "/")), 3 * 3600));
+  // olvasási előrehaladás a weboldallal közösen (Most olvasott; highest_chapter csak felfelé)
+  (async () => {
+    const m = await pool.query("SELECT id FROM manga WHERE slug = $1 ORDER BY id DESC LIMIT 1", [slug]);
+    if (!m.rows[0]) return;
+    const cur = await pool.query("SELECT highest_chapter FROM reading_progress WHERE user_id = $1 AND manga_id = $2", [req.appUser.id, m.rows[0].id]);
+    const num = s => parseFloat((String(s || "").match(/(\d+(?:\.\d+)?)/) || [0, -1])[1]);
+    const highest = !cur.rows[0]?.highest_chapter || num(chapter) > num(cur.rows[0].highest_chapter) ? chapter : cur.rows[0].highest_chapter;
+    await pool.query(`INSERT INTO reading_progress (user_id, manga_id, chapter, page, updated_at, highest_chapter) VALUES ($1, $2, $3, 0, now(), $4)
+                      ON CONFLICT (user_id, manga_id) DO UPDATE SET chapter = EXCLUDED.chapter, page = 0, updated_at = now(), highest_chapter = $4`,
+      [req.appUser.id, m.rows[0].id, chapter, highest]);
+  })().catch(e => console.warn("[app] progress:", e.message));
+  res.json({ slug, chapter, pages: urls });
 });
 
 /* ── Böngészés ── */
