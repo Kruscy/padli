@@ -92,7 +92,8 @@ export function securityMonitor(req, res, next) {
     const status = res.statusCode;
     const p = req.originalUrl || "";
     if (deferFlood && !(req.session?.user && status < 400)) countFlood(req, ip);
-    if (status === 429) {
+    // a napi letöltési keret elfogyása várt helyzet (pl. az Android-app sorban álló letöltései), nem biztonsági esemény
+    if (status === 429 && !res.locals?.quotaLimit) {
       logSecurityEvent({ req, type: "rate_limited", severity: "warn" });
     } else if (status === 403 && /^\/api\/admin(\/|$)/.test(p) && req.session?.user?.role !== "admin") {
       logSecurityEvent({ req, type: "admin_probe", severity: "warn" });

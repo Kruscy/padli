@@ -1,7 +1,7 @@
 // Android-app belépés (2026-11-15): a bejelentkezett user engedélyezi az appot → padlizsan://auth?code=..&state=..
 (function () {
   const p = new URLSearchParams(location.search);
-  const state = p.get("state") || "", device = p.get("device") || "", ret = p.get("return") || "", challenge = p.get("cc") || "";
+  const state = p.get("state") || "", device = p.get("device") || "", ret = p.get("return") || (/^\d{2,5}$/.test(p.get("lp") || "") ? "local:" + p.get("lp") : ""), challenge = p.get("cc") || "";
   const $ = (id) => document.getElementById(id);
   if (!/^[A-Za-z0-9_-]{16,128}$/.test(state)) { $("szoveg").textContent = "Hiányos link. Indítsd a belépést az appból."; return; }
   fetch("/api/user/me", { credentials: "same-origin" })

@@ -403,8 +403,13 @@ router.post("/download", appAuth, express.json(), async (req, res) => {
     `SELECT 1 FROM app_downloads WHERE user_id = $1 AND manga_slug = $2 AND chapter = $3 AND status <> 'failed'
         AND created_at > now() - interval '30 days' LIMIT 1`, [req.appUser.id, slug, chapter]);
   if (!already.rows.length && q.left <= 0) {
+    // mikor szabadul fel hely: amikor a legrégebbi beszámított letöltés 24 órásnál régebbi lesz
+    const o = await pool.query(`SELECT EXTRACT(EPOCH FROM (min(created_at) + interval '24 hours' - now()))::int AS s FROM app_downloads
+                                 WHERE user_id = $1 AND status <> 'failed' AND created_at > now() - interval '24 hours'`, [req.appUser.id]);
+    const retry = Math.max(300, (o.rows[0]?.s || 3600) + 60);
+    res.locals.quotaLimit = true;
     return res.status(429).json({ error: `Elérted a napi letöltési keretet (${q.limit} fejezet).${q.patron ? "" : " Támogatóként többet tölthetsz le."}`,
-      reason: "quota", retry_after: 3600, quota: q });
+      reason: "quota", retry_after: retry, quota: q });
   }
   // Oldalszintű terheléskorlát: ha sok letöltés fut épp, az app később próbálja újra (szórással)
   const act = await pool.query(`SELECT count(*)::int AS n FROM app_downloads WHERE status = 'issued' AND created_at > now() - interval '${ACTIVE_WINDOW}'`);
