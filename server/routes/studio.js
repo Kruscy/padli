@@ -203,7 +203,7 @@ pool.query(`CREATE TABLE IF NOT EXISTS studio_gifts (
   points integer NOT NULL, created_at timestamptz NOT NULL DEFAULT now())`).catch(e => console.error("[STUDIO] tábla:", e.message));
 
 async function recordDownload(req, info, file) {
-  const u = req.session.user;
+  const u = req.session?.user || req.keyUser;
   await pool.query("INSERT INTO studio_downloads (user_id, version, file, ip) VALUES ($1,$2,$3,$4)",
     [u.id, info.version, file, req.headers["cf-connecting-ip"] || req.ip || null]);
   const { rows } = await pool.query("SELECT email_verified FROM users WHERE id = $1", [u.id]);
@@ -242,7 +242,13 @@ async function recordDownload(req, info, file) {
 // Mindig a legújabb. Böngészőből (nincs belépve / nincs joga) a profilra irányít.
 router.get("/download", async (req, res) => {
   const wantsHtml = /text\/html/.test(req.headers.accept || "");
-  if (!(await canDownload(req.session?.user))) {
+  // Az asztali app saját magát frissíti az API-kulcsával (böngészős belépés nélkül) — 2026-11-15
+  if (!req.session?.user && req.headers["x-api-key"]) {
+    const k = await authenticateApiKey(String(req.headers["x-api-key"]), req.headers["cf-connecting-ip"] || req.ip).catch(() => null);
+    if (k) req.keyUser = { id: k.id, username: k.username };
+  }
+  const dlUser = req.session?.user || req.keyUser;
+  if (!(await canDownload(dlUser))) {
     if (wantsHtml) return res.redirect(302, req.session?.user ? "/profile.html#studio" : "/login.html?redirect=" + encodeURIComponent("/api/studio/download"));
     return res.status(req.session?.user ? 404 : 401).json({ error: req.session?.user ? "Nem található" : "Login required" });
   }
@@ -250,7 +256,7 @@ router.get("/download", async (req, res) => {
   if (!info) return wantsHtml ? res.redirect(302, "/profile.html#studio") : res.status(404).json({ error: "Még nincs feltöltött csomag" });
   // alapból a telepítő; ?type=zip vagy ha még nincs kész telepítő: a ZIP
   const file = req.query.type !== "zip" && info.installer ? info.installer.name : info.name;
-  console.log(`[STUDIO] letöltés: ${req.session.user.username} → ${file}`);
+  console.log(`[STUDIO] letöltés: ${dlUser.username}${req.keyUser ? " (appon belüli frissítés)" : ""} → ${file}`);
   recordDownload(req, info, file).catch(e => console.error("[STUDIO] letöltés-napló:", e.message));
   res.setHeader("Cache-Control", "no-store");
   res.download(path.join(DIST_DIR, file), file);
