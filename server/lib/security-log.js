@@ -82,6 +82,8 @@ const RULES = [
   { type: "write_burst",    key: r => `a:${r.details?.actor}`,     limit: 1,   windowMs: 30 * 60e3, msg: r => `Tömeges írás (spam?): ${r.details?.actor} — ${r.details?.count} kérés 5 perc alatt` },
   { type: "request_flood",  key: r => `ip:${r.ip}`,               limit: 1,   windowMs: 30 * 60e3, msg: r => `Kérés-áradat (DoS?): **${r.ip}** — ${r.details?.count} kérés/perc` },
   { type: "rate_limited",   key: r => `ip:${r.ip}`,               limit: 5,   windowMs: 10 * 60e3, msg: r => `Ismételten korlátba futó IP: **${r.ip}** (${r.path})` },
+  // App-hozzáférés (Android/Studio) sok hálózatról / országból → megosztott fiók gyanúja (2026-11-15)
+  { type: "app_token_spread", key: r => `t:${r.details?.token}`, limit: 1, windowMs: 24 * 3600e3, msg: r => `App-hozzáférés gyanúsan sok helyről: **${r.username}** (${r.details?.device || "?"}) — ${r.details?.nets} hálózat, ${r.details?.countries} ország 24 órán belül (megosztott fiók?)` },
   { type: "discord_raid",   key: r => `u:${r.details?.discordUser}`, limit: 1, windowMs: 30 * 60e3, msg: r => `Discord: gyanús tömeges tag-elés, kirúgva: ${r.details?.discordUser}` },
 ];
 

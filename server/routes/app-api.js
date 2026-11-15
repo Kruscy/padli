@@ -20,6 +20,7 @@ import { ADULT_GENRE_EXISTS_SQL, isAdultVerified } from "../lib/age.js";
 import { getNewMangaCache } from "../cache/new-manga.js";
 import { resolveUser, forgetTokens } from "../lib/flex-auth.js";
 import { createApiKey } from "../lib/api-keys.js";
+import { logSecurityEvent } from "../lib/security-log.js";
 
 const router = express.Router();
 const SITE = "https://padlizsanfansub.hu";
@@ -76,6 +77,23 @@ router.post("/auth/token", express.json(), async (req, res) => {
   res.json({ ok: true, token, username: u.rows[0]?.username });
 });
 
+/* Megosztott fiók gyanúja: egy app-token 24 órán belül hány különböző hálózatról (IP első két tagja) és
+   országból jelentkezik. Telefonon a wifi/mobilnet váltás 2–3 hálózat — 6 fölött vagy 2 országnál több már gyanús. */
+const spread = new Map();   // token_id → { nets: Map(net→ts), countries: Map(cc→ts) }
+setInterval(() => { const lim = Date.now() - 24 * 3600e3;
+  for (const [k, v] of spread) { for (const m of [v.nets, v.countries]) for (const [x, t] of m) if (t < lim) m.delete(x); if (!v.nets.size) spread.delete(k); }
+}, 3600e3).unref();
+function trackTokenSpread(req, u) {
+  const ip = String(ipOf(req) || ""), cc = req.headers["cf-ipcountry"] || "?";
+  const net = ip.includes(":") ? ip.split(":").slice(0, 3).join(":") : ip.split(".").slice(0, 2).join(".");
+  const e = spread.get(u.token_id) || { nets: new Map(), countries: new Map() };
+  const now = Date.now(); e.nets.set(net, now); e.countries.set(cc, now); spread.set(u.token_id, e);
+  if (e.nets.size > 6 || e.countries.size > 2) {
+    logSecurityEvent({ req, type: "app_token_spread", severity: "warn", userId: u.id, username: u.username, dedupeKey: `tok:${u.token_id}`,
+      details: { token: u.token_id, device: u.device || null, nets: e.nets.size, countries: e.countries.size } });
+  }
+}
+
 // Bearer-token → req.appUser = { id, username, role }
 async function appAuth(req, res, next) {
   const h = String(req.headers.authorization || "");
@@ -87,10 +105,11 @@ async function appAuth(req, res, next) {
   }
   if (!tok.startsWith(TOKEN_PREFIX)) return res.status(401).json({ error: "Jelentkezz be az appban." });
   const { rows } = await pool.query(
-    `SELECT t.id AS token_id, u.id, u.username, u.role FROM app_tokens t JOIN users u ON u.id = t.user_id
+    `SELECT t.id AS token_id, t.device, u.id, u.username, u.role FROM app_tokens t JOIN users u ON u.id = t.user_id
       WHERE t.token_hash = $1 AND t.revoked_at IS NULL`, [sha(tok)]);
   if (!rows[0]) return res.status(401).json({ error: "A belépésed lejárt, jelentkezz be újra." });
   req.appUser = rows[0];
+  trackTokenSpread(req, rows[0]);
   pool.query("UPDATE app_tokens SET last_used_at = now(), last_ip = $2 WHERE id = $1 AND (last_used_at IS NULL OR last_used_at < now() - interval '5 minutes')",
     [rows[0].token_id, ipOf(req)]).catch(() => {});
   next();
