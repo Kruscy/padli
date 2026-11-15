@@ -310,18 +310,20 @@ cron.schedule("0 10 * * 1,3,5", async () => {
   }
 }, { timezone: "Europe/Budapest" });
 
-/* ===== HETI MANGA-POSZTER A FACEBOOKRA (szombat 11:00) ===== */
-// Nem a blog napjain (H/Sze/P), hogy ne torlódjanak a posztok.
+/* ===== HETI MANGA-POSZTER A FACEBOOKRA ===== */
+// Péntek 19:00: előnézet a #riasztás csatornába (gombok: Mehet / Újra / Másik / Kihagyás).
+// Szombat 11:00: kiposztolás. Nem a blog napjain (H/Sze/P).
+const posterPreview = import("./lib/manga-poster-preview.js")
+  .catch(err => { console.error("[PosterCron] modul betöltési hiba:", err.message); return null; });
+cron.schedule("0 19 * * 5", async () => {
+  if (!process.env.FB_PAGE_ID || !process.env.FB_PAGE_TOKEN) return;
+  try { await (await posterPreview)?.createPreview(); }
+  catch (err) { console.error("[PosterCron] előnézet hiba:", err.message); }
+}, { timezone: "Europe/Budapest" });
 cron.schedule("0 11 * * 6", async () => {
   if (!process.env.FB_PAGE_ID || !process.env.FB_PAGE_TOKEN) return;
-  console.log("[PosterCron] Heti manga-poszter indítása...");
-  try {
-    const { runWeeklyPoster } = await import("./lib/manga-poster.js");
-    const res = await runWeeklyPoster({ post: true });
-    console.log(`[PosterCron] Kiposztolva: ${res.manga.slug} → ${res.fbId}`);
-  } catch (err) {
-    console.error("[PosterCron] Hiba:", err.message);
-  }
+  try { await (await posterPreview)?.publishWeekly(); }
+  catch (err) { console.error("[PosterCron] posztolás hiba:", err.message); }
 }, { timezone: "Europe/Budapest" });
 
 /* ===== SITEMAP NAPI FRISSÍTÉS (új mangák/fejezetek) ===== */

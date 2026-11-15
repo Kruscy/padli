@@ -401,9 +401,10 @@ export async function postPhotoToFacebook(image, caption) {
   return d.post_id || d.id;
 }
 
-/* Heti futás: legfeljebb 3 művel próbálkozik, az elsőt, ami sikerül, kiteszi. */
-export async function runWeeklyPoster({ post = true, slug = null } = {}) {
-  const tried = [];
+/* Poszter + szöveg elkészítése: legfeljebb 3 művel próbálkozik.
+   logErrors: a sikertelen műveket naplózza (30 napig kimaradnak). */
+export async function buildWeeklyPoster({ slug = null, exclude = [], logErrors = true } = {}) {
+  const tried = [...exclude];
   for (let attempt = 0; attempt < 3; attempt++) {
     const m = slug ? (await pool.query("SELECT id, slug, title FROM manga WHERE slug = $1 ORDER BY id DESC LIMIT 1", [slug])).rows[0]
                    : await pickManga(tried);
@@ -412,20 +413,26 @@ export async function runWeeklyPoster({ post = true, slug = null } = {}) {
     try {
       const res = await generatePoster(m.slug);
       const caption = await buildCaption({ ...m, description: res.description });
-      let fbId = null;
-      if (post) {
-        fbId = await postPhotoToFacebook(res.image, caption);
-        await pool.query(
-          `INSERT INTO manga_posters (manga_id, fb_post_id, panels, caption) VALUES ($1, $2, $3, $4)`,
-          [m.id, fbId, res.panels, caption]);
-      }
-      console.log(`[poster] ${post ? "kiposztolva" : "elkészült"}: ${m.slug}${fbId ? " → " + fbId : ""}`);
-      return { ...res, caption, fbId, manga: m };
+      return { ...res, caption, manga: m };
     } catch (e) {
       console.warn(`[poster] ${m.slug} kihagyva: ${e.message}`);
-      if (post) await pool.query(`INSERT INTO manga_posters (manga_id, fb_post_id, error) VALUES ($1, NULL, $2)`, [m.id, e.message.slice(0, 500)]).catch(() => {});
+      if (logErrors) await pool.query(`INSERT INTO manga_posters (manga_id, fb_post_id, error, status) VALUES ($1, NULL, $2, 'failed')`, [m.id, e.message.slice(0, 500)]).catch(() => {});
       if (slug) throw e;
     }
   }
-  throw new Error("3 próbálkozás után sem sikerült: " + tried.join(", "));
+  throw new Error("3 próbálkozás után sem sikerült: " + tried.slice(exclude.length).join(", "));
+}
+
+/* Elkészít és (post=true esetén) azonnal kitesz — kézi futtatáshoz. */
+export async function runWeeklyPoster({ post = true, slug = null } = {}) {
+  const res = await buildWeeklyPoster({ slug, logErrors: post });
+  let fbId = null;
+  if (post) {
+    fbId = await postPhotoToFacebook(res.image, res.caption);
+    await pool.query(
+      `INSERT INTO manga_posters (manga_id, fb_post_id, panels, caption, status) VALUES ($1, $2, $3, $4, 'posted')`,
+      [res.manga.id, fbId, res.panels, res.caption]);
+  }
+  console.log(`[poster] ${post ? "kiposztolva" : "elkészült"}: ${res.manga.slug}${fbId ? " → " + fbId : ""}`);
+  return { ...res, fbId };
 }

@@ -1025,4 +1025,16 @@ router.delete("/gemini-keys/:id", async (req, res) => {
   }
 });
 
+/* ================= HETI MANGA-POSZTER: ELŐNÉZET MOST ================= */
+// A péntek esti előnézet kézi indítása (a #riasztás csatornába megy).
+// body: { slug? } — ha nincs, a heti választó dönt. (2026-11-15)
+router.post("/poster-preview", express.json(), async (req, res) => {
+  const slug = typeof req.body?.slug === "string" && req.body.slug.trim() ? req.body.slug.trim() : null;
+  res.status(202).json({ ok: true, message: "Készül, 1–2 perc múlva megjelenik a Discordon." });
+  try {
+    const { createPreview } = await import("../lib/manga-poster-preview.js");
+    await createPreview({ slug, note: `kézi indítás (${req.session.user.username})` });
+  } catch (e) { console.error("[poster] kézi előnézet:", e.message); }
+});
+
 export default router;

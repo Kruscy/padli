@@ -248,7 +248,25 @@ bot.on("messageCreate", async msg => {
     broadcast
   );
 });
+/* Más modulok gombjai (pl. heti manga-poszter előnézet, 2026-11-15):
+   onButton("prefix:", handler) — a customId elejére illesztünk. */
+const buttonHandlers = [];
+export function onButton(prefix, handler) { buttonHandlers.push({ prefix, handler }); }
+export function isAdminMember(member) { return !!member?.roles?.cache?.has(ADMIN_ROLE_ID); }
+
 bot.on("interactionCreate", async (interaction) => {
+  if (interaction.isButton()) {
+    const h = buttonHandlers.find(x => interaction.customId.startsWith(x.prefix));
+    if (h) {
+      try { await h.handler(interaction); }
+      catch (err) {
+        console.error("Gomb-kezelő hiba:", err.message);
+        const msg = { content: "❌ Hiba: " + err.message.slice(0, 300), ephemeral: true };
+        await (interaction.deferred || interaction.replied ? interaction.followUp(msg) : interaction.reply(msg)).catch(() => {});
+      }
+      return;
+    }
+  }
   // "Hentai" rang önbevallásos megerősítő gombja — csak az kattinthat
   // érvényesen, aki a trigger-üzenetet küldte (a customId tartalmazza az ő
   // userId-ját), hogy más ne tudjon valaki más nevében "megerősíteni".
@@ -354,6 +372,14 @@ export async function sendSecurityAlert(text) {
   if (!channelId || !bot.isReady()) return;
   const channel = await bot.channels.fetch(channelId);
   if (channel) await channel.send(text.slice(0, 1900));
+}
+
+// Admin-csatorna (#riasztás) — tetszőleges üzenet (kép, gombok)
+export async function sendAdminMessage(payload) {
+  const channelId = process.env.DISCORD_SECURITY_CHANNEL_ID;
+  if (!channelId || !bot.isReady()) throw new Error("Discord-bot vagy admin-csatorna nem elérhető");
+  const channel = await bot.channels.fetch(channelId);
+  return channel.send(payload);
 }
 
 export function isDiscordBotReady() {
