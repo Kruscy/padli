@@ -198,6 +198,18 @@ function injectVersion(html) {
 /* ===== STATIC FRONTEND ===== */
 app.use('/downloads', express.static(path.join(PUBLIC_DIR, 'downloads')));
 
+/* (a .html-kiszolgáló ELŐTT kell lennie) Oldalsáv: az Android-app tesztletöltő linkje csak a tesztelőknek (APP_TESTERS, alap: 5 = Ascyra) — 2026-11-15 */
+app.get("/partials/sidebar.html", (req, res, next) => {
+  const testers = new Set(String(process.env.APP_TESTERS || "5").split(",").map(s => parseInt(s, 10)).filter(Boolean));
+  if (!testers.has(req.session?.user?.id)) return next();
+  let html;
+  try { html = readFileSync(path.join(PUBLIC_DIR, "partials", "sidebar.html"), "utf8"); } catch { return next(); }
+  res.setHeader("Cache-Control", "private, no-store");
+  res.type("html").send(html.replace(/(<a href="\/api\/studio\/download"[^>]*>[^<]*<\/a>)/,
+    '$1\n    <a href="/api/app/apk" class="sb-studio" title="Padlizsan Android-app – tesztverzió (csak tesztelőknek)">📱 Padlizsan Android (teszt)</a>'));
+});
+
+
 // chapters.html?slug= → a mű saját címe/leírása a Google-nek (a verziózó réteg ELŐTT)
 app.use(mangaSeoMiddleware(PUBLIC_DIR, html => injectVersion(html)));
 
@@ -238,17 +250,6 @@ app.use((req, res, next) => {
     res.setHeader("Cache-Control", "public, max-age=86400");
   }
   next();
-});
-
-/* Oldalsáv: az Android-app tesztletöltő linkje csak a tesztelőknek (APP_TESTERS, alap: 5 = Ascyra) — 2026-11-15 */
-app.get("/partials/sidebar.html", (req, res, next) => {
-  const testers = new Set(String(process.env.APP_TESTERS || "5").split(",").map(s => parseInt(s, 10)).filter(Boolean));
-  if (!testers.has(req.session?.user?.id)) return next();
-  let html;
-  try { html = readFileSync(path.join(PUBLIC_DIR, "partials", "sidebar.html"), "utf8"); } catch { return next(); }
-  res.setHeader("Cache-Control", "private, no-store");
-  res.type("html").send(html.replace(/(<a href="\/api\/studio\/download"[^>]*>[^<]*<\/a>)/,
-    '$1\n    <a href="/api/app/apk" class="sb-studio" title="Padlizsan Android-app – tesztverzió (csak tesztelőknek)">📱 Padlizsan Android (teszt)</a>'));
 });
 
 app.use(express.static(PUBLIC_DIR));
