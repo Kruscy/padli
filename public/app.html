@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Padlizsan Android-app – olvass offline is | PadlizsanFanSub</title>
+<meta name="description" content="A PadlizsanFanSub Android-alkalmazása: olvass online, vagy töltsd le a fejezeteket, és olvasd őket net nélkül is.">
+<link rel="icon" href="/favicon.ico">
+<style>
+  :root { --lila: #7c3aed; --lila2: #a855f7; --bg: #0f0b1a; --kartya: #1b1530; --szoveg: #ece8f5; --halvany: #a59cc0; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: radial-gradient(circle at top, #2a1850, var(--bg) 55%); color: var(--szoveg); line-height: 1.55; }
+  main { max-width: 760px; margin: 0 auto; padding: 22px 18px 60px; }
+  a { color: #c4b5fd; }
+  .vissza { display: inline-block; margin-bottom: 14px; color: var(--halvany); text-decoration: none; }
+  header { text-align: center; }
+  header img { width: 92px; height: 92px; border-radius: 22px; }
+  h1 { font-size: 1.8rem; margin: 10px 0 4px; }
+  .al { color: var(--halvany); margin: 0 0 18px; }
+  .letolt { display: inline-block; padding: 16px 30px; border-radius: 14px; font-size: 1.15rem; font-weight: 800; color: #fff; text-decoration: none; background: linear-gradient(90deg, var(--lila), var(--lila2)); box-shadow: 0 0 28px rgba(168,85,247,.45); }
+  .verzio { color: var(--halvany); font-size: .9rem; margin-top: 8px; }
+  .figy { background: #3b2a12; border: 1px solid #a16207; color: #fde68a; border-radius: 12px; padding: 12px 14px; margin: 22px 0; }
+  section { background: var(--kartya); border: 1px solid #2f2650; border-radius: 16px; padding: 18px 20px; margin-top: 18px; }
+  h2 { font-size: 1.2rem; margin: 0 0 10px; }
+  ol, ul { padding-left: 22px; margin: 6px 0; }
+  li { margin: 6px 0; }
+  .megj { color: var(--halvany); font-size: .92rem; }
+  code { background: #120d22; padding: 2px 6px; border-radius: 6px; font-size: .85rem; word-break: break-all; }
+  .kicsi { font-size: .85rem; color: var(--halvany); }
+</style>
+</head>
+<body>
+<main>
+  <a class="vissza" href="/">← Vissza a főoldalra</a>
+  <header>
+    <img src="/assets/studio-icon.png" alt="">
+    <h1>Padlizsan Android-app</h1>
+    <p class="al">Olvass online, vagy töltsd le a fejezeteket, és olvasd őket <strong>net nélkül is</strong>.</p>
+    <a class="letolt" id="letoltGomb" href="/api/app/apk">⬇ Letöltés Androidra</a>
+    <div class="verzio" id="verzio">Android 8.0 vagy újabb</div>
+  </header>
+
+  <div class="figy">⚡ <strong>November 18-án áramszünet miatt nem lesz elérhető az oldal.</strong>
+    Ha előtte telepíted az appot, bejelentkezel, és letöltöd a fejezeteket, akkor aznap is nyugodtan olvashatsz – a letöltött részek internet és a mi szerverünk nélkül is megnyílnak.</div>
+
+  <section>
+    <h2>✨ Mit tud?</h2>
+    <ul>
+      <li>Ugyanaz, mint a weboldal: kiemelt művek, <strong>Most olvasott</strong>, <strong>Új részek</strong>, <strong>Új mangák</strong>, könyvespolc, minden sorozat, kereső.</li>
+      <li><strong>Letöltés offline olvasásra:</strong> a mű oldalán a „⬇️ Letöltés” gombbal kijelölöd a részeket, és megadod, mikor töltse le: azonnal, éjjel vagy este; csak wifin vagy mobilneten is; csak töltés közben.</li>
+      <li>A letöltött képek <strong>titkosítva</strong> tárolódnak, csak az appban olvashatók.</li>
+      <li>Közös olvasási előrehaladás a weboldallal: ahol az appban abbahagytad, ott folytathatod a gépen is.</li>
+      <li>Napi letöltési keret: 10 fejezet (támogatóinknak 200). Online olvasni korlátlanul lehet.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>📲 Telepítés lépésről lépésre</h2>
+    <p class="megj">Az app nem a Google Play Áruházból jön, hanem innen, ezért a telefon az első telepítésnél rákérdez, hogy megbízol-e benne. Ez normális.</p>
+    <ol>
+      <li>A <strong>telefonodon</strong> nyomd meg a fenti <strong>„Letöltés Androidra”</strong> gombot. Ha a böngésző rákérdez, hogy „ez a fájl ártalmas lehet”, válaszd a <strong>Letöltés mindenképp</strong> lehetőséget.</li>
+      <li>Nyisd meg a letöltött <code>Padlizsan-….apk</code> fájlt (az értesítésből, vagy a <em>Fájlok → Letöltések</em> mappából).</li>
+      <li>Ha ezt írja: <strong>„Biztonsági okokból a telefon nem telepíthet ismeretlen alkalmazásokat ebből a forrásból”</strong>: nyomd meg a <strong>Beállítások</strong> gombot, kapcsold be az <strong>„Engedélyezés ebből a forrásból”</strong> kapcsolót, majd lépj vissza, és nyomd meg a <strong>Telepítés</strong> gombot.</li>
+      <li>Ha a <strong>Google Play Protect</strong> figyelmeztet („Nem biztonságos alkalmazás blokkolva” vagy „Ismeretlen fejlesztő”): koppints a <strong>Részletek / További részletek</strong> feliratra, majd a <strong>Telepítés mindenképp</strong> gombra. <span class="megj">A Play Protectet ehhez nem kell kikapcsolni.</span></li>
+      <li>Ha esetleg megkérdezi, hogy elküldje-e az appot ellenőrzésre, nyugodtan választhatod a <strong>Nem küldöm el</strong> vagy az <strong>Elküldés</strong> lehetőséget is – egyik sem akadályozza a telepítést.</li>
+      <li>Kész! Nyisd meg az appot, nyomd meg a <strong>„Belépés a weboldalon”</strong> gombot, és a megnyíló oldalon az <strong>„Engedélyezem”</strong> gombot. A jelszavad nem kerül az appba.</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>🛡️ Ha a telefon mégsem engedi telepíteni</h2>
+    <ul>
+      <li><strong>Samsung (One UI 6 vagy újabb):</strong> az <em>Automatikus blokkoló</em> tiltja a nem áruházi appokat. <em>Beállítások → Biztonság és adatvédelem → Automatikus blokkoló</em> → kapcsold ki, telepítsd az appot, aztán <strong>kapcsold vissza</strong>.</li>
+      <li><strong>Ha a Play Protect egyáltalán nem enged továbblépni:</strong> <em>Play Áruház → jobb felül a profilképed → Play Protect → fogaskerék</em> → kapcsold ki az <em>„Alkalmazások keresése a Play Protecttel”</em> kapcsolót, telepítsd az appot, majd <strong>kapcsold vissza</strong>. (A Play Protect kikapcsolva hagyását nem javasoljuk.)</li>
+      <li><strong>Xiaomi / Redmi / POCO:</strong> ha a rendszer biztonsági ellenőrzése figyelmeztet, válaszd a <strong>Telepítés mindenképp</strong> lehetőséget (néha pár másodpercet várni kell, amíg a gomb aktív lesz).</li>
+      <li><strong>„Az alkalmazás nincs telepítve” / „ütközik egy meglévő csomaggal”:</strong> ha korábban tesztverziót telepítettél, töröld azt, és telepítsd újra.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>⚡ Felkészülés az áramszünetre (nov. 18.)</h2>
+    <ol>
+      <li>Telepítsd az appot, és lépj be <strong>november 18. előtt</strong> (a belépéshez az oldalnak elérhetőnek kell lennie).</li>
+      <li>Nyisd meg azokat a műveket, amiket olvasni szeretnél, nyomd meg a <strong>⬇️ Letöltés</strong> gombot, pipáld be a részeket, és indítsd el a letöltést.</li>
+      <li>A letöltött részek a profilképedre koppintva, a <strong>Letöltéseim</strong> alatt találhatók – és az áramszünet alatt a kezdőlapon is megjelennek.</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>🔄 Frissítés és biztonság</h2>
+    <p>Új verziót mindig itt találsz: töltsd le, és telepítsd a régire (nem kell törölni, a letöltéseid megmaradnak).</p>
+    <p class="kicsi">Az appot a PadlizsanFanSub írta alá. Az aláíró tanúsítvány SHA-256 ujjlenyomata:<br>
+      <code>28:A9:69:16:99:63:C1:42:0D:B7:56:18:04:12:AF:85:D4:21:EF:E4:5E:E0:2C:FD:28:A0:E2:20:A2:9C:68:CE</code></p>
+  </section>
+</main>
+<script src="/js/app-page.js"></script>
+</body>
+</html>

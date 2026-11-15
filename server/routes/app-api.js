@@ -358,15 +358,25 @@ router.post("/download/:id/done", appAuth, express.json(), async (req, res) => {
   res.json({ ok: true });
 });
 
-/* ── Tesztverzió letöltése (APK) — egyelőre csak a tesztelőknek (APP_TESTERS, alap: 5 = Ascyra) ── */
+/* ── Az app letöltése (APK) — 2026-11-15 óta mindenkinek (a használatához úgyis fiók kell) ── */
 const APK_DIR = process.env.APP_APK_DIR || "/srv/padlizsan-android-dist";
 const appTesters = () => new Set(String(process.env.APP_TESTERS || "5").split(",").map(s => parseInt(s, 10)).filter(Boolean));
-router.get("/apk", requireLogin, (req, res) => {
-  if (!appTesters().has(req.session.user.id)) return res.status(403).send("Az Android-app még tesztelés alatt áll.");
+function latestApk() {
   const files = fs.existsSync(APK_DIR) ? fs.readdirSync(APK_DIR).filter(f => f.endsWith(".apk"))
     .map(f => ({ f, t: fs.statSync(path.join(APK_DIR, f)).mtimeMs })).sort((a, b) => b.t - a.t) : [];
-  if (!files.length) return res.status(404).send("Még nincs letölthető verzió.");
-  res.download(path.join(APK_DIR, files[0].f), files[0].f);
+  return files[0]?.f || null;
+}
+router.get("/apk", (req, res) => {
+  const f = latestApk();
+  if (!f) return res.status(404).send("Még nincs letölthető verzió.");
+  const ip = req.headers["cf-connecting-ip"] || req.ip;
+  pool.query("INSERT INTO app_apk_downloads (user_id, file, ip) VALUES ($1, $2, $3)", [req.session?.user?.id || null, f, ip]).catch(() => {});
+  res.download(path.join(APK_DIR, f), f);
+});
+router.get("/apk-info", (req, res) => {
+  const f = latestApk();
+  const v = f?.match(/(\d+\.\d+\.\d+)/)?.[1] || null;
+  res.json({ file: f, version: v, size: f ? fs.statSync(path.join(APK_DIR, f)).size : 0 });
 });
 
 /* Google Play-feltöltéshez és áruházi anyagokhoz: a dist mappa fájljai a tesztelőknek (.aab, .png) */
