@@ -384,7 +384,10 @@ router.get("/apk-info", async (req, res) => {
   const st = await pool.query(`SELECT
       (SELECT count(DISTINCT COALESCE(user_id::text, ip)) FROM app_apk_downloads)::int AS downloads,
       (SELECT count(DISTINCT user_id) FROM app_tokens WHERE revoked_at IS NULL)::int AS users`).catch(() => ({ rows: [{}] }));
-  res.json({ file: f, version: v, size: f ? fs.statSync(path.join(APK_DIR, f)).size : 0,
+  // Újdonságok: az APK mellett azonos nevű .txt (pl. Padlizsan-0.3.3.txt)
+  let notes = "";
+  try { if (f) notes = fs.readFileSync(path.join(APK_DIR, f.replace(/\.apk$/, ".txt")), "utf8").trim().slice(0, 2000); } catch {}
+  res.json({ file: f, version: v, notes, url: SITE + "/api/app/apk", size: f ? fs.statSync(path.join(APK_DIR, f)).size : 0,
     downloads: st.rows[0].downloads ?? null, users: st.rows[0].users ?? null, free_limit: freeLimit(), patron_limit: PATRON_PER_DAY });
 });
 
