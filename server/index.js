@@ -310,6 +310,20 @@ cron.schedule("0 10 * * 1,3,5", async () => {
   }
 }, { timezone: "Europe/Budapest" });
 
+/* ===== HETI MANGA-POSZTER A FACEBOOKRA (szombat 11:00) ===== */
+// Nem a blog napjain (H/Sze/P), hogy ne torlódjanak a posztok.
+cron.schedule("0 11 * * 6", async () => {
+  if (!process.env.FB_PAGE_ID || !process.env.FB_PAGE_TOKEN) return;
+  console.log("[PosterCron] Heti manga-poszter indítása...");
+  try {
+    const { runWeeklyPoster } = await import("./lib/manga-poster.js");
+    const res = await runWeeklyPoster({ post: true });
+    console.log(`[PosterCron] Kiposztolva: ${res.manga.slug} → ${res.fbId}`);
+  } catch (err) {
+    console.error("[PosterCron] Hiba:", err.message);
+  }
+}, { timezone: "Europe/Budapest" });
+
 /* ===== SITEMAP NAPI FRISSÍTÉS (új mangák/fejezetek) ===== */
 cron.schedule("30 4 * * *", () => {
   generateSitemap().catch(e => console.error("[Sitemap] Napi frissítés hiba:", e.message));
