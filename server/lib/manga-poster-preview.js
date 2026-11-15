@@ -10,7 +10,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
 import { pool } from "../db.js";
-import { buildWeeklyPoster, postPhotoToFacebook, runWeeklyPoster } from "./manga-poster.js";
+import { buildWeeklyPoster, postPhotoToFacebook, runWeeklyPoster, shareToInstagram } from "./manga-poster.js";
 import { onButton, isAdminMember, sendAdminMessage } from "../discord-bot.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -47,7 +47,7 @@ export async function createPreview({ slug = null, exclude = [], note = "" } = {
   const msg = await sendAdminMessage({
     content: `🖼️ **Heti manga-poszter előnézet${note ? " — " + note : ""}**\n` +
       `Mű: **${res.manga.title}** (${SITE}/chapters.html?slug=${encodeURIComponent(res.manga.slug)})\n` +
-      `Ha nem nyúltok hozzá, **${nextPublishLabel()}** ez megy ki a Facebookra.\n\n` +
+      `Ha nem nyúltok hozzá, **${nextPublishLabel()}** ez megy ki a Facebookra és az Instagramra.\n\n` +
       `**Facebook-szöveg:**\n>>> ${res.caption}`.slice(0, 1900),
     files: [{ attachment: res.image, name: `poszter-${res.manga.slug}.jpg` }],
     components: buttons(id),
@@ -114,14 +114,17 @@ export async function publishWeekly() {
   const row = rows[0];
   if (row?.status === "skipped") { console.log("[poster] ez a poszter kihagyva"); return null; }
   if (row && row.image_path && fs.existsSync(row.image_path)) {
-    const fbId = await postPhotoToFacebook(fs.readFileSync(row.image_path), row.caption);
+    const image = fs.readFileSync(row.image_path);
+    const fbId = await postPhotoToFacebook(image, row.caption);
     await pool.query("UPDATE manga_posters SET status = 'posted', fb_post_id = $1 WHERE id = $2", [fbId, row.id]);
-    await sendAdminMessage({ content: `✅ Heti manga-poszter kiment: **${row.slug}** → https://www.facebook.com/${fbId.replace("_", "/posts/")}` }, posterChannel()).catch(() => {});
+    const ig = await shareToInstagram(row.id, image, row.caption, row.slug);
+    const igLine = !ig ? "" : ig.error ? `\n⚠️ Instagram: nem sikerült (${ig.error.slice(0, 150)})` : `\n📸 Instagram: ${ig.permalink || "kint van"}`;
+    await sendAdminMessage({ content: `✅ Heti manga-poszter kiment: **${row.slug}** → https://www.facebook.com/${fbId.replace("_", "/posts/")}${igLine}` }, posterChannel()).catch(() => {});
     console.log(`[poster] kiposztolva (előnézetből): ${row.slug} → ${fbId}`);
     return fbId;
   }
   // Nincs előnézet: a régi módon
   const res = await runWeeklyPoster({ post: true });
-  await sendAdminMessage({ content: `✅ Heti manga-poszter kiment (előnézet nélkül készült): **${res.manga.slug}**` }, posterChannel()).catch(() => {});
+  await sendAdminMessage({ content: `✅ Heti manga-poszter kiment (előnézet nélkül készült): **${res.manga.slug}**${res.ig?.permalink ? "\n📸 Instagram: " + res.ig.permalink : res.ig?.error ? "\n⚠️ Instagram: nem sikerült" : ""}` }, posterChannel()).catch(() => {});
   return res.fbId;
 }

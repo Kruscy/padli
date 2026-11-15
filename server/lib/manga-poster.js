@@ -19,6 +19,7 @@ import sharp from "sharp";
 import { pool } from "../db.js";
 import { listFiles, r2Fetch, localPathToR2Key } from "../r2.js";
 import { ADULT_GENRE_EXISTS_SQL } from "./age.js";
+import { instagramConfigured, postPhotoToInstagram, toInstagramCaption } from "./instagram.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ASSETS = path.join(__dirname, "..", "assets");
@@ -455,14 +456,29 @@ export async function buildWeeklyPoster({ slug = null, exclude = [], logErrors =
 }
 
 /* Elkészít és (post=true esetén) azonnal kitesz — kézi futtatáshoz. */
+/* Instagramra is (ha be van állítva); hiba esetén csak naplóz, a Facebook-poszt marad. */
+export async function shareToInstagram(posterId, image, caption, slug) {
+  if (!instagramConfigured()) return null;
+  try {
+    const ig = await postPhotoToInstagram(image, toInstagramCaption(caption), `poster-${posterId}-${slug}.jpg`);
+    await pool.query("UPDATE manga_posters SET ig_media_id = $1, ig_permalink = $2 WHERE id = $3", [ig.id, ig.permalink, posterId]);
+    console.log(`[poster] Instagram: ${slug} → ${ig.permalink || ig.id}`);
+    return ig;
+  } catch (e) {
+    console.error(`[poster] Instagram hiba (${slug}):`, e.message);
+    return { error: e.message };
+  }
+}
+
 export async function runWeeklyPoster({ post = true, slug = null } = {}) {
   const res = await buildWeeklyPoster({ slug, logErrors: post });
   let fbId = null;
   if (post) {
     fbId = await postPhotoToFacebook(res.image, res.caption);
-    await pool.query(
-      `INSERT INTO manga_posters (manga_id, fb_post_id, panels, caption, status) VALUES ($1, $2, $3, $4, 'posted')`,
+    const { rows } = await pool.query(
+      `INSERT INTO manga_posters (manga_id, fb_post_id, panels, caption, status) VALUES ($1, $2, $3, $4, 'posted') RETURNING id`,
       [res.manga.id, fbId, res.panels, res.caption]);
+    res.ig = await shareToInstagram(rows[0].id, res.image, res.caption, res.manga.slug);
   }
   console.log(`[poster] ${post ? "kiposztolva" : "elkészült"}: ${res.manga.slug}${fbId ? " → " + fbId : ""}`);
   return { ...res, fbId };
