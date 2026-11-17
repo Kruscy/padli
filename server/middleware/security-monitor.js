@@ -16,7 +16,8 @@ const PROBE_RE = /(^|\/)(\.env|\.git\/|\.aws\/|\.ssh\/|\.DS_Store|wp-(admin|logi
 
 // Írási kérések, amik normál használatban is sűrűk lehetnek → nem számoljuk
 // (az anilist/queue az olvasási állással együtt megy minden lapozáskor)
-const WRITE_EXCLUDE = /^\/api\/(uploader|progress|anilist\/queue|chat\/send|padlicrome|translate|ocr|inpaint|gemini|discord\/sync|csp-report)/;
+// app/download: a napi letöltési keret és az oldalszintű terheléskorlát már szabályozza (2026-11-16: téves „tömeges írás” riasztás egy támogató 190 fejezetes letöltésére)
+const WRITE_EXCLUDE = /^\/api\/(app\/download|uploader|progress|anilist\/queue|chat\/send|padlicrome|translate|ocr|inpaint|gemini|discord\/sync|csp-report)/;
 // Kérés-áradat számlálásnál kihagyott: képbetöltés (egy fejezet 60+ kép is
 // lehet) és az olvasási állás (olvasás közben sűrűn mentődik; a régi
 // listaoldalak — régi böngésző-cache-ből — mangánként kértek le állást).

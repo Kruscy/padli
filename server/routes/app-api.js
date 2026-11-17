@@ -28,6 +28,13 @@ const TOKEN_PREFIX = "pdla_";
 const FREE_PER_DAY = parseInt(process.env.APP_DL_FREE_PER_DAY || "10", 10);
 const PATRON_PER_DAY = parseInt(process.env.APP_DL_PATRON_PER_DAY || "200", 10);
 // Ideiglenes emelés (pl. áramszünet előtt): APP_DL_FREE_BOOST=50, APP_DL_BOOST_UNTIL=2026-11-19T00:00:00+01:00
+// Korlátlan időszak (pl. áramszünet előtt éjjel): APP_DL_UNLIMITED_FROM / APP_DL_UNLIMITED_UNTIL (ISO idő).
+// Közben nincs napi keret, és az ekkor letöltött fejezetek UTÁNA SEM számítanak bele a keretbe (2026-11-17).
+const unlimitedWindow = () => {
+  const from = Date.parse(process.env.APP_DL_UNLIMITED_FROM || ""), until = Date.parse(process.env.APP_DL_UNLIMITED_UNTIL || "");
+  return from && until ? { from: new Date(from), until: new Date(until) } : null;
+};
+const unlimitedNow = () => { const w = unlimitedWindow(); return !!w && Date.now() >= w.from.getTime() && Date.now() < w.until.getTime(); };
 const freeLimit = () => {
   const until = Date.parse(process.env.APP_DL_BOOST_UNTIL || "");
   return until && Date.now() < until ? parseInt(process.env.APP_DL_FREE_BOOST || String(FREE_PER_DAY), 10) : FREE_PER_DAY;
@@ -157,14 +164,19 @@ async function isPatron(userId) {
 }
 async function quota(user) {
   const patron = user.role === "admin" || await isPatron(user.id);
+  if (unlimitedNow()) return { patron, limit: 99999, used: 0, left: 99999, unlimited: true, until: unlimitedWindow().until.toISOString() };
   const limit = patron ? PATRON_PER_DAY : freeLimit();
-  // Ugyanannak a fejezetnek az újbóli letöltése 30 napon belül nem számít bele
+  const w = unlimitedWindow();
+  // Minden megkezdett fejezet EGYSZER számít (a sikertelen is — a „sikertelen” jelzést az app küldi, ezzel nem lehet
+  // megkerülni a keretet; 2026-11-16). Ugyanannak a fejezetnek az újrapróbálása nem számít újra, és a 30 napon belül
+  // már sikeresen letöltött fejezet újbóli letöltése sem.
   const { rows } = await pool.query(
     `SELECT count(DISTINCT (manga_slug, chapter))::int AS n FROM app_downloads d
-      WHERE d.user_id = $1 AND d.created_at > now() - interval '24 hours' AND d.status <> 'failed'
+      WHERE d.user_id = $1 AND d.created_at > now() - interval '24 hours'
+        AND NOT ($2::timestamptz IS NOT NULL AND d.created_at >= $2 AND d.created_at < $3)
         AND NOT EXISTS (SELECT 1 FROM app_downloads p WHERE p.user_id = d.user_id AND p.manga_slug = d.manga_slug
                           AND p.chapter = d.chapter AND p.status = 'done' AND p.created_at < now() - interval '24 hours'
-                          AND p.created_at > now() - interval '30 days')`, [user.id]);
+                          AND p.created_at > now() - interval '30 days')`, [user.id, w?.from || null, w?.until || null]);
   return { patron, limit, used: rows[0].n, left: Math.max(0, limit - rows[0].n) };
 }
 
@@ -400,12 +412,14 @@ router.post("/download", appAuth, express.json(), async (req, res) => {
 
   const q = await quota(req.appUser);
   const already = await pool.query(
-    `SELECT 1 FROM app_downloads WHERE user_id = $1 AND manga_slug = $2 AND chapter = $3 AND status <> 'failed'
-        AND created_at > now() - interval '30 days' LIMIT 1`, [req.appUser.id, slug, chapter]);
+    `SELECT 1 FROM app_downloads WHERE user_id = $1 AND manga_slug = $2 AND chapter = $3
+        AND (created_at > now() - interval '24 hours' OR (status = 'done' AND created_at > now() - interval '30 days')) LIMIT 1`, [req.appUser.id, slug, chapter]);
   if (!already.rows.length && q.left <= 0) {
     // mikor szabadul fel hely: amikor a legrégebbi beszámított letöltés 24 órásnál régebbi lesz
     const o = await pool.query(`SELECT EXTRACT(EPOCH FROM (min(created_at) + interval '24 hours' - now()))::int AS s FROM app_downloads
-                                 WHERE user_id = $1 AND status <> 'failed' AND created_at > now() - interval '24 hours'`, [req.appUser.id]);
+                                 WHERE user_id = $1 AND created_at > now() - interval '24 hours'
+                                   AND NOT ($2::timestamptz IS NOT NULL AND created_at >= $2 AND created_at < $3)`,
+                                 [req.appUser.id, unlimitedWindow()?.from || null, unlimitedWindow()?.until || null]);
     const retry = Math.max(300, (o.rows[0]?.s || 3600) + 60);
     res.locals.quotaLimit = true;
     return res.status(429).json({ error: `Elérted a napi letöltési keretet (${q.limit} fejezet).${q.patron ? "" : " Támogatóként többet tölthetsz le."}`,
@@ -450,9 +464,11 @@ router.get("/page/:id/:i", appAuth, async (req, res) => {
 
 router.post("/download/:id/done", appAuth, express.json(), async (req, res) => {
   const ok = req.body?.ok !== false;
+  // a hiba oka (az app küldi, 0.4.5+) — a sikertelen letöltések okának kiderítéséhez
+  const error = ok ? null : String(req.body?.error || "").slice(0, 200) || null;
   await pool.query(
-    `UPDATE app_downloads SET status = $1, finished_at = now(), bytes = $2 WHERE id = $3 AND user_id = $4 AND status = 'issued'`,
-    [ok ? "done" : "failed", Number(req.body?.bytes) || null, req.params.id, req.appUser.id]);
+    `UPDATE app_downloads SET status = $1, finished_at = now(), bytes = $2, error = $5 WHERE id = $3 AND user_id = $4 AND status = 'issued'`,
+    [ok ? "done" : "failed", Number(req.body?.bytes) || null, req.params.id, req.appUser.id, error]);
   res.json({ ok: true });
 });
 
