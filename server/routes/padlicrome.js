@@ -24,7 +24,7 @@ import { chatCompletions, listModels, NO_POINTS_HINT } from "../lib/llm-proxy.js
 const NO_POINTS_LINKS = { buy_url: "https://padlizsanfansub.hu/shop.html", earn_url: "https://padlizsanfansub.hu/bug-reports.html" };
 import { userStudioStats } from "./studio.js";
 import { availablePoints, chargeMilli } from "../lib/llm-meter.js";
-import { TORII_MODELS, DEFAULT_TORII_MODEL, costFtOf, ftToPoints, estPointsPerPage, byokOpenAiFt, toriiPriceList } from "../lib/torii-pricing.js";
+import { TORII_MODELS, TORII_MODEL_ALIASES, DEFAULT_TORII_MODEL, costFtOf, ftToPoints, estPointsPerPage, byokOpenAiFt, toriiPriceList } from "../lib/torii-pricing.js";
 import { getClientIp } from "../lib/client-ip.js";
 import { isAdultVerified, ADULT_GENRE_EXISTS_SQL } from "../lib/age.js";
 
@@ -222,7 +222,16 @@ function toriiOptions(src = {}) {
   if (typeof src.context === "string" && src.context.trim()) o.context = src.context.slice(0, 10000);
   // Modell (2026-11-08): csak a Torii saját, engedélyezett modelljei; a fogyasztás
   // szerint árazunk (lib/torii-pricing.js). Ismeretlen név → alapmodell.
-  if (TORII_MODELS[src.translator]) o.translator = src.translator;
+  const tr = TORII_MODEL_ALIASES[src.translator] || src.translator;
+  if (TORII_MODELS[tr]) o.translator = tr;
+  // Forrásnyelv-szűrés (Torii kísérleti source_langs_whitelist, Stukker v2.10/2.15.2): csak ezekről
+  // a nyelvekről fordít. JSON-tömb vagy tömb; üres/hibás → nem küldjük (a régi működés marad).
+  let sl = src.source_langs_whitelist;
+  if (typeof sl === "string") { try { sl = JSON.parse(sl); } catch { sl = null; } }
+  if (Array.isArray(sl)) {
+    const codes = [...new Set(sl.filter(c => typeof c === "string" && /^[a-z]{2,3}(-[a-z]{2,4})?$/i.test(c)).map(c => c.toLowerCase()))].slice(0, 20);
+    if (codes.length) o.source_langs_whitelist = JSON.stringify(codes);
+  }
   if (["none", "low", "medium", "high"].includes(src.reasoning_effort)) o.reasoning_effort = src.reasoning_effort;
   return o;
 }
@@ -242,6 +251,7 @@ async function translateViaToriiFull(imageBuffer, filename, opts = {}) {
   form.append("bubbles_only", opts.bubbles_only || "false");
   if (opts.custom_prompt) form.append("custom_prompt", opts.custom_prompt);
   if (opts.context) form.append("context", opts.context);
+  if (opts.source_langs_whitelist) form.append("source_langs_whitelist", opts.source_langs_whitelist);
 
   // BYOK: a drága OpenAI-modellek a mi kulcsunkkal futnak (lib/torii-pricing.js).
   // Tartalékmodellre NEM esünk vissza (x-byok-fallback alapból false): ha a

@@ -25,19 +25,28 @@ export const DEFAULT_TORII_MODEL = "gemini-3.1-flash-lite";
 // baseCredits: becslés a felületnek (mérve, átlagos webtoon-csík);
 // byok: a mi OpenAI-kulcsunkkal fut, oaPrice: $ / 1M token [bemenet, kimenet]
 // (forrásoldalak szerint; a magasabb értékkel számolunk)
+// 2026-11-19: Stukker v2.18.2 modellistája (Torii 2026. novemberi API, 14 modell). A baseCredits
+// az ő egyképes mérései (MODEL_TEST_CREDITS) × 0,65 — a mi valós átlagunkhoz igazítva
+// (gemini-3.1-flash-lite: nála 1,98, nálunk pc_torii_usage átlag 1,27). Csak az előzetes
+// fedezet-ellenőrzéshez és a kiíráshoz kell, a levonás a valós fogyasztás szerint megy.
+// A „deepseek-v4-flash” régi név: a Torii már a V4.1-et futtatja rá (toriiOptions átírja).
 export const TORII_MODELS = {
   "gemini-3.1-flash-lite": { label: "Gemini 3.1 Flash Lite (alap, gyors)", baseCredits: 1.1 },
+  "deepseek-v4.1-flash":   { label: "DeepSeek V4.1 Flash",                 baseCredits: 1.05 },
   "gpt-6-luna":            { label: "GPT-6 Luna",                          baseCredits: 1.05 },
-  "deepseek-v4-flash":     { label: "DeepSeek V4 Flash",                   baseCredits: 1.05 },
-  "grok-4.20":             { label: "Grok 4.20",                           baseCredits: 2 },
-  "kimi-k2.5":             { label: "Kimi K2.5",                           baseCredits: 2 },
-  "gemini-3-flash":        { label: "Gemini 3 Flash",                      baseCredits: 3 },
-  "gemini-3.8-flash":      { label: "Gemini 3.8 Flash",                    baseCredits: 3 },
+  "claude-haiku-5.5":      { label: "Claude Haiku 5.5",                    baseCredits: 1.2 },
+  "kimi-k2.5":             { label: "Kimi K2.5",                           baseCredits: 2.8 },
+  "grok-4.20":             { label: "Grok 4.20",                           baseCredits: 3.3 },
+  "gemini-3-flash":        { label: "Gemini 3 Flash",                      baseCredits: 3.5 },
+  "gemini-3.8-flash":      { label: "Gemini 3.8 Flash",                    baseCredits: 3.7 },
+  "gpt-6.1-terra":         { label: "GPT-6.1 Terra",                       baseCredits: 5.8 },
   "gpt-5.6-terra":         { label: "GPT-5.6 Terra",                       baseCredits: 1, byok: "openai", oaPrice: [2.00, 12.00] },
   "gpt-6.1-sol":           { label: "GPT-6.1 Sol",                         baseCredits: 1, byok: "openai", oaPrice: [2.00, 10.00] },
-  "claude-sonnet-5.5":     { label: "Claude Sonnet 5.5",                   baseCredits: 4.5 },
-  "claude-opus-5.5":       { label: "Claude Opus 5.5 (legjobb, drága)",    baseCredits: 6 },
+  "claude-sonnet-5.5":     { label: "Claude Sonnet 5.5",                   baseCredits: 21 },
+  "gemini-4-carbon":       { label: "Gemini 4 Carbon (lassú)",             baseCredits: 29 },
+  "claude-opus-5.5":       { label: "Claude Opus 5.5 (legjobb, drága)",    baseCredits: 31 },
 };
+export const TORII_MODEL_ALIASES = { "deepseek-v4-flash": "deepseek-v4.1-flash" };
 
 // a BYOK-os OpenAI-díj a Torii által visszaadott tokenekből (a gondolkodás kimenetnek számít)
 export function byokOpenAiFt(model, meta) {
