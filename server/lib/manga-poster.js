@@ -27,6 +27,7 @@ const MASCOT = path.join(ASSETS, "poster-mascot.png");
 const FONT_FILE = path.join(ASSETS, "fonts", "LuckiestGuy-Regular.ttf");
 const FONT = "Luckiest Guy";
 const SITE = "https://padlizsanfansub.hu";
+import { assertSocialEnabled, socialDisabled } from "./social-switch.js";
 const GRAPH = "https://graph.facebook.com/v21.0";
 const W = 1080, H = 1350, BORDER = 5, GAP = 16, PICKS = 5;
 
@@ -447,6 +448,7 @@ export async function generatePoster(slug, { nChap = 4, feedback = "" } = {}) {
 }
 
 export async function postPhotoToFacebook(image, caption) {
+  assertSocialEnabled("Facebook-posztolás");
   if (!process.env.FB_PAGE_ID || !process.env.FB_PAGE_TOKEN) throw new Error("Facebook nincs beállítva");
   const form = new FormData();
   form.append("source", new Blob([image], { type: "image/jpeg" }), "poster.jpg");

@@ -9,6 +9,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
 import { pool } from "../db.js";
+import { assertSocialEnabled, socialDisabled } from "./social-switch.js";
 import { buildSnippet } from "./ig-snippet.js";
 import { postCarouselToInstagram, instagramConfigured } from "./instagram.js";
 import { postTikTokCarousel, publerConfigured, toTikTokCaption } from "./publer.js";
@@ -69,6 +70,7 @@ async function saveSnippet(res, status) {
 }
 
 export async function createSnippetPreview({ slug = null, exclude = [], avoid = [], note = "", feedback = "" } = {}) {
+  assertSocialEnabled("Részlet-előnézet");
   const res = await buildSnippet({ slug, exclude, avoid, feedback });
   const id = await saveSnippet(res, "pending");
   const msg = await sendAdminMessage({
@@ -130,6 +132,7 @@ onButton("snip:", async (interaction) => {
 
 /* Minden nap 10:00 (TikTok; Instagram csak K/Cs/Szo): a legfrissebb (2 napon belüli) döntés szerint posztol. */
 export async function publishSnippet() {
+  if (socialDisabled()) return null;
   const igToday = IG_DAYS.includes(bpNow().getDay()) && instagramConfigured();
   if (!igToday && !publerConfigured()) return null;
   const recent = await pool.query(

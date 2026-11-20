@@ -8,6 +8,7 @@
    a későbbi válogatásoknál is megkapja az AI (social_feedback → recentFeedback).
    NE importáld parancssori scriptből (discord-bot.js). */
 import { pool } from "../db.js";
+import { assertSocialEnabled, socialDisabled } from "./social-switch.js";
 import { onMessage, isAdminMember } from "../discord-bot.js";
 import { openaiJson } from "./manga-poster.js";
 import { createSnippetPreview } from "./ig-snippet-preview.js";
@@ -64,6 +65,7 @@ async function editOld(msg, row, line) {
 }
 
 onMessage(async (msg) => {
+  if (socialDisabled()) return;
   if (!channelId() || msg.channelId !== channelId()) return;
   if (!msg.content?.trim() || !isAdminMember(msg.member)) return;
   const target = await findTarget(msg);

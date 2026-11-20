@@ -333,11 +333,13 @@ cron.schedule("0 10 * * 1,3,5", async () => {
 const posterPreview = import("./lib/manga-poster-preview.js")
   .catch(err => { console.error("[PosterCron] modul betöltési hiba:", err.message); return null; });
 cron.schedule("0 19 * * 1,5", async () => {
+  if (/^(1|true|yes|igen)$/i.test(String(process.env.SOCIAL_MEDIA_DISABLED || "").trim())) return; // médiás főkapcsoló
   if (!process.env.FB_PAGE_ID || !process.env.FB_PAGE_TOKEN) return;
   try { await (await posterPreview)?.createPreview(); }
   catch (err) { console.error("[PosterCron] előnézet hiba:", err.message); }
 }, { timezone: "Europe/Budapest" });
 cron.schedule("0 11 * * 2,6", async () => {
+  if (/^(1|true|yes|igen)$/i.test(String(process.env.SOCIAL_MEDIA_DISABLED || "").trim())) return; // médiás főkapcsoló
   if (!process.env.FB_PAGE_ID || !process.env.FB_PAGE_TOKEN) return;
   try { await (await posterPreview)?.publishWeekly(); }
   catch (err) { console.error("[PosterCron] posztolás hiba:", err.message); }
@@ -349,11 +351,13 @@ cron.schedule("0 11 * * 2,6", async () => {
 const snippetPreview = import("./lib/ig-snippet-preview.js")
   .catch(err => { console.error("[SnippetCron] modul betöltési hiba:", err.message); return null; });
 cron.schedule("0 16 * * *", async () => {
+  if (/^(1|true|yes|igen)$/i.test(String(process.env.SOCIAL_MEDIA_DISABLED || "").trim())) return; // médiás főkapcsoló
   if (!process.env.PUBLER_API_KEY && !process.env.IG_USER_ID) return;
   try { await (await snippetPreview)?.createSnippetPreview(); }
   catch (err) { console.error("[SnippetCron] előnézet hiba:", err.message); }
 }, { timezone: "Europe/Budapest" });
 cron.schedule("0 10 * * *", async () => {
+  if (/^(1|true|yes|igen)$/i.test(String(process.env.SOCIAL_MEDIA_DISABLED || "").trim())) return; // médiás főkapcsoló
   if (!process.env.PUBLER_API_KEY && !process.env.IG_USER_ID) return;
   try { await (await snippetPreview)?.publishSnippet(); }
   catch (err) { console.error("[SnippetCron] posztolás hiba:", err.message); }

@@ -8,11 +8,13 @@
    Hiba esetén visszaáll NULL-ra, és naplózunk — a blog működését nem
    akasztja meg. */
 import { pool } from "../db.js";
+import { assertSocialEnabled, socialDisabled } from "./social-switch.js";
 
 const GRAPH = "https://graph.facebook.com/v21.0";
 const SITE = "https://padlizsanfansub.hu";
 
 export function facebookConfigured() {
+  if (socialDisabled()) return false;
   return !!(process.env.FB_PAGE_ID && process.env.FB_PAGE_TOKEN);
 }
 

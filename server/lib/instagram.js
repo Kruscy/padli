@@ -4,6 +4,7 @@
    Kell: FB_PAGE_TOKEN (instagram_basic + instagram_content_publish joggal), IG_USER_ID. */
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { r2, BUCKET } from "../r2.js";
+import { assertSocialEnabled, socialDisabled } from "./social-switch.js";
 
 const GRAPH = "https://graph.facebook.com/v21.0";
 
@@ -49,6 +50,7 @@ export async function uploadPublicImage(image, name) {
 
 /* Kép + szöveg az Instagramra. Visszaad: { id, permalink }. */
 export async function postPhotoToInstagram(image, caption, name = `ig-${Date.now()}.jpg`) {
+  assertSocialEnabled("Instagram-posztolás");
   if (!instagramConfigured()) throw new Error("Instagram nincs beállítva (IG_USER_ID / FB_PAGE_TOKEN / R2)");
   const ig = process.env.IG_USER_ID;
   const imageUrl = await uploadPublicImage(image, name);
@@ -64,6 +66,7 @@ export async function postPhotoToInstagram(image, caption, name = `ig-${Date.now
 
 /* Lapozós (carousel) poszt: 2–10 kép. */
 export async function postCarouselToInstagram(images, caption, prefix = `ig-${Date.now()}`) {
+  assertSocialEnabled("Instagram-posztolás");
   if (!instagramConfigured()) throw new Error("Instagram nincs beállítva (IG_USER_ID / FB_PAGE_TOKEN / R2)");
   const ig = process.env.IG_USER_ID;
   const children = [];

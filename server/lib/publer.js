@@ -2,6 +2,7 @@
    Publer Business csomag; .env: PUBLER_API_KEY, PUBLER_WORKSPACE_ID, PUBLER_TIKTOK_ACCOUNT_ID.
    Folyamat: képek feltöltése (multipart, /media) → poszt azonnali közzététele
    (/posts/schedule/publish) → job_status lekérdezése, amíg kész. */
+import { assertSocialEnabled, socialDisabled } from "./social-switch.js";
 const API = "https://app.publer.com/api/v1";
 
 export function publerConfigured() {
@@ -56,6 +57,7 @@ export async function waitJob(jobId, maxSec = 300) {
 
 /* TikTok lapozós fotó-poszt, automatikus zenével. privacy: PUBLIC_TO_EVERYONE | SELF_ONLY */
 export async function postTikTokCarousel(images, caption, { privacy = "PUBLIC_TO_EVERYONE", prefix = `tt-${Date.now()}`, title = "" } = {}) {
+  assertSocialEnabled("TikTok-posztolás");
   if (!publerConfigured()) throw new Error("Publer nincs beállítva");
   const media = [];
   for (let i = 0; i < images.length; i++) media.push(await uploadMedia(images[i], `${prefix}-${i + 1}.jpg`));

@@ -10,6 +10,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
 import { pool } from "../db.js";
+import { assertSocialEnabled, socialDisabled } from "./social-switch.js";
 import { buildWeeklyPoster, postPhotoToFacebook, runWeeklyPoster, shareToInstagram } from "./manga-poster.js";
 import { onButton, isAdminMember, sendAdminMessage } from "../discord-bot.js";
 
@@ -36,6 +37,7 @@ function buttons(id, disabled = false) {
 
 /* Elkészít egy előnézetet és kiküldi a Discordra. */
 export async function createPreview({ slug = null, exclude = [], note = "", feedback = "" } = {}) {
+  assertSocialEnabled("Poszter-előnézet");
   const res = await buildWeeklyPoster({ slug, exclude, feedback });
   fs.mkdirSync(DIR, { recursive: true });
   const { rows } = await pool.query(
@@ -103,6 +105,7 @@ onButton("poster:", async (interaction) => {
 
 /* Kedd/szombat: a legfrissebb (2 napon belüli) döntés szerint posztol. */
 export async function publishWeekly() {
+  if (socialDisabled()) return null;
   // Védelem: ha 2 napon belül már kiment egy (pl. kézzel), most nem
   const recent = await pool.query(
     "SELECT 1 FROM manga_posters WHERE status = 'posted' AND created_at > now() - interval '2 days' LIMIT 1");
