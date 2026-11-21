@@ -676,15 +676,26 @@ function goToChapter(folder) {
   location.href = `/reader.html?slug=${slug}&chapter=${encodeURIComponent(folder)}`;
 }
 
+// A névben szereplő ELSŐ szám (alszámokkal: 12.5, 12.1.2) szerint rendez, így a
+// „CH135”, „135 - Episode 135”, „Chapter 135” nevek vegyesen is jó sorrendben
+// vannak (2026-11-21: Eleceed — a parseInt("CH135") NaN volt, összekeverte a
+// lapozást). Szám nélküli név a lista végére, egymás közt névsorban.
+function chapterKey(folder) {
+  const m = String(folder).match(/\d+(?:\.\d+)*/);
+  return m ? m[0].split(".").map(n => parseInt(n, 10)) : null;
+}
 function compareChapters(a, b) {
-  const ak = a.folder.split(".").map(n => parseInt(n, 10));
-  const bk = b.folder.split(".").map(n => parseInt(n, 10));
-  for (let i = 0; i < Math.max(ak.length, bk.length); i++) {
-    const av = ak[i] ?? 0;
-    const bv = bk[i] ?? 0;
-    if (av !== bv) return av - bv;
+  const ak = chapterKey(a.folder), bk = chapterKey(b.folder);
+  if (ak && !bk) return -1;
+  if (!ak && bk) return 1;
+  if (ak && bk) {
+    for (let i = 0; i < Math.max(ak.length, bk.length); i++) {
+      const av = ak[i] ?? 0;
+      const bv = bk[i] ?? 0;
+      if (av !== bv) return av - bv;
+    }
   }
-  return 0;
+  return String(a.folder).localeCompare(String(b.folder), undefined, { numeric: true });
 }
 
 /* ── TELJES KÉPERNYŐ ─────────────────────────────────────── */

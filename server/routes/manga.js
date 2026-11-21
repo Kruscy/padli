@@ -183,8 +183,11 @@ const { rows } = await pool.query(
    JOIN manga m ON m.id = c.manga_id
    WHERE m.slug = $1
    ORDER BY
-     CAST(COALESCE(NULLIF(SPLIT_PART(REGEXP_REPLACE(c.folder, '[^0-9\.]', '', 'g'), '.', 1), ''), '0') AS INT),
-     CAST(COALESCE(NULLIF(SPLIT_PART(REGEXP_REPLACE(c.folder, '[^0-9\.]', '', 'g'), '.', 2), ''), '0') AS INT)`,
+     -- a névben szereplő ELSŐ szám (2026-11-21: a régi minden számjegyet
+     -- összefűzött: „001 - Episode 1” → 11, „CH135” → 135 → rossz sorrend)
+     CAST(SPLIT_PART(SUBSTRING(c.folder FROM '[0-9]+(?:[.][0-9]+)?'), '.', 1) AS NUMERIC) NULLS LAST,
+     CAST(COALESCE(NULLIF(SPLIT_PART(SUBSTRING(c.folder FROM '[0-9]+(?:[.][0-9]+)?'), '.', 2), ''), '0') AS NUMERIC),
+     c.folder`,
   [slug]
 );
 
