@@ -457,15 +457,20 @@ router.get("/auth/me", async (req, res) => {
   if (!req.session.user) return res.status(401).end();
   try {
     const [tierRes, userRes] = await Promise.all([
-      pool.query(`SELECT tier FROM patreon_status WHERE user_id = $1 LIMIT 1`, [req.session.user.id]),
-      pool.query(`SELECT email, email_verified, can_upload FROM users WHERE id = $1`, [req.session.user.id]),
+      pool.query(`SELECT tier, active FROM patreon_status WHERE user_id = $1 LIMIT 1`, [req.session.user.id]),
+      pool.query(`SELECT email, email_verified, can_upload, discord_id FROM users WHERE id = $1`, [req.session.user.id]),
     ]);
+    const tier = tierRes.rows[0]?.tier || null;
     res.json({
       ...req.session.user,
       tier: tierRes.rows[0]?.tier || null,
       email: userRes.rows[0]?.email || null,
       email_verified: userRes.rows[0]?.email_verified ?? true,
       can_upload: userRes.rows[0]?.can_upload || false,
+      // Discord-rang ajánló sáv (layout-loader): aktív támogató, aki még nem kapcsolta össze
+      discord_prompt_role: (tierRes.rows[0]?.active && ["Támogató", "Booster", "Szuper Támogató"].includes(tier)
+        && userRes.rows[0] && !userRes.rows[0].discord_id
+        && process.env.DISCORD_CLIENT_ID && process.env.DISCORD_CLIENT_SECRET) ? tier : null,
       can_scan: req.session.user.id === SCAN_OWNER_USER_ID,
       can_security: req.session.user.id === SCAN_OWNER_USER_ID,
     });

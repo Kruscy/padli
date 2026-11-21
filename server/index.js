@@ -256,6 +256,8 @@ app.use((req, res, next) => {
   next();
 });
 
+// Rövid link a Discord-rang összekapcsoláshoz (Discord-üzenet, sáv)
+app.get(["/discord-rang", "/discord-rang/"], (req, res) => res.redirect(302, "/api/discord/connect"));
 app.use(express.static(PUBLIC_DIR));
 app.use(activityTracker);
 

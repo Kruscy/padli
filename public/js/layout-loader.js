@@ -83,6 +83,8 @@ async function initAdminControls() {
 
   const user = await res.json();
 
+  try { initDiscordPrompt(user); } catch (e) { console.error("Discord-sáv hiba:", e); }
+
   // Feltöltő gomb: Admin vagy Uploader tiernek
   const uploaderBtn = document.getElementById("uploaderBtn");
   // can_upload: nem-admin feltöltő (admin felületen megadott jog) — neki
@@ -137,6 +139,46 @@ usersBtn.addEventListener("click", () => {
   }
 }
 
+
+/* ================= DISCORD-RANG AJÁNLÓ SÁV (2026-11-21) =================
+   Aktív támogató, aki még nem kapcsolta össze a Discord-fiókját: a fejléc
+   alatt egy sáv, egy kattintással indul az összekapcsolás. A ✕ 14 napra
+   elrejti. A szerver (/api/auth/me → discord_prompt_role) dönti el, kinek jár. */
+function initDiscordPrompt(user) {
+  const role = user?.discord_prompt_role;
+  if (!role || document.getElementById("discordPromptBar")) return;
+  if (/^\/(settings|reader)/.test(location.pathname)) return; // beállítások: ott a fül; olvasó: ne zavarjon
+  const KEY = "discordPromptHiddenUntil";
+  if (Number(localStorage.getItem(KEY) || 0) > Date.now()) return;
+
+  const bar = document.createElement("div");
+  bar.id = "discordPromptBar";
+  bar.setAttribute("role", "region");
+  bar.setAttribute("aria-label", "Discord-rang");
+  bar.style.cssText = "display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;" +
+    "padding:8px 40px 8px 14px;background:#5865F2;color:#fff;font-size:14px;line-height:1.35;position:relative;text-align:center;";
+  const text = document.createElement("span");
+  text.append("🎮 Támogatóként jár neked a ");
+  const b = document.createElement("b");
+  b.textContent = role;
+  text.append(b, " rang a Discordon! Kapcsold össze a fiókod, és a bot magától megadja.");
+  const btn = document.createElement("a");
+  btn.href = "/api/discord/connect";
+  btn.textContent = "Összekapcsolás";
+  btn.style.cssText = "background:#fff;color:#4752c4;font-weight:700;padding:5px 14px;border-radius:6px;text-decoration:none;white-space:nowrap;";
+  const close = document.createElement("button");
+  close.type = "button";
+  close.setAttribute("aria-label", "Elrejtés");
+  close.textContent = "✕";
+  close.style.cssText = "position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:0;color:#fff;font-size:18px;cursor:pointer;padding:4px 8px;";
+  close.addEventListener("click", () => {
+    localStorage.setItem(KEY, String(Date.now() + 14 * 864e5));
+    bar.remove();
+  });
+  bar.append(text, btn, close);
+  const header = document.getElementById("header-root");
+  if (header) header.after(bar); else document.body.prepend(bar);
+}
 
 /* ================= 18+ KAPCSOLÓ (Patreon gomb helyén) ================= */
 async function initAdultModeToggle() {

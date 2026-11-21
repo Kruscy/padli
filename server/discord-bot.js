@@ -21,6 +21,7 @@ const MANAGEABLE_ROLES = {
   "Szuper Támogató": "1415980701316022322",
   "Hentai": "1518335431475728537",
 };
+const rangCmdLast = new Map(); // !rang: felhasználónként 1 perc
 const ADMIN_ROLE_ID = "1382774504412938320";
 const MOD_ROLE_ID = "1382765977522929676";
 
@@ -161,6 +162,30 @@ bot.on("messageCreate", async msg => {
       await handleCompromisedAccount(msg.guild, msg.author, activity.messages);
       return;
     }
+  }
+
+  // !rang — a weboldali támogatói rang összekapcsolásának linkje (2026-11-21).
+  // Ha már össze van kapcsolva, azt írja ki; a rangot a 30 perces egyeztetés adja.
+  if (msg.guild && /^!rang\b/i.test(msg.content.trim())) {
+    const last = rangCmdLast.get(msg.author.id) || 0;
+    if (Date.now() - last < 60_000) return;
+    rangCmdLast.set(msg.author.id, Date.now());
+    try {
+      const { rows } = await pool.query(
+        `SELECT u.username, ps.tier, ps.active FROM users u LEFT JOIN patreon_status ps ON ps.user_id = u.id WHERE u.discord_id = $1`,
+        [msg.author.id]);
+      const base = process.env.BASE_URL || "https://padlizsanfansub.hu";
+      if (!rows.length) {
+        await msg.reply(`🎮 Támogató vagy az oldalon? Kapcsold össze a Discordod a fiókoddal, és a bot magától megadja a rangodat (Támogató / Booster / Szuper Támogató): ${base}/discord-rang`);
+      } else {
+        const r = rows[0];
+        const tierTxt = r.active && ["Támogató", "Booster", "Szuper Támogató"].includes(r.tier) ? `a **${r.tier}** rang jár neked` : "jelenleg nincs aktív támogatásod, ezért támogatói rang nem jár";
+        await msg.reply(`✅ A Discordod már össze van kapcsolva a(z) **${r.username}** fiókkal — ${tierTxt}. A rangok félóránként frissülnek; azonnal: ${base}/settings.html?tab=discord`);
+      }
+    } catch (err) {
+      console.error("!rang parancs hiba:", err.message);
+    }
+    return;
   }
 
   // "Hentai" rang — önbevallásos 18+ megerősítéssel: ha valaki leírja ezt a

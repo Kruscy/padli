@@ -15,7 +15,10 @@ const router = express.Router();
 const redirectUri = () => `${process.env.BASE_URL}/api/discord/callback`;
 const back = (q) => `/settings.html?tab=discord&${q}`;
 
-router.get("/connect", requireLogin, (req, res) => {
+// Böngészőből nyitott link (sáv, Discord-üzenet): belépés nélkül a login oldalra
+// visz, és belépés után ide tér vissza — JSON 401 helyett
+router.get("/connect", (req, res) => {
+  if (!req.session.user) return res.redirect("/login.html?redirect=" + encodeURIComponent("/api/discord/connect"));
   if (!process.env.DISCORD_CLIENT_ID || !process.env.DISCORD_CLIENT_SECRET) {
     console.error("❌ Discord összekapcsolás: hiányzó DISCORD_CLIENT_ID / DISCORD_CLIENT_SECRET");
     return res.redirect(back("discord=error&reason=not_configured"));
