@@ -499,7 +499,8 @@ function showFixModal(existing) {
         <span>${label}${hint ? `<br><span style="color:#9ca3af;font-size:.8rem">${hint}</span>` : ""}</span>
       </label>`;
     const rows = existing.map((e, i) => {
-      const head = `<b>${escAttr(e.title)}</b> – ${escAttr(e.chapterFolder)}
+      const head = `<b>${escAttr(e.title)}</b> – ${escAttr(e.chapterFolder)}${e.renamed
+          ? ` <span style="color:#fbbf24">(az oldalon „${escAttr(e.siteChapter)}” néven)</span>` : ""}
         <span style="color:#9ca3af">(fent: ${e.pages} kép${e.own ? "" : `, ${escAttr(e.library)} könyvtárában`}, most: ${e.newCount} kép)</span>`;
       if (!e.allowed) {
         return `<li style="margin-bottom:14px;line-height:1.5">${head}
@@ -512,7 +513,7 @@ function showFixModal(existing) {
               "A fent lévő képek mind törlődnek (a más nevűek is), és csak az újak maradnak.")}
         ${opt(i, "pages", fewPages, "Javítás – <b>csak a feltöltött oldalak cseréje</b>",
               "Az azonos nevű és az azonos oldalszámú (pl. 5. oldal: p005.jpg ↔ page_5.png) régi kép cserélődik, a többi oldal marad.")}
-        ${e.own
+        ${e.own && !e.renamed
           ? opt(i, "normal", false, "Nem javítás – sima feltöltés", "A képek a mappába kerülnek, a régiek mellé (azonos névnél felülírja).")
           : opt(i, "skip", false, "Nem javítás – kihagyom", "")}
       </li>`;

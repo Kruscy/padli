@@ -33,9 +33,36 @@ const CONTENT_TYPES = { ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "im
 
 /* A rész, ahogy az olvasó látja (routes/manga.js: az első jelölt, amelyiknél
    van kép). Több képes jelöltnél (duplikált manga-sor) nem döntünk helyette. */
+/* A rész egyértelmű száma a névből: minden benne lévő szám ugyanaz kell legyen
+   („CH423”, „423 - Episode 423”, „Chapter 12.5” → igen; „Volume 5 Chapter 41” → null).
+   Vezető nullák nem számítanak (001 = 1). */
+export function chapterNumberKey(name) {
+  const nums = String(name).match(/\d+(?:\.\d+)?/g);
+  if (!nums) return null;
+  const keys = new Set(nums.map(n => n.split(".").map(x => String(parseInt(x, 10))).join(".")));
+  return keys.size === 1 ? [...keys][0] : null;
+}
+
 export async function resolveChapterTarget(mangaFolder, chapterFolder) {
   const slug = slugify(mangaFolder);
   if (!slug || !chapterFolder) return null;
+  const exact = await resolveByFolder(slug, chapterFolder);
+  if (exact) return exact;
+  // Nincs ilyen nevű rész → ugyanilyen számú, más nevű rész (2026-11-21: az Eleceed
+  // CH423-at átneveztük „423 - Episode 423”-ra, a feltöltő gépén viszont CH423 maradt,
+  // így egy javítás új, duplikált részt hozott volna létre). Csak egyértelmű számnál
+  // és pontosan egy találatnál — több találat esetén nem döntünk, új részként megy.
+  const key = chapterNumberKey(chapterFolder);
+  if (!key) return null;
+  const { rows } = await pool.query(
+    `SELECT DISTINCT c.folder FROM chapter c JOIN manga m ON m.id = c.manga_id WHERE m.slug = $1`, [slug]);
+  const same = rows.map(r => r.folder).filter(f => f !== chapterFolder && chapterNumberKey(f) === key);
+  if (same.length !== 1) return null;
+  const t = await resolveByFolder(slug, same[0]);
+  return t && !t.ambiguous ? { ...t, matchedByNumber: true } : null;
+}
+
+async function resolveByFolder(slug, chapterFolder) {
   const { rows } = await pool.query(
     `SELECT m.id AS manga_id, m.slug, m.title, m.folder AS manga_folder, m.uploaders, m.r2_migrated,
             c.id AS chapter_id, c.folder AS chapter_folder,

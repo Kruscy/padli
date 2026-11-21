@@ -564,6 +564,8 @@ router.post("/fix-candidates", requireUploader, express.json(), async (req, res)
       const lib = path.resolve(t.library_path), base = userBaseOf(req.uploaderRoot);
       out.push({
         mangaFolder, chapterFolder, title: t.title, pages: t.currentPages.length,
+        // Más néven van fent (szám szerinti egyezés) — sima feltöltés duplikált részt hozna létre
+        siteChapter: t.chapter_folder, renamed: !!t.matchedByNumber,
         library: t.library_name, own: lib === base || lib.startsWith(base + path.sep), allowed,
         reason: allowed ? null : "Ez más feltöltő része, és nem vagy fordítóként megjelölve a műnél.",
       });
