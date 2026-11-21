@@ -4,7 +4,8 @@
    írjuk át, a fájljait (R2 + helyi) töröljük.
    kind:
      empty     — a „remove” mögött EGYETLEN fájl sincs (se R2, se helyi)
-     identical — a „remove” fájljai név + méret szerint PONTOSAN egyeznek a „keep”-ével
+     identical — a „remove” fájljai név + méret (+ R2 ETag) szerint PONTOSAN egyeznek a „keep”-ével
+     different — eltérő tartalom, a feltöltő döntése alapján („reason” kötelező); mentés készül
    Minden ellenőrzés közvetlenül a módosítás előtt fut; ha bármi nem stimmel, az
    adott tétel kimarad. Törlés előtt mentés: backups/dup-chapters/<dátum>/...
    Használat: node server/scripts/merge-duplicate-chapters.js <lista.json> [--apply]
@@ -71,6 +72,12 @@ for (const it of items) {
       // Tartalom (MD5-ETag) egyezés is, ha mindkettő R2-n van
       if (rem.r2.size && keep.r2.size && ![...rem.r2.etags].every(([k, e]) => keep.r2.etags.get(k) === e))
         throw new Error("a törlendő R2-fájlok tartalma (ETag) eltér a megtartandóétól");
+      if ([...rem.local.keys()].some(k => k.endsWith("/")) || [...rem.r2.keys()].some(k => k.includes("/")))
+        throw new Error("a törlendőben almappa van");
+    } else if (it.kind === "different") {
+      // Eltérő tartalom, a feltöltő kifejezett döntése alapján (it.reason) — a régi mentésbe kerül
+      if (!it.reason) throw new Error("different: kell reason (ki döntött)");
+      if (!rem.r2.size && !rem.local.size) throw new Error("a törlendőben nincs fájl — ez empty, nem different");
       if ([...rem.local.keys()].some(k => k.endsWith("/")) || [...rem.r2.keys()].some(k => k.includes("/")))
         throw new Error("a törlendőben almappa van");
     } else throw new Error("ismeretlen kind");
