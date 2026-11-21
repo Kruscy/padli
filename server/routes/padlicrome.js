@@ -166,6 +166,18 @@ router.use((req, res, next) => {
 });
 
 /* ── MULTER ───────────────────────────────────────────────── */
+// Egyképes fordítás (Studio / API): 20 MB — a magas webtoon-csíkok PNG-ben 5 MB fölé mennek
+// (2026-11-21: Ascyra 2 oldala „File too large”). A több képes projektfeltöltés marad 5 MB/kép
+// (memóriában tárolódik, ott a sok × nagy kép túl sok RAM lenne).
+const MAX_TRANSLATE_FILE_SIZE = 20 * 1024 * 1024;
+const uploadOne = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_TRANSLATE_FILE_SIZE, files: 1 },
+  fileFilter: (_req, file, cb) => {
+    if (/^image\/(png|jpeg|jpg|webp)$/.test(file.mimetype)) cb(null, true);
+    else cb(new Error("Csak képfájl engedélyezett"));
+  },
+});
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_FILE_SIZE },
@@ -1025,7 +1037,7 @@ router.get("/download/:type/:filename", requireAuth, (req, res) => {
 });
 
 /* ── POST /translate (addon - régi kompatibilitás) ───────── */
-router.post("/translate", requireAuth, upload.single("image"), async (req, res) => {
+router.post("/translate", requireAuth, uploadOne.single("image"), async (req, res) => {
   const userId = req.authUser.id;
 
   let imageBuffer;
