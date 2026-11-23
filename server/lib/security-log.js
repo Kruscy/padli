@@ -109,6 +109,7 @@ function trackForAlert(row) {
 
 async function sendAlert(text) {
   console.warn("[security] RIASZTÁS:", text.replace(/\*\*|`/g, ""));
+  import("./ntfy.js").then(m => m.notifyNtfy(text, { title: "PadlizsanFanSub – biztonság", priority: 3, tags: ["shield"] })).catch(() => {});
   pool.query(
     `INSERT INTO security_events (type, severity, details) VALUES ('alert', 'high', $1)`,
     [JSON.stringify({ text })]

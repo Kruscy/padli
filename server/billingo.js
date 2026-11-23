@@ -14,6 +14,7 @@ const BLOCK_ID = 321919;
 async function alertInvoiceFailed({ email, items, error }) {
   const text = `🧾 **Sikertelen Billingo-számla kiállítás** — email: ${email || "?"}, tétel: ${items?.[0]?.name || "?"}, hiba: ${error}`;
   console.error("[Billingo]", text);
+  import("./lib/ntfy.js").then(m => m.notifyNtfy(text, { title: "PadlizsanFanSub – számlázási hiba", priority: 4, tags: ["receipt"] })).catch(() => {});
   try {
     await pool.query(
       `INSERT INTO security_events (type, severity, details) VALUES ('billingo_invoice_failed', 'high', $1)`,

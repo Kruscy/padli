@@ -12,6 +12,7 @@ export async function notifyAdminOnce(alertKey, message) {
   const today = new Date().toISOString().slice(0, 10);
   if (lastAlertDate.get(alertKey) === today) return;
   lastAlertDate.set(alertKey, today);
+  import("./ntfy.js").then(m => m.notifyNtfy(message, { title: "PadlizsanFanSub – API-kvóta", priority: 3, tags: ["warning"] })).catch(() => {});
   try {
     await pool.query(
       `INSERT INTO notifications (user_id, type, message, link) VALUES ($1, $2, $3, $4)`,

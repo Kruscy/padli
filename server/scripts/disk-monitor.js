@@ -115,6 +115,9 @@ async function send(message) {
   } catch (e) {
     console.error("Discord-értesítés hiba:", e.message);
   }
+  // Otthoni ntfy (2026-11-23) — teli lemeznél ez a legbiztosabb csatorna
+  const { notifyNtfy } = await import("../lib/ntfy.js");
+  if (await notifyNtfy(message, { title: "PadlizsanFanSub – lemez", priority: message.startsWith("✅") || message.startsWith("🧪") ? 3 : 5, tags: ["floppy_disk"] })) ok = true;
   return ok;
 }
 
