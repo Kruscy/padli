@@ -3,65 +3,95 @@
 
   <url>
     <loc>https://padlizsanfansub.hu/</loc>
-    <lastmod>2026-11-14</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/blog/</loc>
-    <lastmod>2026-11-14</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/login.html</loc>
-    <lastmod>2026-11-14</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/register.html</loc>
-    <lastmod>2026-11-14</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/leaderboard.html</loc>
-    <lastmod>2026-11-14</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/polls.html</loc>
-    <lastmod>2026-11-14</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/partners.html</loc>
-    <lastmod>2026-11-14</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.4</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/impressum.html</loc>
-    <lastmod>2026-11-14</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/privacy.html</loc>
-    <lastmod>2026-11-14</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/aszf.html</loc>
-    <lastmod>2026-11-14</lastmod>
+    <lastmod>2026-11-24</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
 
+  <url>
+    <loc>https://padlizsanfansub.hu/blog/pontrendszer-ranglista-bemutatasa.html</loc>
+    <lastmod>2026-11-23</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://padlizsanfansub.hu/blog/anime-feliratok-magyar-forditas-utmutato.html</loc>
+    <lastmod>2026-11-20</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://padlizsanfansub.hu/blog/anilist-szinkronizacio-utmutato.html</loc>
+    <lastmod>2026-11-18</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://padlizsanfansub.hu/blog/hogyan-legyel-fordito-onkentes-fansubnal.html</loc>
+    <lastmod>2026-11-16</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://padlizsanfansub.hu/blog/padlicrome-forditoeszkoz-bemutatasa.html</loc>
+    <lastmod>2026-11-14</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
   <url>
     <loc>https://padlizsanfansub.hu/blog/hogyan-jelents-hibat-forditasban.html</loc>
     <lastmod>2026-11-13</lastmod>
@@ -413,7 +443,7 @@
 
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=30-years-have-passed-since-the-prologue</loc>
-    <lastmod>2026-11-09</lastmod>
+    <lastmod>2026-11-16</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -461,7 +491,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=a-dragonslayer-s-peerless-regression</loc>
-    <lastmod>2026-11-09</lastmod>
+    <lastmod>2026-11-16</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -473,13 +503,13 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=a-mercenary-s-rebirth-among-nobles</loc>
-    <lastmod>2026-11-14</lastmod>
+    <lastmod>2026-11-21</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=a-modern-man-who-got-transmigrated-into-the-murim-world</loc>
-    <lastmod>2026-11-09</lastmod>
+    <lastmod>2026-11-18</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -503,19 +533,19 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=a-space-marine-got-a-status-window</loc>
-    <lastmod>2026-11-09</lastmod>
+    <lastmod>2026-11-16</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=a-villain-s-will-to-survive</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-23</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=a-wimp-s-strategy-guide-to-conquer-the-tower</loc>
-    <lastmod>2026-11-09</lastmod>
+    <lastmod>2026-11-15</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -533,13 +563,13 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=absolute-regression</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-21</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=absolute-sword-sense</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-19</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -563,19 +593,25 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=after-rebirth-i-used-mirror-reversal-for-vengeance</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-21</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=after-the-school-belle-dumped-me-i-became-a-martial-arts-god</loc>
-    <lastmod>2026-11-14</lastmod>
+    <lastmod>2026-11-21</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=all-my-alter-egos-are-tycoons</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-21</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://padlizsanfansub.hu/chapters.html?slug=all-my-summons-have-sss-level-talents</loc>
+    <lastmod>2026-11-19</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -587,7 +623,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=ano-toki-tasukete-itadaita-monster-musume-desu</loc>
-    <lastmod>2026-09-03</lastmod>
+    <lastmod>2026-11-20</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -611,7 +647,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=apocalypse-sword-god</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-20</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -623,7 +659,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=archmages-restaurant</loc>
-    <lastmod>2026-11-14</lastmod>
+    <lastmod>2026-11-21</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -641,7 +677,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=artisan-s-district</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -659,13 +695,13 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=ascendance-of-a-bookworm-i-ll-do-anything-to-become-a-librarian-part-4-i-want-to-save-the-royal-academy-s-library</loc>
-    <lastmod>2026-04-03</lastmod>
+    <lastmod>2026-11-21</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=assassin-s-creed-forgotten-temple</loc>
-    <lastmod>2026-11-14</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -676,14 +712,20 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://padlizsanfansub.hu/chapters.html?slug=baby-lynx-of-the-tiger-family</loc>
+    <lastmod>2026-11-23</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=bad-born-blood</loc>
-    <lastmod>2026-11-09</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=barbarian-s-adventure-in-a-fantasy-world</loc>
-    <lastmod>2026-11-11</lastmod>
+    <lastmod>2026-11-21</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -695,25 +737,25 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=became-the-owner-of-a-poor-estate</loc>
-    <lastmod>2026-11-11</lastmod>
+    <lastmod>2026-11-18</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=becoming-necromancer-god-through-a-skeleton-clone</loc>
-    <lastmod>2026-11-14</lastmod>
+    <lastmod>2026-11-20</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=berserk</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=beware-the-villainess</loc>
-    <lastmod>2026-10-22</lastmod>
+    <lastmod>2026-11-23</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -725,19 +767,19 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=black-haze-2025</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-19</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=black-killer-whale-baby</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-23</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=blade-of-the-discarded</loc>
-    <lastmod>2026-11-07</lastmod>
+    <lastmod>2026-11-19</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -779,13 +821,13 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=childhood-friend-of-the-zenith</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-23</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=children-of-the-rune</loc>
-    <lastmod>2026-10-15</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -797,7 +839,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=chronicles-of-the-lazy-sovereign</loc>
-    <lastmod>2026-11-10</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -809,7 +851,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=conquering-the-academy-with-just-a-sashimi-knife</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-23</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -827,7 +869,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=copying-skills-with-affinity</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-23</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -851,13 +893,13 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=cyberpunk-chivalry</loc>
-    <lastmod>2026-11-14</lastmod>
+    <lastmod>2026-11-20</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=damn-reincarnation</loc>
-    <lastmod>2026-09-14</lastmod>
+    <lastmod>2026-11-21</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -868,8 +910,14 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://padlizsanfansub.hu/chapters.html?slug=dao-of-the-bizarre-immortal</loc>
+    <lastmod>2026-11-23</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=dark-and-light-martial-emperor</loc>
-    <lastmod>2026-11-14</lastmod>
+    <lastmod>2026-11-23</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -886,8 +934,14 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://padlizsanfansub.hu/chapters.html?slug=day-walker</loc>
+    <lastmod>2026-11-23</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=deadlines-are-raining-in-the-status-window</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-20</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -911,13 +965,19 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=demon-instructor-s-return</loc>
-    <lastmod>2026-11-10</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=demon-lord-s-martial-arts-ascension</loc>
     <lastmod>2026-05-04</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://padlizsanfansub.hu/chapters.html?slug=demon-summoner-i-am-the-abyss</loc>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -929,7 +989,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=demonic-beast-hunter-survival-guide</loc>
-    <lastmod>2026-11-10</lastmod>
+    <lastmod>2026-11-22</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -947,7 +1007,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=disastrous-necromancer</loc>
-    <lastmod>2026-11-09</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -971,7 +1031,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=do-your-best-and-regret</loc>
-    <lastmod>2026-10-25</lastmod>
+    <lastmod>2026-11-18</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -1025,7 +1085,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=dukedom-s-legendary-prodigy</loc>
-    <lastmod>2026-09-22</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -1073,13 +1133,13 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=eleceed</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-20</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=emperor-of-solo-play</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-23</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -1091,7 +1151,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=entomologist-in-sichuan-tang-clan</loc>
-    <lastmod>2026-10-13</lastmod>
+    <lastmod>2026-11-16</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -1150,6 +1210,12 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://padlizsanfansub.hu/chapters.html?slug=fantasy-induction-corps</loc>
+    <lastmod>2026-11-23</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=fated-to-be-loved-by-villains</loc>
     <lastmod>2026-02-19</lastmod>
     <changefreq>weekly</changefreq>
@@ -1169,7 +1235,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=fighting-is-too-easy</loc>
-    <lastmod>2026-10-10</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -1199,7 +1265,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=genius-archer-s-streaming</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-23</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -1211,7 +1277,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=genius-prismatic-mage</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-23</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -1223,25 +1289,25 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=global-awakening-the-synthesis-master-starts-with-an-undead-army</loc>
-    <lastmod>2026-11-11</lastmod>
+    <lastmod>2026-11-19</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=global-class-transition-the-magic-king-s-skills-have-infinite-affixes</loc>
-    <lastmod>2026-11-09</lastmod>
+    <lastmod>2026-11-22</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=goblin-inc</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-19</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=god-level-assassin-i-m-the-shadow</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-21</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -1295,7 +1361,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=heart-pounding-cute-poem</loc>
-    <lastmod>2026-11-07</lastmod>
+    <lastmod>2026-11-14</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -1313,13 +1379,13 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=helmut-the-forsaken-child</loc>
-    <lastmod>2026-10-13</lastmod>
+    <lastmod>2026-11-16</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=hero-killer</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-20</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -1361,7 +1427,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=how-to-get-on-the-main-character-s-flower-path</loc>
-    <lastmod>2026-10-09</lastmod>
+    <lastmod>2026-11-20</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -1379,7 +1445,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=i-became-a-married-man-in-another-world</loc>
-    <lastmod>2026-11-11</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -1409,13 +1475,13 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=i-became-the-first-prince-legend-of-sword-s-song</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-18</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=i-became-the-genius-bastard-of-a-noble-dark-clan</loc>
-    <lastmod>2026-11-02</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -1462,6 +1528,12 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://padlizsanfansub.hu/chapters.html?slug=i-d-rather-be-a-queen</loc>
+    <lastmod>2026-11-19</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=i-don-t-want-to-play-matchmaker</loc>
     <lastmod>2026-11-12</lastmod>
     <changefreq>weekly</changefreq>
@@ -1475,7 +1547,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=i-have-a-mansion-in-the-post-apocalyptic-world</loc>
-    <lastmod>2026-11-14</lastmod>
+    <lastmod>2026-11-23</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -1493,7 +1565,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=i-ll-quit-as-the-empress</loc>
-    <lastmod>2026-11-09</lastmod>
+    <lastmod>2026-11-16</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -1505,13 +1577,13 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=i-m-being-raised-by-villains</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-23</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=i-m-gonna-annihilate-this-land</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-16</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -1523,7 +1595,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=i-m-the-max-level-newbie</loc>
-    <lastmod>2026-11-02</lastmod>
+    <lastmod>2026-11-22</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -1552,8 +1624,14 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://padlizsanfansub.hu/chapters.html?slug=i-shall-master-this-family</loc>
+    <lastmod>2026-11-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=i-start-with-mythical-talent-one-sword-slays-kings</loc>
-    <lastmod>2026-11-10</lastmod>
+    <lastmod>2026-11-18</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -1601,19 +1679,19 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=infinite-level-up-in-murim</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-19</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=infinite-mage</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-20</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=is-it-bad-that-the-main-character-s-a-roleplayer</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-20</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -1655,7 +1733,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=kidnapped-dragons</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-20</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -1691,7 +1769,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=latna-saga-survival-story-of-a-sword-king</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -1739,31 +1817,31 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=logging-10000-years-into-the-future</loc>
-    <lastmod>2026-11-14</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=lookism</loc>
-    <lastmod>2026-11-07</lastmod>
+    <lastmod>2026-11-21</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=lord-of-goblins</loc>
-    <lastmod>2026-11-09</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=lord-of-summoning-when-anomalies-descend-upon-the-human-world</loc>
-    <lastmod>2026-10-28</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=lout-of-count-s-family</loc>
-    <lastmod>2026-11-14</lastmod>
+    <lastmod>2026-11-21</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -1775,7 +1853,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=lucky-mia</loc>
-    <lastmod>2026-10-19</lastmod>
+    <lastmod>2026-11-21</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -1787,7 +1865,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=magic-emperor</loc>
-    <lastmod>2026-11-14</lastmod>
+    <lastmod>2026-11-21</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -1805,13 +1883,13 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=maou-ni-natta-node-dungeon-tsukutte-jingai-musume-to-honobono-suru</loc>
-    <lastmod>2026-09-03</lastmod>
+    <lastmod>2026-11-21</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=martial-god-regressed-to-level-2</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -1841,7 +1919,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=maxed-strength-necromancer</loc>
-    <lastmod>2026-11-14</lastmod>
+    <lastmod>2026-11-18</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -1871,7 +1949,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=mimi</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -1889,7 +1967,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=mount-hua-sect-s-genius-phantom-swordsman</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-23</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -1901,31 +1979,31 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=mr-kim-is-living-the-good-life-with-auto-hunting</loc>
-    <lastmod>2026-11-08</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://padlizsanfansub.hu/chapters.html?slug=mr-zombie</loc>
     <lastmod>2026-11-14</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://padlizsanfansub.hu/chapters.html?slug=mr-zombie</loc>
+    <lastmod>2026-11-21</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=murim-login</loc>
-    <lastmod>2026-11-06</lastmod>
+    <lastmod>2026-11-14</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=murim-psychopath</loc>
-    <lastmod>2026-11-05</lastmod>
+    <lastmod>2026-11-20</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=murim-s-debt-king</loc>
-    <lastmod>2026-11-02</lastmod>
+    <lastmod>2026-11-16</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -1943,19 +2021,19 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=my-exclusive-tower-guide</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-19</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=my-girlfriend-returned-as-a-dragon</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-20</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=my-possession-became-a-ghost-story</loc>
-    <lastmod>2026-07-20</lastmod>
+    <lastmod>2026-11-23</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -1967,7 +2045,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=my-slain-dragon-bride</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-20</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -2003,19 +2081,19 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=nano-machine</loc>
-    <lastmod>2026-11-14</lastmod>
+    <lastmod>2026-11-21</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=necromancer-academy-and-the-genius-summoner</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-20</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=noble-lady-reformation-guide</loc>
-    <lastmod>2026-11-09</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -2027,7 +2105,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=ode-of-the-brave</loc>
-    <lastmod>2026-11-09</lastmod>
+    <lastmod>2026-11-15</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -2039,7 +2117,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=oh-be-patient-my-lady</loc>
-    <lastmod>2026-11-14</lastmod>
+    <lastmod>2026-11-23</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -2057,7 +2135,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=only-i-have-an-ex-grade-summon</loc>
-    <lastmod>2026-11-05</lastmod>
+    <lastmod>2026-11-23</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -2087,13 +2165,13 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=overbearing-tyrant</loc>
-    <lastmod>2026-11-14</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=overgeared</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-21</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -2111,19 +2189,19 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=past-life-returner</loc>
-    <lastmod>2026-11-09</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=pawprints-on-her-heart</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-20</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=perfect-surgeon</loc>
-    <lastmod>2026-11-09</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -2141,7 +2219,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=player-who-can-t-level-up</loc>
-    <lastmod>2026-11-07</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -2159,7 +2237,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=plaything</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-23</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -2176,6 +2254,18 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://padlizsanfansub.hu/chapters.html?slug=pregnant-and-gone-in-five-months</loc>
+    <lastmod>2026-11-18</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://padlizsanfansub.hu/chapters.html?slug=private-debtors</loc>
+    <lastmod>2026-11-17</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=questism</loc>
     <lastmod>2026-06-22</lastmod>
     <changefreq>weekly</changefreq>
@@ -2183,13 +2273,13 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=raising-the-princess-to-overcome-death</loc>
-    <lastmod>2026-11-08</lastmod>
+    <lastmod>2026-11-16</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=raising-villains-the-right-way</loc>
-    <lastmod>2026-11-14</lastmod>
+    <lastmod>2026-11-21</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -2236,8 +2326,14 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://padlizsanfansub.hu/chapters.html?slug=reborn-as-a-hatchling</loc>
+    <lastmod>2026-11-23</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=reborn-as-the-enemy-prince</loc>
-    <lastmod>2026-11-09</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -2255,25 +2351,25 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=reformation-of-the-deadbeat-noble</loc>
-    <lastmod>2026-11-09</lastmod>
+    <lastmod>2026-11-21</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=regressed-blood-demon</loc>
-    <lastmod>2026-11-05</lastmod>
+    <lastmod>2026-11-19</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=regressing-as-the-reincarnated-bastard-of-the-sword-clan</loc>
-    <lastmod>2026-11-10</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=regressing-with-the-king-s-power</loc>
-    <lastmod>2026-11-14</lastmod>
+    <lastmod>2026-11-22</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -2285,7 +2381,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=regressor-of-the-fallen-family</loc>
-    <lastmod>2026-11-09</lastmod>
+    <lastmod>2026-11-22</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -2321,13 +2417,13 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=reincarnator</loc>
-    <lastmod>2026-09-26</lastmod>
+    <lastmod>2026-11-23</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=reincarnator-s-stream</loc>
-    <lastmod>2026-11-09</lastmod>
+    <lastmod>2026-11-22</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -2357,31 +2453,31 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=return-of-the-apocalypse-class-death-knight</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-19</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=return-of-the-disaster-class-hero</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-21</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=return-of-the-first-patriarch-the-strongest-reincarnates-into-his-descendant-1000-years-later</loc>
-    <lastmod>2026-11-09</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=return-of-the-frozen-player</loc>
-    <lastmod>2026-11-14</lastmod>
+    <lastmod>2026-11-20</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=return-of-the-king-of-hell</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-23</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -2393,7 +2489,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=return-of-the-mount-hua-sect</loc>
-    <lastmod>2026-11-14</lastmod>
+    <lastmod>2026-11-19</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -2423,7 +2519,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=revenge-of-the-iron-blooded-sword-hound</loc>
-    <lastmod>2026-11-09</lastmod>
+    <lastmod>2026-11-22</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -2435,13 +2531,13 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=rise-of-the-limitless-necromancer</loc>
-    <lastmod>2026-10-17</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=rise-of-the-low-class-swordsman</loc>
-    <lastmod>2026-11-10</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -2459,13 +2555,13 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=s-class-hunter-heals-with-monsters</loc>
-    <lastmod>2026-11-05</lastmod>
+    <lastmod>2026-11-20</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=saenai-ossan-jitsu-wa-saikyou</loc>
-    <lastmod>2026-10-19</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -2489,7 +2585,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=second-life-ranker</loc>
-    <lastmod>2026-11-05</lastmod>
+    <lastmod>2026-11-21</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -2507,19 +2603,19 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=serim-s-golden-rule</loc>
-    <lastmod>2026-11-08</lastmod>
+    <lastmod>2026-11-19</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=shadow-slave</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-19</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=shangri-la-frontier</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -2537,7 +2633,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=snake-immortal-the-tale-of-a-snake-s-cultivation-to-immortality</loc>
-    <lastmod>2026-10-28</lastmod>
+    <lastmod>2026-11-18</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -2549,7 +2645,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=solo-bug-player</loc>
-    <lastmod>2026-11-14</lastmod>
+    <lastmod>2026-11-23</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -2567,13 +2663,25 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=solo-leveling-ragnarok</loc>
-    <lastmod>2026-03-15</lastmod>
+    <lastmod>2026-11-21</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=solo-reincarnation</loc>
     <lastmod>2026-03-27</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://padlizsanfansub.hu/chapters.html?slug=solo-swordmaster</loc>
+    <lastmod>2026-11-17</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://padlizsanfansub.hu/chapters.html?slug=sovereign-of-a-hundred-blades-heir-to-the-ultimate-style</loc>
+    <lastmod>2026-11-23</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -2585,7 +2693,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=spare-me-great-lord</loc>
-    <lastmod>2026-11-03</lastmod>
+    <lastmod>2026-11-14</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -2597,13 +2705,13 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=sss-class-suicide-hunter</loc>
-    <lastmod>2026-10-19</lastmod>
+    <lastmod>2026-11-20</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=sss-grade-saint-knight</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-22</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -2615,13 +2723,13 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=star-embracing-swordmaster</loc>
-    <lastmod>2026-11-08</lastmod>
+    <lastmod>2026-11-16</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=starting-with-13-hidden-traits</loc>
-    <lastmod>2026-11-02</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -2639,13 +2747,13 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=superhuman-s-gaming-stream</loc>
-    <lastmod>2026-11-05</lastmod>
+    <lastmod>2026-11-20</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=supreme-curse-master</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-21</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -2657,13 +2765,13 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=survival-supremacy</loc>
-    <lastmod>2026-11-09</lastmod>
+    <lastmod>2026-11-16</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=surviving-as-a-genius-on-borrowed-time</loc>
-    <lastmod>2026-11-02</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -2675,31 +2783,31 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=surviving-the-game-as-barbarian</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-21</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=sword-devouring-swordmaster</loc>
-    <lastmod>2026-11-09</lastmod>
+    <lastmod>2026-11-19</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=sword-god-s-livestream</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-18</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=sword-of-the-undying</loc>
-    <lastmod>2026-11-14</lastmod>
+    <lastmod>2026-11-21</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=swordmaster-s-youngest-son</loc>
-    <lastmod>2026-11-09</lastmod>
+    <lastmod>2026-11-22</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -2711,7 +2819,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=talent-swallowing-magician</loc>
-    <lastmod>2026-06-24</lastmod>
+    <lastmod>2026-11-18</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -2724,12 +2832,6 @@
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=terminally-iii-genius-dark-knight</loc>
     <lastmod>2026-04-21</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://padlizsanfansub.hu/chapters.html?slug=teszt-sz-nez</loc>
-    <lastmod>2026-09-27</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -2747,19 +2849,19 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-academy-s-genius-swordsman</loc>
-    <lastmod>2026-11-09</lastmod>
+    <lastmod>2026-11-15</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-baby-fairy-is-a-villain</loc>
-    <lastmod>2026-07-04</lastmod>
+    <lastmod>2026-11-20</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-back-alley-mage-s-second-life</loc>
-    <lastmod>2026-11-02</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -2783,13 +2885,13 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-berserker-s-second-playthrough</loc>
-    <lastmod>2026-11-09</lastmod>
+    <lastmod>2026-11-21</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-black-haired-us-army-general</loc>
-    <lastmod>2026-11-09</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -2813,7 +2915,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-chick-class-hunter-is-filial</loc>
-    <lastmod>2026-09-13</lastmod>
+    <lastmod>2026-11-16</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -2831,13 +2933,13 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-constellations-are-my-disciples</loc>
-    <lastmod>2026-10-02</lastmod>
+    <lastmod>2026-11-20</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-count-s-youngest-son-is-a-player</loc>
-    <lastmod>2026-11-02</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -2861,7 +2963,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-dark-mage-s-return-to-enlistment</loc>
-    <lastmod>2026-03-27</lastmod>
+    <lastmod>2026-11-23</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -2873,7 +2975,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-dark-swordsman-returns</loc>
-    <lastmod>2026-11-09</lastmod>
+    <lastmod>2026-11-16</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -2885,7 +2987,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-demon-king-overrun-by-heroes</loc>
-    <lastmod>2026-11-14</lastmod>
+    <lastmod>2026-11-21</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -2897,13 +2999,19 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-demon-slayer-s-restaurant</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-23</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-devil-never-cries</loc>
     <lastmod>2026-10-14</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://padlizsanfansub.hu/chapters.html?slug=the-duchess-lives-only-for-this-day</loc>
+    <lastmod>2026-11-19</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -2933,7 +3041,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-extra-s-academy-survival-guide</loc>
-    <lastmod>2026-11-14</lastmod>
+    <lastmod>2026-11-21</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -2951,7 +3059,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-flower-with-a-sword</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-23</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -2975,7 +3083,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-frontier-count-s-10th-class-outcast</loc>
-    <lastmod>2026-11-09</lastmod>
+    <lastmod>2026-11-16</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -2987,7 +3095,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-genius-knight-of-a-fallen-race</loc>
-    <lastmod>2026-11-09</lastmod>
+    <lastmod>2026-11-19</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -2999,13 +3107,19 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-grand-duchess-of-the-north-was-secretly-a-villainess</loc>
-    <lastmod>2026-09-23</lastmod>
+    <lastmod>2026-11-18</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://padlizsanfansub.hu/chapters.html?slug=the-grand-duke-s-new-daughter-in-law-is-a-little-fierce</loc>
+    <lastmod>2026-11-19</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-great-mage-returns-after-4000-years</loc>
-    <lastmod>2026-11-10</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -3023,7 +3137,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-heavenly-demon-s-otherworld-livestream</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-23</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -3041,25 +3155,31 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-hero-cannot-rest</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-23</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-hero-returns</loc>
-    <lastmod>2026-11-09</lastmod>
+    <lastmod>2026-11-17</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://padlizsanfansub.hu/chapters.html?slug=the-illegitimate-son-became-a-monster-summoner</loc>
+    <lastmod>2026-11-18</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-immortal-genius-spearman-png</loc>
-    <lastmod>2026-11-09</lastmod>
+    <lastmod>2026-11-21</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-indomitable-martial-king</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-20</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -3101,7 +3221,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-legendary-hero-is-an-academy-honors-student</loc>
-    <lastmod>2026-11-09</lastmod>
+    <lastmod>2026-11-21</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -3113,7 +3233,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-legendary-mechanic</loc>
-    <lastmod>2026-11-14</lastmod>
+    <lastmod>2026-11-23</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -3142,26 +3262,32 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://padlizsanfansub.hu/chapters.html?slug=the-lord-who-levels-up-by-devouring</loc>
+    <lastmod>2026-11-18</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-mad-dog-of-the-duke-s-estate</loc>
-    <lastmod>2026-11-02</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-magic-tower-s-problem-child</loc>
-    <lastmod>2026-11-09</lastmod>
+    <lastmod>2026-11-19</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-maid-with-a-child</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-23</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-max-level-hero-strikes-back</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -3196,6 +3322,12 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://padlizsanfansub.hu/chapters.html?slug=the-newbie-civil-servant-hunts-villains-before-going-home</loc>
+    <lastmod>2026-11-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-newbie-is-too-strong</loc>
     <lastmod>2026-11-14</lastmod>
     <changefreq>weekly</changefreq>
@@ -3215,19 +3347,19 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-northern-grand-duke-s-mad-son-in-law</loc>
-    <lastmod>2026-11-11</lastmod>
+    <lastmod>2026-11-16</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-novel-s-extra</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-old-man-vows-revenge-against-his-demon-wife</loc>
-    <lastmod>2026-11-11</lastmod>
+    <lastmod>2026-11-16</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -3245,7 +3377,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-perks-of-being-a-villainess</loc>
-    <lastmod>2026-10-23</lastmod>
+    <lastmod>2026-11-20</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -3263,7 +3395,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-player-of-the-fallen-family</loc>
-    <lastmod>2026-11-02</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -3281,31 +3413,37 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-rankers-guide-to-live-an-ordinary-life</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-23</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://padlizsanfansub.hu/chapters.html?slug=the-reason-for-the-twin-lady-s-disguise</loc>
+    <lastmod>2026-11-23</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-rebel-of-the-apocalypse-academy</loc>
-    <lastmod>2026-11-11</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-rebel-of-the-tyrant-noble-house-aster</loc>
-    <lastmod>2026-11-11</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-rebellious-apostle-of-the-harvest-goddess</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-20</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-reborn-young-lord-is-an-assassin</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-19</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -3317,13 +3455,13 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-regressed-genius-player-s-mythical-rank-weapon-creation</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-23</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-regressed-sword-saint-s-magic-theory</loc>
-    <lastmod>2026-11-02</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -3335,7 +3473,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-reincarnated-assassin-is-a-genius-swordsman</loc>
-    <lastmod>2026-07-20</lastmod>
+    <lastmod>2026-11-23</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -3347,7 +3485,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-return-of-namgung-s-granddaughter</loc>
-    <lastmod>2026-11-14</lastmod>
+    <lastmod>2026-11-20</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -3377,13 +3515,13 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-ruined-world-was-mistaken-for-a-game</loc>
-    <lastmod>2026-11-09</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-ruler-of-darkness</loc>
-    <lastmod>2026-07-13</lastmod>
+    <lastmod>2026-11-16</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -3407,7 +3545,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-sergeant-s-dragon</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-20</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -3419,7 +3557,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-skeleton-soldier-failed-to-defend-the-dungeon</loc>
-    <lastmod>2026-11-09</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -3430,14 +3568,26 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://padlizsanfansub.hu/chapters.html?slug=the-son-of-the-first-emperor-kills-enemies-and-becomes-a-god</loc>
+    <lastmod>2026-11-23</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-spark-in-your-eyes</loc>
     <lastmod>2026-10-18</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://padlizsanfansub.hu/chapters.html?slug=the-squirrel-will-raise-the-baby-tiger</loc>
+    <lastmod>2026-11-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-ss-class-freshman-of-the-magic-academy</loc>
-    <lastmod>2026-10-17</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -3461,7 +3611,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-subcontractor-s-blueprint</loc>
-    <lastmod>2026-11-06</lastmod>
+    <lastmod>2026-11-19</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -3473,7 +3623,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-sword-emperor-reincarnated-into-a-swordmaster-clan</loc>
-    <lastmod>2026-11-09</lastmod>
+    <lastmod>2026-11-22</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -3485,7 +3635,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-sword-of-dawn</loc>
-    <lastmod>2026-11-14</lastmod>
+    <lastmod>2026-11-23</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -3509,7 +3659,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-tale-of-cultivation-and-demon-extermination</loc>
-    <lastmod>2026-11-14</lastmod>
+    <lastmod>2026-11-19</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -3539,7 +3689,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-tutorial-is-too-hard</loc>
-    <lastmod>2026-11-09</lastmod>
+    <lastmod>2026-11-22</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -3551,19 +3701,25 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-tyrant-girl-nero-s-rebellion</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-23</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-tyrant-s-overprotective-contract-mother</loc>
-    <lastmod>2026-09-23</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-ultimate-shut-in</loc>
-    <lastmod>2026-11-14</lastmod>
+    <lastmod>2026-11-21</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://padlizsanfansub.hu/chapters.html?slug=the-veteran-healer-is-overpowered</loc>
+    <lastmod>2026-11-23</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -3581,7 +3737,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=the-wandering-knight-s-survival-manual</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -3592,8 +3748,14 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://padlizsanfansub.hu/chapters.html?slug=third-rate-martial-family-becomes-the-best-under-heaven</loc>
+    <lastmod>2026-11-19</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=this-assassin-is-upright</loc>
-    <lastmod>2026-11-09</lastmod>
+    <lastmod>2026-11-15</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -3629,7 +3791,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=tomb-raider-king-end-line</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-21</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -3671,13 +3833,13 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=versatile-sword-cultivator</loc>
-    <lastmod>2026-11-07</lastmod>
+    <lastmod>2026-11-21</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=villain-to-kill</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-20</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -3689,7 +3851,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=wail-of-a-dragon-s-rage</loc>
-    <lastmod>2026-11-10</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -3707,7 +3869,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=what-a-bountiful-harvest-demon-lord</loc>
-    <lastmod>2026-11-09</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -3743,7 +3905,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=why-i-quit-being-the-demon-king</loc>
-    <lastmod>2026-10-28</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -3773,13 +3935,13 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=world-saving-is-a-skill</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-19</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=yasei-no-last-boss-ga-arawareta</loc>
-    <lastmod>2026-10-19</lastmod>
+    <lastmod>2026-11-21</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -3791,13 +3953,13 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=you-re-a-cat-but-you-ve-been-adopted-by-a-wolf-family</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-23</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=you-re-the-only-one-i-can-see</loc>
-    <lastmod>2026-11-12</lastmod>
+    <lastmod>2026-11-23</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -3833,7 +3995,7 @@
   </url>
   <url>
     <loc>https://padlizsanfansub.hu/chapters.html?slug=zombie-revelation-82-08</loc>
-    <lastmod>2026-11-09</lastmod>
+    <lastmod>2026-11-17</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
