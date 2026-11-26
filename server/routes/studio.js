@@ -207,7 +207,7 @@ async function recordDownload(req, info, file) {
   await pool.query("INSERT INTO studio_downloads (user_id, version, file, ip) VALUES ($1,$2,$3,$4)",
     [u.id, info.version, file, req.headers["cf-connecting-ip"] || req.ip || null]);
   const { rows } = await pool.query("SELECT email_verified FROM users WHERE id = $1", [u.id]);
-  if (!rows[0]?.email_verified) return;
+  if (!rows[0]?.email_verified) { console.log(`[STUDIO] ajándék kihagyva: ${u.username} – nincs megerősített e-mail`); return; }
   const ip = req.headers["cf-connecting-ip"] || req.ip || null;
   const client = await pool.connect();
   try {
@@ -227,7 +227,7 @@ async function recordDownload(req, info, file) {
       }
     }
     const g = await client.query("INSERT INTO studio_gifts (user_id, points) VALUES ($1,$2) ON CONFLICT DO NOTHING", [u.id, GIFT_POINTS]);
-    if (!g.rowCount) { await client.query("ROLLBACK"); return; } // már kapott
+    if (!g.rowCount) { await client.query("ROLLBACK"); console.log(`[STUDIO] ajándék kihagyva: ${u.username} – már kapott`); return; } // már kapott
     await client.query(`INSERT INTO user_points (user_id, fix_id, points, approved_by, earned_at, spent) VALUES ($1, NULL, $2, NULL, NOW(), false)`, [u.id, GIFT_POINTS]);
     await client.query(`INSERT INTO notifications (user_id, type, message, link) VALUES ($1, 'points', $2, '/profile.html#studio')`,
       [u.id, `🎁 Köszönjük, hogy letöltötted a Padlizsan Studio-t! Ajándékba ${GIFT_POINTS} pontot írtunk jóvá a fiókodon. Az API-kulcsodat a profilodon hozhatod létre.`]);
