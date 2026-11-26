@@ -1,4 +1,5 @@
-import { Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
+import { Client, GatewayIntentBits, Partials, ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
+import { notifyNtfy } from "./lib/ntfy.js";
 import { WebSocketServer } from "ws";
 import { pool } from "./db.js";
 import { sessionMiddleware } from "./session.js";
@@ -124,8 +125,10 @@ const bot = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
-  ]
+    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.DirectMessages, // privát válaszok Padlinak → ntfy (2026-11-26)
+  ],
+  partials: [Partials.Channel], // DM-csatorna nincs a cache-ben, enélkül nem jön esemény
 });
 
 bot.once("ready", () => {
@@ -135,6 +138,21 @@ bot.once("ready", () => {
 // Discord → Web
 bot.on("messageCreate", async msg => {
   if (msg.author.bot) return;
+
+  // Privát üzenet Padlinak (pl. válasz a Studio-megkeresésre): továbbítás az
+  // otthoni ntfy-ra + napló. A bot DM-ben nem válaszol, és a webes chatbe sem kerül.
+  if (!msg.guild) {
+    let site = "";
+    try {
+      const { rows } = await pool.query("SELECT username FROM users WHERE discord_id = $1", [msg.author.id]);
+      if (rows[0]) site = ` (oldalon: ${rows[0].username})`;
+    } catch {}
+    const who = `${msg.author.globalName || msg.author.username} @${msg.author.username}${site}`;
+    const att = msg.attachments.size ? `\n📎 ${[...msg.attachments.values()].map(a => a.url).join("\n")}` : "";
+    console.log(`[discord-dm] ${who}: ${msg.content.slice(0, 500)}${att ? " +csatolmány" : ""}`);
+    notifyNtfy(`${msg.content || "(csak csatolmány)"}${att}`, { title: `Padli privát üzenet: ${who}`, priority: 4, tags: ["speech_balloon"] });
+    return;
+  }
 
   // Feltört fiók / raid detektálás — bármelyik csatornán, minden üzenetnél.
   if (msg.guild) {
